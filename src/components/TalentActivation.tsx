@@ -6,6 +6,7 @@
  *   special      → asterisk          ✦
  *   passive      → infinity          ∞
  */
+import type { ReactElement } from 'react'
 
 export type ActivationType = 'action1' | 'action2' | 'action3' | 'free' | 'reaction' | 'special' | 'passive'
 
@@ -27,7 +28,7 @@ function OutlineTriangle() {
   )
 }
 
-const CONFIG: Record<ActivationType, { symbols: JSX.Element; label: string; color: string; bg: string; border: string }> = {
+const CONFIG: Record<ActivationType, { symbols: ReactElement; label: string; color: string; bg: string; border: string }> = {
   action1: {
     symbols: <><FilledTriangle /></>,
     label: '1 acción',

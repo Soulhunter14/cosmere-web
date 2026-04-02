@@ -467,7 +467,7 @@ function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: bool
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: past ? 'var(--text-muted)' : 'var(--text)', truncate: true }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: past ? 'var(--text-muted)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {session.title}
           </span>
           {past ? (

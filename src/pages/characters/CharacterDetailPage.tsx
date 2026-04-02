@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Edit2, Save, X, Heart, Zap, Flame, Sparkles, ChevronDown, Trash2, Plus } from 'lucide-react'
+import { Edit2, Save, X, Heart, Flame, Sparkles, ChevronDown, Trash2, Plus } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
 import type { WeaponCatalog, ArmorCatalog, GearItem } from '../../types'
@@ -249,21 +249,21 @@ export function CharacterDetailPage() {
   })
 
   function addItem(type: 'weapon' | 'armor' | 'gear', name: string) {
-    if (type === 'weapon') itemsMutation.mutate({ weapons: [...(char.weapons ?? []), name] })
-    else if (type === 'armor') itemsMutation.mutate({ armor: [...(char.armor ?? []), name] })
-    else itemsMutation.mutate({ equipment: [...(char.equipment ?? []), name] })
+    if (type === 'weapon') itemsMutation.mutate({ weapons: [...(char?.weapons ?? []), name] })
+    else if (type === 'armor') itemsMutation.mutate({ armor: [...(char?.armor ?? []), name] })
+    else itemsMutation.mutate({ equipment: [...(char?.equipment ?? []), name] })
     setItemPicker(null)
   }
 
   function removeItem(type: 'weapon' | 'armor' | 'gear', index: number) {
     if (type === 'weapon') {
-      const next = char.weapons.filter((_, i) => i !== index)
+      const next = (char?.weapons ?? []).filter((_, i) => i !== index)
       itemsMutation.mutate({ weapons: next })
     } else if (type === 'armor') {
-      const next = char.armor.filter((_, i) => i !== index)
+      const next = (char?.armor ?? []).filter((_, i) => i !== index)
       itemsMutation.mutate({ armor: next })
     } else {
-      const next = char.equipment.filter((_, i) => i !== index)
+      const next = (char?.equipment ?? []).filter((_, i) => i !== index)
       itemsMutation.mutate({ equipment: next })
     }
     setConfirmRemoveItem(null)
@@ -301,19 +301,8 @@ export function CharacterDetailPage() {
           backgroundSize: '200px',
         }} />
 
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* Avatar */}
-            <div style={{
-              width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-              background: 'rgba(0,0,0,0.25)',
-              border: '2px solid rgba(255,255,255,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 24, fontWeight: 800, color: 'white',
-            }}>
-              {char.name[0].toUpperCase()}
-            </div>
-
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, minWidth: 0 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: 20, fontWeight: 800, color: 'white', letterSpacing: '-0.03em', lineHeight: 1.2 }}>
@@ -325,7 +314,7 @@ export function CharacterDetailPage() {
                         background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.25)',
                         borderRadius: 8, padding: '2px 8px', color: 'white',
                         fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em',
-                        outline: 'none', width: 180,
+                        outline: 'none', width: '100%', maxWidth: 180,
                       }}
                     />
                   ) : char.name}
@@ -490,7 +479,7 @@ export function CharacterDetailPage() {
               const path = HEROIC_PATHS.find((p) => p.id === f.caminoHeroico)
               const order = RADIANT_ORDERS.find((o) => o.id === f.caminoRadiante)
 
-              const cardStyle = (color?: string, colorBg?: string, colorBorder?: string) => ({
+              const cardStyle = () => ({
                 background: 'var(--surface-1)', border: '1px solid var(--border)',
                 borderRadius: 14, padding: '12px 14px',
                 display: 'flex', flexDirection: 'column' as const, gap: 6,
@@ -570,6 +559,7 @@ export function CharacterDetailPage() {
             })()}
 
             {/* Concentration + Investiture (current / max) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {[
               { key: 'concentration', maxKey: 'maxConcentration', label: 'Concentración', icon: <Flame size={14} style={{ color: '#fb923c' }} />, color: '#fb923c' },
               { key: 'investiture',   maxKey: 'maxInvestiture',   label: 'Investidura',   icon: <Sparkles size={14} style={{ color: '#a78bfa' }} />, color: '#a78bfa' },
@@ -612,6 +602,7 @@ export function CharacterDetailPage() {
                 )}
               </div>
             ))}
+            </div>
 
             {/* Físico / Cognitivo / Espiritual sections */}
             {SECTIONS.map((section) => {
@@ -738,7 +729,6 @@ export function CharacterDetailPage() {
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 10,
                         padding: '8px 14px',
-                        borderTop: '1px solid var(--border)',
                         borderTop: `1px dashed ${section.colorBorder}`,
                       }}>
                         {editing ? (

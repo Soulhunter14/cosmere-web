@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, ArrowRight, Heart, Zap, Users, UserCheck, UserX } from 'lucide-react'
+import { Plus, Trash2, ArrowRight, Heart, Users, UserCheck, UserX } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'

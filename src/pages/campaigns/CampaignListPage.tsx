@@ -353,7 +353,7 @@ export function CampaignListPage() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
             gap: 18,
           }}>
-            {campaigns.map((c) => {
+            {(campaigns ?? []).map((c) => {
               const pal = PALETTES[c.id % PALETTES.length]
               return (
                 <CampaignCard

@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Catppuccin Mocha-inspired – warm dark purple-gray, not void black */
+  --bg:        #1e1e2e;
+  --mantle:    #181825;
+  --surface-1: #313244;
+  --surface-2: #45475a;
+  --surface-3: #585b70;
+
+  --border:        rgba(205, 214, 244, 0.08);
+  --border-bright: rgba(205, 214, 244, 0.16);
+
+  --text:        #cdd6f4;
+  --text-muted:  #a6adc8;
+  --text-subtle: #6c7086;
+
+  /* Brand – Mauve/Lavender */
+  --brand:       #b4befe;   /* lavender */
+  --brand-dark:  #8b5cf6;   /* violet-500 for buttons */
+  --brand-light: #cba6f7;   /* mauve */
+  --brand-glow:  rgba(180, 190, 254, 0.2);
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root { min-height: 100vh; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--surface-3); }
+
+::selection { background: rgba(180, 190, 254, 0.25); color: white; }
+
+*:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Mobile layout offsets for fixed top/bottom bars + safe areas */
+.app-main {
+  padding-top: calc(52px + var(--sat));
+  padding-bottom: calc(60px + var(--sab));
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+@media (min-width: 640px) {
+  .app-main {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* PWA: full-screen body with safe area padding on standalone mode */
+@media all and (display-mode: standalone) {
+  body {
+    /* Prevent overscroll bounce from showing raw background */
+    overscroll-behavior: none;
+  }
+}

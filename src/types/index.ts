@@ -1,0 +1,197 @@
+// Auth
+export interface User {
+  id: number
+  username: string
+  displayName: string
+}
+
+export interface LoginResponse {
+  token: string
+  user: User
+}
+
+// Campaigns
+export interface Campaign {
+  id: number
+  name: string
+  role: 'gm' | 'player'
+  createdAt: string
+  nextSessionDate?: string
+  nextSessionTitle?: string
+}
+
+export interface CampaignDetail extends Campaign {
+  inviteCode?: string
+  inviteActive: boolean
+  members: Member[]
+}
+
+export interface Member {
+  userId: number
+  displayName: string
+  role: 'gm' | 'player'
+}
+
+// Characters
+export interface Character {
+  id: number
+  campaignId: number
+  ownerId?: number
+  name: string
+  playerName: string
+  level: number
+  experience: number
+  caminoHeroico: string
+  caminoRadiante: string
+  ascendencia: string
+  fuerza: number
+  velocidad: number
+  intelecto: number
+  voluntad: number
+  discernimiento: number
+  presencia: number
+  health: number
+  maxHealth: number
+  concentration: number
+  maxConcentration: number
+  investiture: number
+  maxInvestiture: number
+  desvio: number
+  marcosInfusas: number
+  marcosOpacas: number
+  agilidad: number
+  armasLigeras: number
+  armasPesadas: number
+  atletismo: number
+  hurto: number
+  sigilo: number
+  deduccion: number
+  disciplina: number
+  intimidacion: number
+  manufactura: number
+  medicina: number
+  conocimiento: number
+  engano: number
+  liderazgo: number
+  percepcion: number
+  perspicacia: number
+  persuasion: number
+  supervivencia: number
+  habilidadPersonalizada1: string
+  habilidadPersonalizada1Valor: number
+  habilidadPersonalizada1Atributo: string
+  habilidadPersonalizada2: string
+  habilidadPersonalizada2Valor: number
+  habilidadPersonalizada2Atributo: string
+  habilidadPersonalizada3: string
+  habilidadPersonalizada3Valor: number
+  habilidadPersonalizada3Atributo: string
+  proposito: string
+  obstaculo: string
+  metas: string
+  talentos: string
+  apariencia: string
+  notas: string
+  conexiones: string
+  weapons: string[]
+  armor: string[]
+  spells: string[]
+  equipment: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante'> & { ownerId?: number }
+export type UpdateCharacterRequest = Omit<Character, 'id' | 'campaignId' | 'createdAt' | 'updatedAt'>
+
+// NPCs
+export interface Npc extends Character {
+  isVisibleToPlayers: boolean
+}
+
+// Matches
+export interface Scene {
+  id: number
+  description: string
+  orderIndex: number
+}
+
+export interface Match {
+  id: number
+  campaignId: number
+  resolution: string
+  isCompleted: boolean
+  createdAt: string
+  completedAt?: string
+  scenes: Scene[]
+}
+
+// SideQuests
+export interface SideQuest {
+  id: number
+  campaignId: number
+  name: string
+  summary: string
+  description: string
+  acts: string[]
+  rewards: string[]
+  benefits: string[]
+  notes: string
+  started: boolean
+  createdAt: string
+}
+
+// Sessions
+export interface Session {
+  id: number
+  campaignId: number
+  title: string
+  date: string
+  location: string
+  notes: string
+  createdAt: string
+}
+
+export interface CreateSessionRequest {
+  title: string
+  date: string
+  location: string
+  notes: string
+}
+
+// Catalog
+export interface WeaponCatalog {
+  id: number
+  name: string
+  weaponTypeId: number
+  skillId: number
+  damageDiceCount: number
+  damageDiceValue: number
+  damageTypeId: number
+  rangeId: number
+  traitIds: number[]
+  expertTraitIds: number[]
+}
+
+export interface ArmorCatalog {
+  id: number
+  name: string
+  armorTypeId: number
+  desvio: number
+  traitIds: number[]
+  expertTraitIds: number[]
+}
+
+export interface GearItem {
+  id: number
+  name: string
+  weight: number
+  price: number
+  description: string
+}
+
+export interface CatalogOption {
+  id: number
+  name: string
+  description: string
+}

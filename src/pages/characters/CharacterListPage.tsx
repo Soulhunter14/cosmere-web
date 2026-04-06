@@ -320,7 +320,7 @@ export function CharacterListPage() {
   // Player with no character
   if (!isGm && (!characters || characters.length === 0)) {
     return (
-      <div style={{ padding: '28px 20px 48px', maxWidth: 640 }}>
+      <div style={{ padding: '20px 16px 48px', maxWidth: 680, margin: '0 auto' }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 32 }}>
           Mi personaje
         </h1>
@@ -352,12 +352,12 @@ export function CharacterListPage() {
   }
 
   return (
-    <div style={{ padding: '28px 20px 48px', maxWidth: 640 }}>
+    <div style={{ padding: '20px 16px 48px', maxWidth: 680, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, gap: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 3 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
             {isGm ? 'Personajes' : 'Mi personaje'}
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>

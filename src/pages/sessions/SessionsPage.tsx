@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, MapPin, Clock } from 'lucide-react'
 import { sessionsApi } from '../../api/sessions'
 import { useCampaignStore } from '../../store/campaignStore'
-import { Input, Spinner } from '../../components/ui'
+import { Input, Spinner, ConfirmDialog } from '../../components/ui'
 import type { Session } from '../../types'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -116,7 +116,7 @@ export function SessionsPage() {
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em' }}>
           Calendario
         </h1>
         {isGm && (
@@ -303,50 +303,13 @@ export function SessionsPage() {
         )
       })()}
 
-      {/* Confirm delete dialog */}
-      {confirmDelete && (
-        <>
-          <div
-            onClick={() => setConfirmDelete(null)}
-            style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-          />
-          <div style={{
-            position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-            zIndex: 71, background: 'var(--surface-1)',
-            borderRadius: 16, border: '1px solid var(--border-bright)',
-            padding: '24px 24px 20px', width: 'min(340px, calc(100vw - 32px))',
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
-              ¿Eliminar sesión?
-            </h3>
-            <p style={{ fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.5, marginBottom: 20 }}>
-              Se eliminará <strong style={{ color: 'var(--text-muted)' }}>"{confirmDelete.title}"</strong> permanentemente. Esta acción no se puede deshacer.
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => setConfirmDelete(null)}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer',
-                  background: 'var(--surface-2)', border: '1px solid var(--border)',
-                  color: 'var(--text-muted)', fontSize: 13, fontWeight: 600,
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => { deleteMutation.mutate(confirmDelete.id); setConfirmDelete(null) }}
-                style={{
-                  flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer',
-                  background: 'rgba(251,113,133,0.15)', border: '1px solid rgba(251,113,133,0.3)',
-                  color: '#fb7185', fontSize: 13, fontWeight: 700,
-                }}
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title={`¿Eliminar "${confirmDelete?.title}"?`}
+        message="Esta acción no se puede deshacer."
+        onConfirm={() => { deleteMutation.mutate(confirmDelete!.id); setConfirmDelete(null) }}
+        onCancel={() => setConfirmDelete(null)}
+      />
 
       {/* Create session sheet */}
       {showCreate && (

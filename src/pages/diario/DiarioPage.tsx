@@ -249,15 +249,15 @@ export function DiarioPage() {
   const [selected, setSelected] = useState<Session | null>(null)
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 20px 48px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
+      <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
         Diario de campaña
       </h1>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>
         {SESSIONS.length} sesiones — Caminapiedras
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {SESSIONS.map((s) => (
           <SessionCard key={s.slug} session={s} onClick={() => setSelected(s)} />
         ))}

@@ -27,8 +27,8 @@ function QuestCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '13px 14px', borderRadius: 16, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 14,
+        padding: '14px 16px', borderRadius: 16, cursor: 'pointer',
         background: 'var(--surface-1)',
         border: `1px solid ${hovered ? 'rgba(180,190,254,0.2)' : 'var(--border)'}`,
         transform: hovered ? 'translateX(3px)' : 'translateX(0)',
@@ -164,12 +164,12 @@ export function SideQuestListPage() {
   const pending = quests?.filter((q) => !q.started) ?? []
 
   return (
-    <div style={{ padding: '28px 20px 48px', maxWidth: 640 }}>
+    <div style={{ padding: '20px 16px 48px', maxWidth: 680, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, gap: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 3 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
             Misiones
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -288,7 +288,7 @@ export function SideQuestListPage() {
           <div style={{ fontSize: 10, fontWeight: 700, color: '#34d399', letterSpacing: '0.08em', marginBottom: 10 }}>
             ACTIVAS
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {active.map((q) => (
               <QuestCard key={q.id} quest={q} isGm={isGm}
                 onOpen={() => navigate(`/campaigns/${id}/sidequests/${q.id}`)}
@@ -308,7 +308,7 @@ export function SideQuestListPage() {
               PENDIENTES
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {pending.map((q) => (
               <QuestCard key={q.id} quest={q} isGm={isGm}
                 onOpen={() => navigate(`/campaigns/${id}/sidequests/${q.id}`)}

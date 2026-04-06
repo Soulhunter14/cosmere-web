@@ -1,38 +1,47 @@
 import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Users, Sword, Shield, ScrollText, Library, LogOut, ChevronLeft, Settings2, BookMarked, CalendarDays } from 'lucide-react'
+import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useCampaignStore } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
+import { notesApi } from '../api/notes'
 import { cn } from '../lib/utils'
 
 const navItems = [
-  { to: 'characters', label: 'Personajes', icon: Users },
-  { to: 'npcs', label: 'NPCs', icon: Shield },
-  { to: 'sessions', label: 'Calendario', icon: CalendarDays },
-  { to: 'diario', label: 'Diario', icon: BookMarked },
-  { to: 'encyclopedia', label: 'Enciclopedia', icon: Library },
+  { to: 'home', label: 'Inicio', icon: House },
+  { to: 'personajes', label: 'Personajes', icon: Users },
+  { to: 'historia', label: 'Historia', icon: BookOpen },
+  { to: 'encyclopedia', label: 'Mundo', icon: Globe },
 ]
 
 const gmNavItems = [
-  { to: 'sidequests', label: 'Misiones', icon: ScrollText },
-  { to: 'matches', label: 'Combates', icon: Sword },
+  { to: 'gm', label: 'GM', icon: Sword },
 ]
 
 const SECTION_LABELS: Record<string, string> = {
+  home: 'Inicio',
+  personajes: 'Personajes',
+  historia: 'Historia',
+  encyclopedia: 'Mundo',
+  gm: 'GM',
   characters: 'Personajes',
-  npcs: 'NPCs',
+  npcs: 'Personajes',
   matches: 'Combates',
-  sessions: 'Calendario',
-  diario: 'Diario',
+  sessions: 'Historia',
+  diario: 'Historia',
   sidequests: 'Misiones',
   catalog: 'Catálogo',
-  encyclopedia: 'Enciclopedia',
   settings: 'Ajustes',
 }
 
-// Sections that should go back to a parent section instead of the campaign root
 const PARENT_SECTION: Record<string, string> = {
   catalog: 'encyclopedia',
+  characters: 'personajes',
+  npcs: 'personajes',
+  sessions: 'historia',
+  diario: 'historia',
+  sidequests: 'gm',
+  matches: 'gm',
 }
 
 export function Sidebar() {
@@ -42,13 +51,10 @@ export function Sidebar() {
   const location = useLocation()
   const [showUserMenu, setShowUserMenu] = useState(false)
 
-  // /campaigns/:id/:section/:detailId  → detail page (4 segments)
-  // /campaigns/:id/:section            → list page   (3 segments)
   const segments = location.pathname.split('/').filter(Boolean)
   const isDetailPage = segments.length >= 4
-  const currentSection = segments[2] // e.g. 'characters', 'npcs', …
-
-  const campaignBase = segments.slice(0, 2).join('/') // campaigns/:id
+  const currentSection = segments[2]
+  const campaignBase = segments.slice(0, 2).join('/')
 
   const handleBack = () => {
     if (isDetailPage) {
@@ -60,11 +66,11 @@ export function Sidebar() {
     }
   }
 
+  const showBack = isDetailPage || !!PARENT_SECTION[currentSection]
+
   const backLabel = isDetailPage
     ? (SECTION_LABELS[currentSection] ?? 'Atrás')
-    : PARENT_SECTION[currentSection]
-      ? (SECTION_LABELS[PARENT_SECTION[currentSection]] ?? 'Atrás')
-      : 'Campañas'
+    : SECTION_LABELS[PARENT_SECTION[currentSection]] ?? 'Atrás'
 
   const handleLogout = () => {
     logout()
@@ -78,47 +84,65 @@ export function Sidebar() {
   const linkTo = (to: string) =>
     currentCampaign ? `/campaigns/${currentCampaign.id}/${to}` : '#'
 
+  const { data: notes = [] } = useQuery({
+    queryKey: ['notes', currentCampaign?.id],
+    queryFn: () => notesApi.getAll(currentCampaign!.id),
+    enabled: !!currentCampaign && !isGm,
+  })
+  const unreadCount = notes.filter((n) => !n.isRead).length
+
   return (
     <>
-      {/* ─── Desktop sidebar ────────────────────────────────── */}
+      {/* ─── Desktop sidebar (≥1024px) ──────────────────────── */}
       <aside
-        className="hidden sm:flex flex-col shrink-0"
+        className="hidden lg:flex flex-col shrink-0"
         style={{
-          width: 200,
+          width: 220,
           minHeight: '100vh',
           background: 'var(--surface-1)',
           borderRight: '1px solid var(--border)',
+          position: 'relative',
         }}
       >
-        {/* Campaign block */}
-        <div className="px-3 pt-4 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-1 text-[11px] mb-3 transition-colors group"
-            style={{ color: 'var(--text-subtle)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-          >
-            <ChevronLeft size={10} className="transition-transform group-hover:-translate-x-0.5" />
-            {backLabel}
-          </button>
+        {/* Subtle top gradient accent */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+          background: 'linear-gradient(90deg, var(--brand-dark), var(--brand-light), transparent)',
+          opacity: 0.6,
+        }} />
 
-          <p className="text-[13px] font-semibold text-white leading-tight truncate mb-1.5">
+        {/* Campaign block */}
+        <div style={{ padding: '20px 14px 14px', borderBottom: '1px solid var(--border)' }}>
+          {showBack && (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1 transition-colors group"
+              style={{ color: 'var(--text-subtle)', fontSize: 11, marginBottom: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+            >
+              <ChevronLeft size={10} className="transition-transform group-hover:-translate-x-0.5" />
+              {backLabel}
+            </button>
+          )}
+
+          <p style={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1.3, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {currentCampaign?.name ?? 'Cosmere'}
           </p>
 
           {currentCampaign && (
             <span
-              className="inline-flex items-center gap-1 font-bold rounded-full uppercase tracking-wider"
+              className="inline-flex items-center gap-1.5 font-bold rounded-full uppercase tracking-wider"
               style={
                 isGm
-                  ? { fontSize: 10, padding: '3px 10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }
-                  : { fontSize: 9, padding: '2px 8px', background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', color: 'var(--brand-light)' }
+                  ? { fontSize: 10, padding: '3px 10px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
+                  : { fontSize: 9, padding: '2px 9px', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', color: 'var(--brand-light)' }
               }
             >
               <span style={{
-                width: isGm ? 5 : 4, height: isGm ? 5 : 4, borderRadius: '50%', flexShrink: 0,
+                width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
                 background: isGm ? '#f87171' : 'var(--brand-light)',
+                boxShadow: isGm ? '0 0 6px #f87171' : '0 0 6px var(--brand-light)',
               }} />
               {isGm ? 'Game Master' : 'Jugador'}
             </span>
@@ -126,30 +150,36 @@ export function Sidebar() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 py-2 space-y-0.5">
+        <nav style={{ flex: 1, padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={linkTo(to)}
               className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all duration-150',
-                  isActive ? 'text-[var(--brand-light)] font-semibold' : 'font-medium'
-                )
+                cn('flex items-center gap-2.5 rounded-lg text-[13px] transition-all duration-150', isActive ? 'font-semibold' : 'font-medium')
               }
-              style={({ isActive }) =>
-                isActive
-                  ? { background: 'rgba(180,190,254,0.08)', border: '1px solid rgba(180,190,254,0.15)' }
-                  : { color: 'var(--text-muted)', border: '1px solid transparent' }
+              style={({ isActive }) => isActive
+                ? {
+                    padding: '8px 10px',
+                    background: 'rgba(180,190,254,0.08)',
+                    border: '1px solid rgba(180,190,254,0.14)',
+                    color: 'var(--brand-light)',
+                    boxShadow: 'inset 3px 0 0 var(--brand-light)',
+                  }
+                : {
+                    padding: '8px 10px',
+                    color: 'var(--text-muted)',
+                    border: '1px solid transparent',
+                  }
               }
               onMouseEnter={(e) => {
-                if (!e.currentTarget.classList.contains('text-[var(--brand-light)]')) {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
                   e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
                   e.currentTarget.style.color = 'var(--text)'
                 }
               }}
               onMouseLeave={(e) => {
-                if (!e.currentTarget.classList.contains('text-[var(--brand-light)]')) {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
                   e.currentTarget.style.background = ''
                   e.currentTarget.style.color = 'var(--text-muted)'
                 }
@@ -160,39 +190,42 @@ export function Sidebar() {
             </NavLink>
           ))}
 
-          {/* GM-only section */}
           {isGm && (
             <>
-              <div style={{ margin: '8px 4px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,0.2)' }} />
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#f87171', letterSpacing: '0.1em' }}>GM</span>
-                <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,0.2)' }} />
+              <div style={{ margin: '10px 4px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,0.18)' }} />
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(248,113,113,0.7)', letterSpacing: '0.12em' }}>GM</span>
+                <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,0.18)' }} />
               </div>
               {gmNavItems.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}
                   to={linkTo(to)}
                   className={({ isActive }) =>
-                    cn(
-                      'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all duration-150',
-                      isActive ? 'font-semibold' : 'font-medium'
-                    )
+                    cn('flex items-center gap-2.5 rounded-lg text-[13px] transition-all duration-150', isActive ? 'font-semibold' : 'font-medium')
                   }
-                  style={({ isActive }) =>
-                    isActive
-                      ? { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }
-                      : { color: 'var(--text-muted)', border: '1px solid transparent' }
+                  style={({ isActive }) => isActive
+                    ? {
+                        padding: '8px 10px',
+                        background: 'rgba(239,68,68,0.08)',
+                        border: '1px solid rgba(239,68,68,0.22)',
+                        color: '#f87171',
+                        boxShadow: 'inset 3px 0 0 #f87171',
+                      }
+                    : {
+                        padding: '8px 10px',
+                        color: 'var(--text-muted)',
+                        border: '1px solid transparent',
+                      }
                   }
                   onMouseEnter={(e) => {
-                    const active = e.currentTarget.style.color === 'rgb(248, 113, 113)'
-                    if (!active) {
-                      e.currentTarget.style.background = 'rgba(239,68,68,0.06)'
+                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                      e.currentTarget.style.background = 'rgba(239,68,68,0.05)'
                       e.currentTarget.style.color = '#fca5a5'
                     }
                   }}
                   onMouseLeave={(e) => {
-                    const active = e.currentTarget.getAttribute('aria-current') === 'page'
-                    if (!active) {
+                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
                       e.currentTarget.style.background = ''
                       e.currentTarget.style.color = 'var(--text-muted)'
                     }
@@ -208,20 +241,38 @@ export function Sidebar() {
 
         {/* Settings */}
         {currentCampaign && (
-          <div className="px-2 pb-1.5" style={{ borderTop: '1px solid var(--border)', paddingTop: '0.375rem' }}>
+          <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)' }}>
             <NavLink
               to={`/campaigns/${currentCampaign.id}/settings`}
               className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all duration-150',
-                  isActive ? 'text-[var(--brand-light)]' : ''
-                )
+                cn('flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150', isActive ? '' : '')
               }
-              style={({ isActive }) =>
-                isActive
-                  ? { background: 'rgba(180,190,254,0.08)', border: '1px solid rgba(180,190,254,0.15)' }
-                  : { color: 'var(--text-muted)', border: '1px solid transparent' }
+              style={({ isActive }) => isActive
+                ? {
+                    padding: '8px 10px',
+                    background: 'rgba(180,190,254,0.08)',
+                    border: '1px solid rgba(180,190,254,0.14)',
+                    color: 'var(--brand-light)',
+                    boxShadow: 'inset 3px 0 0 var(--brand-light)',
+                  }
+                : {
+                    padding: '8px 10px',
+                    color: 'var(--text-muted)',
+                    border: '1px solid transparent',
+                  }
               }
+              onMouseEnter={(e) => {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                  e.currentTarget.style.color = 'var(--text)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                  e.currentTarget.style.background = ''
+                  e.currentTarget.style.color = 'var(--text-muted)'
+                }
+              }}
             >
               <Settings2 size={14} />
               Ajustes
@@ -230,21 +281,25 @@ export function Sidebar() {
         )}
 
         {/* User footer */}
-        <div className="px-3 py-3" style={{ borderTop: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 bg-gradient-to-br from-violet-500 to-indigo-600">
+        <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+              <div
+                className="flex items-center justify-center text-white font-bold shrink-0 bg-gradient-to-br from-violet-500 to-indigo-600"
+                style={{ width: 28, height: 28, borderRadius: '50%', fontSize: 10, border: '1.5px solid rgba(180,190,254,0.25)' }}
+              >
                 {initials}
               </div>
-              <span className="text-[12px] truncate font-medium" style={{ color: 'var(--text-muted)' }}>
-                {user?.displayName}
-              </span>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user?.displayName}
+                </p>
+              </div>
             </div>
             <button
               onClick={handleLogout}
-              className="p-1 rounded-md transition-colors shrink-0"
+              style={{ padding: 6, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', flexShrink: 0, display: 'flex', alignItems: 'center' }}
               title="Cerrar sesión"
-              style={{ color: 'var(--text-subtle)' }}
               onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
               onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
             >
@@ -254,75 +309,274 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* ─── Mobile top bar ─────────────────────────────────── */}
+      {/* ─── Tablet sidebar (640px–1023px) ──────────────────── */}
+      <aside
+        className="hidden sm:flex lg:hidden flex-col shrink-0 items-center"
+        style={{
+          width: 64,
+          minHeight: '100vh',
+          background: 'var(--surface-1)',
+          borderRight: '1px solid var(--border)',
+          position: 'relative',
+        }}
+      >
+        {/* Top accent line */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+          background: 'linear-gradient(90deg, var(--brand-dark), var(--brand-light))',
+          opacity: 0.6,
+        }} />
+
+        {/* Role dot */}
+        <div style={{ paddingTop: 20, paddingBottom: 14, display: 'flex', justifyContent: 'center', width: '100%', borderBottom: '1px solid var(--border)' }}>
+          <div
+            title={isGm ? 'Game Master' : 'Jugador'}
+            style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: isGm ? '#f87171' : 'var(--brand-light)',
+              boxShadow: isGm ? '0 0 8px #f87171' : '0 0 8px var(--brand-light)',
+            }}
+          />
+        </div>
+
+        {/* Nav icons */}
+        <nav style={{ flex: 1, padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%' }}>
+          {navItems.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={linkTo(to)}
+              title={label}
+              style={({ isActive }) => ({
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+                padding: '10px 0',
+                width: '100%',
+                position: 'relative',
+                textDecoration: 'none',
+                color: isActive ? 'var(--brand-light)' : 'var(--text-subtle)',
+                transition: 'color 0.15s',
+              })}
+              onMouseEnter={(e) => {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                  e.currentTarget.style.color = 'var(--text-muted)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                  e.currentTarget.style.color = 'var(--text-subtle)'
+                }
+              }}
+            >
+              {({ isActive }) => (
+                <>
+                  {/* Active left bar */}
+                  {isActive && (
+                    <div style={{
+                      position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
+                      width: 3, height: 24, borderRadius: '0 3px 3px 0',
+                      background: 'var(--brand-light)',
+                      boxShadow: '0 0 8px var(--brand-light)',
+                    }} />
+                  )}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 36, height: 32, borderRadius: 8,
+                    background: isActive ? 'rgba(180,190,254,0.1)' : 'transparent',
+                    transition: 'background 0.15s',
+                  }}>
+                    <Icon size={16} />
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.02em', lineHeight: 1 }}>
+                    {label}
+                  </span>
+                </>
+              )}
+            </NavLink>
+          ))}
+
+          {isGm && (
+            <>
+              <div style={{ width: 28, height: 1, background: 'rgba(239,68,68,0.2)', margin: '4px 0' }} />
+              {gmNavItems.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={linkTo(to)}
+                  title={label}
+                  style={({ isActive }) => ({
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '10px 0',
+                    width: '100%',
+                    position: 'relative',
+                    textDecoration: 'none',
+                    color: isActive ? '#f87171' : 'rgba(248,113,113,0.45)',
+                    transition: 'color 0.15s',
+                  })}
+                  onMouseEnter={(e) => {
+                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                      e.currentTarget.style.color = '#fca5a5'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                      e.currentTarget.style.color = 'rgba(248,113,113,0.45)'
+                    }
+                  }}
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <div style={{
+                          position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
+                          width: 3, height: 24, borderRadius: '0 3px 3px 0',
+                          background: '#f87171',
+                          boxShadow: '0 0 8px #f87171',
+                        }} />
+                      )}
+                      <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: 36, height: 32, borderRadius: 8,
+                        background: isActive ? 'rgba(239,68,68,0.1)' : 'transparent',
+                        transition: 'background 0.15s',
+                      }}>
+                        <Icon size={16} />
+                      </div>
+                      <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.02em', lineHeight: 1 }}>
+                        {label}
+                      </span>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </>
+          )}
+        </nav>
+
+        {/* Settings icon */}
+        {currentCampaign && (
+          <div style={{ padding: '8px 0', borderTop: '1px solid var(--border)', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <NavLink
+              to={`/campaigns/${currentCampaign.id}/settings`}
+              title="Ajustes"
+              style={({ isActive }) => ({
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 36, height: 32, borderRadius: 8,
+                color: isActive ? 'var(--brand-light)' : 'var(--text-subtle)',
+                background: isActive ? 'rgba(180,190,254,0.1)' : 'transparent',
+                transition: 'color 0.15s, background 0.15s',
+                textDecoration: 'none',
+              })}
+              onMouseEnter={(e) => {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                  e.currentTarget.style.color = 'var(--text-muted)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
+                  e.currentTarget.style.color = 'var(--text-subtle)'
+                }
+              }}
+            >
+              <Settings2 size={15} />
+            </NavLink>
+          </div>
+        )}
+
+        {/* User avatar button */}
+        <div style={{ padding: '12px 0', borderTop: '1px solid var(--border)', width: '100%', display: 'flex', justifyContent: 'center' }}>
+          <button
+            onClick={() => setShowUserMenu(true)}
+            title={user?.displayName}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <div
+              className="flex items-center justify-center text-white font-bold bg-gradient-to-br from-violet-500 to-indigo-600"
+              style={{ width: 32, height: 32, borderRadius: '50%', fontSize: 11, border: '2px solid rgba(180,190,254,0.25)' }}
+            >
+              {initials}
+            </div>
+          </button>
+        </div>
+      </aside>
+
+      {/* ─── Mobile top bar (<640px) ────────────────────────── */}
       <div
-        className="sm:hidden fixed top-0 left-0 right-0 z-40 flex items-end justify-between px-4"
+        className="sm:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4"
         style={{
           height: 'calc(52px + var(--sat))',
-          paddingBottom: 10,
+          paddingTop: 'var(--sat)',
           background: 'rgba(30,30,46,0.85)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderBottom: '1px solid var(--border)',
         }}
       >
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-1.5 text-[13px] font-medium"
-          style={{
-            color: 'var(--text-subtle)',
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '8px 8px 8px 0',
-          }}
-        >
-          <ChevronLeft size={16} />
-          <span className="truncate max-w-[140px]">
-            {backLabel}
-          </span>
-        </button>
-
-        {/* Right side: GM badge + avatar — whole area is one tap target */}
-        <button
-          onClick={() => setShowUserMenu(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '8px 0 8px 8px',
-          }}
-        >
-          {currentCampaign && (
-            <span
-              className="inline-flex items-center font-bold rounded-full uppercase tracking-wider"
-              style={
-                isGm
-                  ? { fontSize: 11, padding: '3px 10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }
-                  : { fontSize: 9, padding: '2px 8px', background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', color: 'var(--brand-light)' }
-              }
-            >
-              {isGm ? 'GM' : 'Player'}
-            </span>
-          )}
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold bg-gradient-to-br from-violet-500 to-indigo-600"
-            style={{ border: '2px solid rgba(180,190,254,0.3)' }}
+        {currentCampaign ? (
+          <span
+            className="inline-flex items-center font-bold rounded-full uppercase tracking-wider"
+            style={
+              isGm
+                ? { fontSize: 11, padding: '3px 10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }
+                : { fontSize: 9, padding: '2px 8px', background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', color: 'var(--brand-light)' }
+            }
           >
-            {initials}
-          </div>
-        </button>
+            {isGm ? 'GM' : 'Jugador'}
+          </span>
+        ) : <div />}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {!isGm && currentCampaign && (
+            <NavLink
+              to={linkTo('historia')}
+              style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px 6px' }}
+            >
+              <Bell
+                size={18}
+                style={{ color: unreadCount > 0 ? 'var(--brand-light)' : 'var(--text-subtle)', transition: 'color 0.15s' }}
+              />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: 4, right: 2,
+                  minWidth: 14, height: 14, borderRadius: 7,
+                  background: 'var(--brand)', color: 'white',
+                  fontSize: 8, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 3px',
+                }}>
+                  {unreadCount}
+                </span>
+              )}
+            </NavLink>
+          )}
+
+          <button
+            onClick={() => setShowUserMenu(true)}
+            style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 8 }}
+          >
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold bg-gradient-to-br from-violet-500 to-indigo-600"
+              style={{ border: '2px solid rgba(180,190,254,0.3)' }}
+            >
+              {initials}
+            </div>
+          </button>
+        </div>
       </div>
 
-      {/* ─── Mobile user menu sheet ──────────────────────────── */}
+      {/* ─── User menu sheet (mobile + tablet) ──────────────── */}
       {showUserMenu && (
         <>
-          {/* Backdrop */}
           <div
-            className="sm:hidden fixed inset-0 z-50"
+            className="fixed inset-0 z-50"
             style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
             onClick={() => setShowUserMenu(false)}
           />
-          {/* Sheet */}
           <div
-            className="sm:hidden fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl"
+            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl"
             style={{
               background: 'var(--surface-1)',
               border: '1px solid var(--border-bright)',
@@ -330,11 +584,9 @@ export function Sidebar() {
               paddingBottom: 'calc(16px + var(--sab))',
             }}
           >
-            {/* Drag handle */}
             <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
               <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
             </div>
-            {/* User info */}
             <div style={{ padding: '8px 20px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold bg-gradient-to-br from-violet-500 to-indigo-600"
@@ -347,9 +599,22 @@ export function Sidebar() {
                 <p style={{ fontSize: 12, color: 'var(--text-subtle)' }}>@{user?.username}</p>
               </div>
             </div>
-            {/* Divider */}
             <div style={{ height: 1, background: 'var(--border)', margin: '0 20px 12px' }} />
-            {/* Logout */}
+            {currentCampaign && (
+              <NavLink
+                to={`/campaigns/${currentCampaign.id}/settings`}
+                onClick={() => setShowUserMenu(false)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  width: '100%', padding: '12px 20px',
+                  color: 'var(--text-muted)', fontSize: 14, fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                <Settings2 size={16} />
+                Ajustes
+              </NavLink>
+            )}
             <button
               onClick={() => { handleLogout(); setShowUserMenu(false) }}
               style={{
@@ -367,61 +632,7 @@ export function Sidebar() {
         </>
       )}
 
-      {/* ─── Mobile GM bottom bar ───────────────────────────── */}
-      {isGm && (
-        <nav
-          className="sm:hidden fixed left-0 right-0 z-39 flex items-start justify-around px-2"
-          style={{
-            bottom: 'calc(60px + var(--sab, 0px))',
-            height: 52,
-            paddingTop: 6,
-            background: 'rgba(30,18,18,0.95)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderTop: '1px solid rgba(239,68,68,0.25)',
-          }}
-        >
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-            background: 'linear-gradient(90deg, transparent, rgba(239,68,68,0.4), transparent)',
-          }} />
-          <span style={{
-            position: 'absolute', top: -8, left: '50%', transform: 'translateX(-50%)',
-            fontSize: 8, fontWeight: 800, color: '#f87171', letterSpacing: '0.12em',
-            background: 'rgba(30,18,18,0.95)', padding: '1px 8px', borderRadius: 20,
-            border: '1px solid rgba(239,68,68,0.3)',
-          }}>GM</span>
-          {gmNavItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={linkTo(to)}
-              className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-all duration-150"
-              style={({ isActive }) => ({
-                color: isActive ? '#f87171' : 'rgba(248,113,113,0.5)',
-              })}
-            >
-              {({ isActive }) => (
-                <>
-                  <div
-                    className="flex items-center justify-center rounded-lg transition-all duration-150"
-                    style={{
-                      width: 32, height: 24,
-                      background: isActive ? 'rgba(239,68,68,0.15)' : 'transparent',
-                    }}
-                  >
-                    <Icon size={15} />
-                  </div>
-                  <span className="text-[9px] font-semibold leading-none" style={{ letterSpacing: '0.02em' }}>
-                    {label}
-                  </span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-      )}
-
-      {/* ─── Mobile bottom nav ──────────────────────────────── */}
+      {/* ─── Mobile bottom nav (<640px) ─────────────────────── */}
       <nav
         className="sm:hidden fixed bottom-0 left-0 right-0 z-40 flex items-start justify-around px-1"
         style={{
@@ -461,12 +672,12 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {currentCampaign && (
+        {isGm && (
           <NavLink
-            to={`/campaigns/${currentCampaign.id}/settings`}
+            to={linkTo('gm')}
             className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-all duration-150"
             style={({ isActive }) => ({
-              color: isActive ? 'var(--brand-light)' : 'var(--text-subtle)',
+              color: isActive ? '#f87171' : 'rgba(248,113,113,0.5)',
             })}
           >
             {({ isActive }) => (
@@ -475,13 +686,13 @@ export function Sidebar() {
                   className="flex items-center justify-center rounded-lg transition-all duration-150"
                   style={{
                     width: 32, height: 28,
-                    background: isActive ? 'rgba(180,190,254,0.12)' : 'transparent',
+                    background: isActive ? 'rgba(239,68,68,0.12)' : 'transparent',
                   }}
                 >
-                  <Settings2 size={16} />
+                  <Sword size={16} />
                 </div>
                 <span className="text-[9px] font-semibold leading-none" style={{ letterSpacing: '0.02em' }}>
-                  Ajustes
+                  GM
                 </span>
               </>
             )}

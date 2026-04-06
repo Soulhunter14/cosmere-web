@@ -134,7 +134,7 @@ export function CampaignListPage() {
     onSuccess: (campaign) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] })
       setCurrentCampaign(campaign)
-      navigate(`/campaigns/${campaign.id}/characters`)
+      navigate(`/campaigns/${campaign.id}/home`)
     },
   })
 
@@ -155,7 +155,7 @@ export function CampaignListPage() {
   const openCampaign = async (id: number) => {
     const detail = await campaignsApi.getById(id)
     setCurrentCampaign(detail)
-    navigate(`/campaigns/${id}/characters`)
+    navigate(`/campaigns/${id}/home`)
   }
 
   return (

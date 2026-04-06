@@ -159,6 +159,24 @@ export interface CreateSessionRequest {
   notes: string
 }
 
+// Notes
+export interface Note {
+  id: number
+  campaignId: number
+  fromUserId: number
+  toUserId: number
+  fromDisplayName: string
+  toDisplayName: string
+  content: string
+  isRead: boolean
+  createdAt: string
+}
+
+export interface CreateNoteRequest {
+  toUserId: number
+  content: string
+}
+
 // Catalog
 export interface WeaponCatalog {
   id: number

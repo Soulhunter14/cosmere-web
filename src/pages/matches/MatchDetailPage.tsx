@@ -41,7 +41,7 @@ export function MatchDetailPage() {
   const isCompleted = match.isCompleted
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 600, margin: '0 auto' }}>
+    <div style={{ padding: '20px 16px 48px', maxWidth: 680, margin: '0 auto' }}>
 
       {/* ── Hero header ───────────────────────────────────────── */}
       <div

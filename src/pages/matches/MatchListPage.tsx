@@ -36,13 +36,13 @@ export function MatchListPage() {
   if (isLoading) return <Spinner />
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 640, margin: '0 auto' }}>
+    <div style={{ padding: '20px 16px 48px', maxWidth: 680, margin: '0 auto' }}>
 
       {/* ── Header ───────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
         <div>
           <h1 style={{
-            fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em',
+            fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em',
             color: 'var(--text)', marginBottom: 4, lineHeight: 1.2,
           }}>
             Sesiones
@@ -62,7 +62,7 @@ export function MatchListPage() {
               display: 'flex', alignItems: 'center', gap: 6,
               background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
               color: 'white', border: 'none', borderRadius: 12,
-              padding: '8px 16px', fontSize: 13, fontWeight: 600,
+              padding: '8px 14px', fontSize: 13, fontWeight: 600,
               cursor: createMutation.isPending ? 'not-allowed' : 'pointer',
               opacity: createMutation.isPending ? 0.5 : 1,
               boxShadow: '0 4px 14px rgba(139,92,246,0.3)',
@@ -83,7 +83,7 @@ export function MatchListPage() {
         <div style={{
           border: '1.5px dashed var(--border-bright)',
           borderRadius: 20,
-          padding: '56px 24px',
+          padding: '52px 32px',
           textAlign: 'center',
           background: 'var(--surface-1)',
         }}>

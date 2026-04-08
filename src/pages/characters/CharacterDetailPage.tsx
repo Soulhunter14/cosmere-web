@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Edit2, Save, X, Heart, Flame, Sparkles, ChevronDown, Trash2, Plus } from 'lucide-react'
+import { Edit2, Save, X, Heart, ChevronDown, Trash2, Plus } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
 import type { WeaponCatalog, ArmorCatalog, GearItem } from '../../types'
@@ -11,6 +11,8 @@ import type { Character, UpdateCharacterRequest } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { TalentActivation } from '../../components/TalentActivation'
+import type { ActivationType } from '../../components/TalentActivation'
 
 interface PickerOption { id: string; label: string; sublabel?: string; color: string; colorBg: string; colorBorder: string; icon?: string }
 
@@ -146,39 +148,10 @@ const SECTIONS = [
 
 const BACKGROUND_FIELDS = [
   ['proposito', 'Propósito'], ['obstaculo', 'Obstáculo'], ['metas', 'Metas'],
-  ['talentos', 'Talentos'], ['apariencia', 'Apariencia'], ['notas', 'Notas'],
+  ['apariencia', 'Apariencia'], ['notas', 'Notas'],
 ]
 
-type Tab = 'stats' | 'background' | 'bolsa'
-
-function ResourceBar({ icon, label, value, max, color }: {
-  icon: React.ReactNode; label: string; value: number; max: number; color: string
-}) {
-  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0
-  return (
-    <div style={{ flex: 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          {icon}
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>
-            {label}
-          </span>
-        </div>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'white', fontVariantNumeric: 'tabular-nums' }}>
-          {value}<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-subtle)' }}>/{max}</span>
-        </span>
-      </div>
-      <div style={{ height: 5, borderRadius: 6, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-        <div style={{
-          height: '100%', borderRadius: 6,
-          background: color,
-          width: `${pct}%`,
-          transition: 'width 0.5s ease',
-        }} />
-      </div>
-    </div>
-  )
-}
+type Tab = 'stats' | 'background' | 'bolsa' | 'talentos'
 
 export function CharacterDetailPage() {
   const { campaignId, characterId } = useParams<{ campaignId: string; characterId: string }>()
@@ -195,6 +168,7 @@ export function CharacterDetailPage() {
   const [marcosDelta, setMarcosDelta] = useState(1)
   const [itemPicker, setItemPicker] = useState<'weapon' | 'armor' | 'gear' | null>(null)
   const [confirmRemoveItem, setConfirmRemoveItem] = useState<{ type: 'weapon' | 'armor' | 'gear'; index: number; name: string } | null>(null)
+  const [talentoPicker, setTalentoPicker] = useState(false)
 
   const { data: char, isLoading } = useQuery<Character>({
     queryKey: ['character', cId, chId],
@@ -226,6 +200,12 @@ export function CharacterDetailPage() {
     marcosMutation.mutate(next)
   }
 
+  const desvioMutation = useMutation({
+    mutationFn: (patch: { equippedArmor: string; desvio: number }) =>
+      charactersApi.update(cId, chId, { ...(char as UpdateCharacterRequest), ...patch }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
+  })
+
   const { data: catalogWeapons = [] } = useQuery<WeaponCatalog[]>({
     queryKey: ['catalog', 'weapons'],
     queryFn: catalogApi.getWeapons,
@@ -234,7 +214,7 @@ export function CharacterDetailPage() {
   const { data: catalogArmor = [] } = useQuery<ArmorCatalog[]>({
     queryKey: ['catalog', 'armor'],
     queryFn: catalogApi.getArmor,
-    enabled: tab === 'bolsa',
+    enabled: tab === 'bolsa' || tab === 'stats',
   })
   const { data: catalogGear = [] } = useQuery<GearItem[]>({
     queryKey: ['catalog', 'gear'],
@@ -242,8 +222,14 @@ export function CharacterDetailPage() {
     enabled: tab === 'bolsa',
   })
 
+  const talentosMutation = useMutation({
+    mutationFn: (names: string[]) =>
+      charactersApi.update(cId, chId, { ...(char as UpdateCharacterRequest), talentos: JSON.stringify(names) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
+  })
+
   const itemsMutation = useMutation({
-    mutationFn: (patch: { weapons?: string[]; armor?: string[]; equipment?: string[] }) =>
+    mutationFn: (patch: { weapons?: string[]; armor?: string[]; equipment?: string[]; equippedArmor?: string; desvio?: number }) =>
       charactersApi.update(cId, chId, { ...(char as UpdateCharacterRequest), ...patch }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
   })
@@ -260,8 +246,13 @@ export function CharacterDetailPage() {
       const next = (char?.weapons ?? []).filter((_, i) => i !== index)
       itemsMutation.mutate({ weapons: next })
     } else if (type === 'armor') {
+      const removedName = (char?.armor ?? [])[index]
       const next = (char?.armor ?? []).filter((_, i) => i !== index)
-      itemsMutation.mutate({ armor: next })
+      const wasEquipped = removedName && char?.equippedArmor === removedName
+      itemsMutation.mutate({
+        armor: next,
+        ...(wasEquipped ? { equippedArmor: '', desvio: 0 } : {}),
+      })
     } else {
       const next = (char?.equipment ?? []).filter((_, i) => i !== index)
       itemsMutation.mutate({ equipment: next })
@@ -278,9 +269,30 @@ export function CharacterDetailPage() {
   const gradient = AVATAR_GRADIENTS[char.id % AVATAR_GRADIENTS.length]
   const marcosTotal = marcos.infusas + marcos.opacas
 
+  const heroicPath = HEROIC_PATHS.find((p) => p.id === f.caminoHeroico)
+  const radiantOrder = RADIANT_ORDERS.find((o) => o.id === f.caminoRadiante)
+
+  // All talentos available from the character's paths
+  type AvailableTalento = { name: string; activation: ActivationType | null; description: string; source: string; sourceColor: string }
+  const availableTalentos: AvailableTalento[] = []
+  if (heroicPath) {
+    availableTalentos.push({ name: heroicPath.mainTalent, activation: null, description: heroicPath.mainTalentEffect, source: heroicPath.name, sourceColor: heroicPath.color })
+    for (const spec of heroicPath.specialties)
+      for (const kt of spec.keyTalents)
+        availableTalentos.push({ name: kt.name, activation: kt.activation, description: kt.description, source: `${heroicPath.name} · ${spec.name}`, sourceColor: heroicPath.color })
+  }
+  if (radiantOrder) {
+    for (const t of radiantOrder.talentos)
+      availableTalentos.push({ name: t.name, activation: t.cost, description: t.description, source: radiantOrder.name, sourceColor: radiantOrder.color })
+  }
+
+  const selectedTalentos: string[] = (() => { try { return JSON.parse(f.talentos || '[]') } catch { return [] } })()
+  const talentosMap = new Map(availableTalentos.map((t) => [t.name, t]))
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'stats', label: 'Stats' },
     { key: 'background', label: 'Trasfondo' },
+    { key: 'talentos', label: 'Talentos' },
     { key: 'bolsa', label: 'Bolsa' },
   ]
 
@@ -412,27 +424,24 @@ export function CharacterDetailPage() {
         }}>
           {editing ? (
             <div style={{ display: 'flex', flex: 1, gap: 10, flexWrap: 'wrap' }}>
-              {[['health','HP'], ['maxHealth','HP Máx']].map(([k, label]) => (
-                <div key={k} style={{ flex: 1, minWidth: 70 }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', marginBottom: 4, fontWeight: 600 }}>{label}</div>
-                  <Input
-                    type="number" min={0}
-                    value={(form as any)?.[k] ?? 0}
-                    onChange={set(k as keyof UpdateCharacterRequest)}
-                    style={{ padding: '4px 8px', fontSize: 13, textAlign: 'center' }}
-                  />
-                </div>
-              ))}
+              <div style={{ flex: 1, minWidth: 70 }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', marginBottom: 4, fontWeight: 600 }}>HP Máx</div>
+                <Input
+                  type="number" min={0}
+                  value={form?.maxHealth ?? 0}
+                  onChange={set('maxHealth')}
+                  style={{ padding: '4px 8px', fontSize: 13, textAlign: 'center' }}
+                />
+              </div>
             </div>
           ) : (
-            <>
-              <ResourceBar
-                icon={<Heart size={12} style={{ color: '#fb7185' }} />}
-                label="SALUD"
-                value={f.health} max={f.maxHealth}
-                color="linear-gradient(90deg,#f43f5e,#fb7185)"
-              />
-            </>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Heart size={14} style={{ color: '#fb7185', flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>SALUD</span>
+              <span style={{ marginLeft: 'auto', fontSize: 20, fontWeight: 800, color: 'white', fontVariantNumeric: 'tabular-nums' }}>
+                {f.maxHealth}
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -558,51 +567,51 @@ export function CharacterDetailPage() {
               )
             })()}
 
-            {/* Concentration + Investiture (current / max) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[
-              { key: 'concentration', maxKey: 'maxConcentration', label: 'Concentración', icon: <Flame size={14} style={{ color: '#fb923c' }} />, color: '#fb923c' },
-              { key: 'investiture',   maxKey: 'maxInvestiture',   label: 'Investidura',   icon: <Sparkles size={14} style={{ color: '#a78bfa' }} />, color: '#a78bfa' },
-            ].map(({ key, maxKey, label, icon, color }) => (
-              <div key={key} style={{
-                background: 'var(--surface-1)', border: '1px solid var(--border)',
-                borderRadius: 14, padding: '14px 16px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  {icon}
-                  <span style={{ fontSize: 10, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>
-                    {label.toUpperCase()}
-                  </span>
-                </div>
-                {editing ? (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <Input type="number" min={0} value={(form as any)?.[key] ?? 0}
-                      onChange={set(key as keyof UpdateCharacterRequest)}
-                      style={{ padding: '4px 8px', fontSize: 15, fontWeight: 700, textAlign: 'center', flex: 1 }} />
-                    <span style={{ color: 'var(--text-subtle)', fontSize: 13 }}>/</span>
-                    <Input type="number" min={0} value={(form as any)?.[maxKey] ?? 0}
-                      onChange={set(maxKey as keyof UpdateCharacterRequest)}
-                      style={{ padding: '4px 8px', fontSize: 15, fontWeight: 700, textAlign: 'center', flex: 1 }} />
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1, marginBottom: 8 }}>
-                      {(f as any)[key] ?? 0}
-                      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-subtle)' }}>/{(f as any)[maxKey] ?? 0}</span>
-                    </div>
-                    {(f as any)[maxKey] > 0 && (
-                      <div style={{ height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', borderRadius: 4, background: color,
-                          width: `${Math.min(100, Math.round(((f as any)[key] / (f as any)[maxKey]) * 100))}%`,
-                        }} />
+            {/* Concentración + Investidura + Desvío — one row */}
+            {(() => {
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                  {/* Concentración */}
+                  {[
+                    { maxKey: 'maxConcentration', label: 'Concentración', color: '#fb923c' },
+                    { maxKey: 'maxInvestiture',   label: 'Investidura',   color: '#a78bfa' },
+                  ].map(({ maxKey, label, color }) => (
+                    <div key={maxKey} style={{
+                      background: 'var(--surface-1)', border: '1px solid var(--border)',
+                      borderRadius: 14, padding: '12px 14px',
+                    }}>
+                      <div style={{ marginBottom: 8 }}>
+                        <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>
+                          {label.toUpperCase()}
+                        </span>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-            </div>
+                      {editing ? (
+                        <Input type="number" min={0} value={(form as any)?.[maxKey] ?? 0}
+                          onChange={set(maxKey as keyof UpdateCharacterRequest)}
+                          style={{ padding: '4px 6px', fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%' }} />
+                      ) : (
+                        <div style={{ fontSize: 20, fontWeight: 800, color, lineHeight: 1 }}>
+                          {(f as any)[maxKey] ?? 0}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Desvío */}
+                  <div style={{
+                    background: 'var(--surface-1)', border: '1px solid var(--border)',
+                    borderRadius: 14, padding: '12px 14px',
+                  }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>DESVÍO</span>
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#fbbf24', lineHeight: 1 }}>
+                      {f.desvio ?? 0}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Físico / Cognitivo / Espiritual sections */}
             {SECTIONS.map((section) => {
@@ -676,7 +685,7 @@ export function CharacterDetailPage() {
                       const base = (f as any)[k] ?? 0
                       const bonus = (f as any)[attrKey2] ?? 0
                       const total = base + bonus
-                      const pct = Math.min(100, (total / 15) * 100)
+                      const pct = Math.min(100, (base / 5) * 100)
                       return (
                         <div key={k} style={{
                           display: 'flex', alignItems: 'center', gap: 10,
@@ -815,6 +824,89 @@ export function CharacterDetailPage() {
           </div>
         )}
 
+        {/* TALENTOS TAB */}
+        {tab === 'talentos' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* Header with add button */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em' }}>
+                {selectedTalentos.length} TALENTO{selectedTalentos.length !== 1 ? 'S' : ''}
+              </span>
+              <button
+                onClick={() => setTalentoPicker(true)}
+                disabled={availableTalentos.filter((t) => !selectedTalentos.includes(t.name)).length === 0}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+                  background: 'rgba(251,191,36,0.12)', color: '#fbbf24',
+                  fontSize: 12, fontWeight: 700,
+                  opacity: availableTalentos.filter((t) => !selectedTalentos.includes(t.name)).length === 0 ? 0.4 : 1,
+                }}
+              >
+                <Plus size={12} /> Añadir talento
+              </button>
+            </div>
+
+            {/* No paths selected */}
+            {!heroicPath && !radiantOrder && (
+              <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.5 }}>
+                  Asigna un Camino Heroico u Orden Radiante en la pestaña Stats para ver los talentos disponibles.
+                </p>
+              </div>
+            )}
+
+            {/* Selected talentos */}
+            {selectedTalentos.length === 0 && (heroicPath || radiantOrder) && (
+              <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-subtle)' }}>Ningún talento aprendido aún.</p>
+              </div>
+            )}
+            {selectedTalentos.map((name) => {
+              const t = talentosMap.get(name)
+              const isMainTalent = heroicPath?.mainTalent === name || radiantOrder?.talentos[0]?.name === name
+              const mainPath = heroicPath?.mainTalent === name ? heroicPath : radiantOrder?.talentos[0]?.name === name ? radiantOrder : null
+              return (
+                <div key={name} style={{ background: 'var(--surface-1)', border: `1px solid ${isMainTalent ? (mainPath?.colorBorder ?? 'var(--border)') : 'var(--border)'}`, borderRadius: 14, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{name}</span>
+                      {isMainTalent && mainPath && (
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 6px', borderRadius: 20, background: mainPath.colorBg, border: `1px solid ${mainPath.colorBorder}`, color: mainPath.color }}>
+                          PRINCIPAL
+                        </span>
+                      )}
+                      {t?.activation && <TalentActivation type={t.activation} compact />}
+                      {t && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                          padding: '2px 6px', borderRadius: 20,
+                          background: `color-mix(in srgb, ${t.sourceColor} 12%, transparent)`,
+                          border: `1px solid color-mix(in srgb, ${t.sourceColor} 30%, transparent)`,
+                          color: t.sourceColor,
+                        }}>{t.source.toUpperCase()}</span>
+                      )}
+                    </div>
+                    {!isMainTalent && (
+                      <button
+                        onClick={() => talentosMutation.mutate(selectedTalentos.filter((n) => n !== name))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--text-subtle)', flexShrink: 0 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {t && <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{t.description}</p>}
+                  {!t && <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0, fontStyle: 'italic' }}>Talento personalizado</p>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {/* BOLSA TAB */}
         {tab === 'bolsa' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -932,21 +1024,46 @@ export function CharacterDetailPage() {
                 </div>
 
                 {/* Item list */}
-                {items.map((name, idx) => (
-                  <div key={idx} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 16px',
-                    borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
-                  }}>
-                    <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>{name}</span>
-                    <button
-                      onClick={() => setConfirmRemoveItem({ type, index: idx, name })}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', display: 'flex' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
+                {items.map((name, idx) => {
+                  const isEquipped = type === 'armor' && char.equippedArmor === name
+                  return (
+                    <div key={idx} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 16px',
+                      borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
+                      background: isEquipped ? 'rgba(251,191,36,0.05)' : 'transparent',
+                    }}>
+                      <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, flex: 1 }}>{name}</span>
+                      {type === 'armor' && (
+                        <button
+                          onClick={() => {
+                            const armorData = catalogArmor.find((a) => a.name === name)
+                            desvioMutation.mutate(
+                              isEquipped
+                                ? { equippedArmor: '', desvio: 0 }
+                                : { equippedArmor: name, desvio: armorData?.desvio ?? 0 }
+                            )
+                          }}
+                          style={{
+                            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
+                            border: `1px solid ${isEquipped ? 'rgba(251,191,36,0.4)' : 'var(--border)'}`,
+                            background: isEquipped ? 'rgba(251,191,36,0.12)' : 'var(--surface-2)',
+                            color: isEquipped ? '#fbbf24' : 'var(--text-subtle)',
+                            cursor: 'pointer', flexShrink: 0,
+                          }}
+                        >
+                          {isEquipped ? 'Equipada' : 'Equipar'}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setConfirmRemoveItem({ type, index: idx, name })}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', display: 'flex', flexShrink: 0 }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )
+                })}
 
                 {items.length === 0 && (
                   <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--text-subtle)', textAlign: 'center' }}>
@@ -1119,7 +1236,15 @@ export function CharacterDetailPage() {
           options={HEROIC_PATHS.map((p) => ({
             id: p.id, label: p.name, color: p.color, colorBg: p.colorBg, colorBorder: p.colorBorder, icon: p.icon,
           }))}
-          onChange={(id) => setForm((prev) => prev ? { ...prev, caminoHeroico: id } : prev)}
+          onChange={(id) => {
+            const oldPath = HEROIC_PATHS.find((p) => p.id === (form?.caminoHeroico ?? char.caminoHeroico))
+            const newPath = HEROIC_PATHS.find((p) => p.id === id)
+            const current: string[] = (() => { try { return JSON.parse((form?.talentos ?? char.talentos) || '[]') } catch { return [] } })()
+            const oldNames = oldPath ? [oldPath.mainTalent, ...oldPath.specialties.flatMap((s) => s.keyTalents.map((kt) => kt.name))] : []
+            const filtered = current.filter((n) => !oldNames.includes(n))
+            const next = newPath ? [newPath.mainTalent, ...filtered.filter((n) => n !== newPath.mainTalent)] : filtered
+            setForm((prev) => prev ? { ...prev, caminoHeroico: id, talentos: JSON.stringify(next) } : prev)
+          }}
           onClose={() => setPicker(null)}
         />
       )}
@@ -1131,10 +1256,77 @@ export function CharacterDetailPage() {
             id: o.id, label: o.name, sublabel: o.surges.join(' · '),
             color: o.color, colorBg: o.colorBg, colorBorder: o.colorBorder,
           }))}
-          onChange={(id) => setForm((prev) => prev ? { ...prev, caminoRadiante: id } : prev)}
+          onChange={(id) => {
+            const oldOrder = RADIANT_ORDERS.find((o) => o.id === (form?.caminoRadiante ?? char.caminoRadiante))
+            const newOrder = RADIANT_ORDERS.find((o) => o.id === id)
+            const current: string[] = (() => { try { return JSON.parse((form?.talentos ?? char.talentos) || '[]') } catch { return [] } })()
+            const oldNames = oldOrder ? oldOrder.talentos.map((t) => t.name) : []
+            const filtered = current.filter((n) => !oldNames.includes(n))
+            const mainName = newOrder?.talentos[0]?.name
+            const next = mainName ? [mainName, ...filtered.filter((n) => n !== mainName)] : filtered
+            setForm((prev) => prev ? { ...prev, caminoRadiante: id, talentos: JSON.stringify(next) } : prev)
+          }}
           onClose={() => setPicker(null)}
         />
       )}
+
+      {/* Talento picker */}
+      {talentoPicker && (() => {
+        const unselected = availableTalentos.filter((t) => !selectedTalentos.includes(t.name) && t.name !== heroicPath?.mainTalent && t.name !== radiantOrder?.talentos[0]?.name)
+        return (
+          <>
+            <div onClick={() => setTalentoPicker(false)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+            <div style={{
+              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
+              background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
+              border: '1px solid var(--border-bright)', borderBottom: 'none',
+              maxHeight: '75vh', display: 'flex', flexDirection: 'column',
+              paddingBottom: 'calc(16px + var(--sab, 0px))',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px', flexShrink: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Añadir talento</span>
+                <button onClick={() => setTalentoPicker(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {unselected.map((t) => (
+                  <button
+                    key={t.name}
+                    onClick={() => { talentosMutation.mutate([...selectedTalentos, t.name]); setTalentoPicker(false) }}
+                    style={{
+                      display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
+                      borderRadius: 12, cursor: 'pointer', textAlign: 'left', width: '100%',
+                      background: 'var(--surface-2)', border: '1px solid var(--border)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{t.name}</span>
+                      {t.activation && <TalentActivation type={t.activation} compact />}
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                        padding: '2px 6px', borderRadius: 20,
+                        background: `color-mix(in srgb, ${t.sourceColor} 12%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${t.sourceColor} 30%, transparent)`,
+                        color: t.sourceColor,
+                      }}>{t.source.toUpperCase()}</span>
+                    </div>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{t.description}</p>
+                  </button>
+                ))}
+                {unselected.length === 0 && (
+                  <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '20px 0' }}>
+                    Ya has aprendido todos los talentos disponibles.
+                  </p>
+                )}
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }

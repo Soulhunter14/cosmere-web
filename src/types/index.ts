@@ -52,9 +52,7 @@ export interface Character {
   presencia: number
   health: number
   maxHealth: number
-  concentration: number
   maxConcentration: number
-  investiture: number
   maxInvestiture: number
   desvio: number
   marcosInfusas: number
@@ -97,6 +95,7 @@ export interface Character {
   armor: string[]
   spells: string[]
   equipment: string[]
+  equippedArmor: string
   createdAt: string
   updatedAt: string
 }
@@ -104,9 +103,16 @@ export interface Character {
 export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante'> & { ownerId?: number }
 export type UpdateCharacterRequest = Omit<Character, 'id' | 'campaignId' | 'createdAt' | 'updatedAt'>
 
-// NPCs
-export interface Npc extends Character {
-  isVisibleToPlayers: boolean
+// NPC Notes (player personal notes about NPCs they encounter)
+export interface NpcNote {
+  id: number
+  npcName: string
+  notes: string
+  isShared: boolean
+  isOwn: boolean
+  authorName: string
+  createdAt: string
+  updatedAt: string
 }
 
 // Global NPCs (cross-campaign, from book appendices)

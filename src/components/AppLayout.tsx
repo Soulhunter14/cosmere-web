@@ -1,7 +1,22 @@
-import { Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Outlet, useParams } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
+import { useCampaignStore } from '../store/campaignStore'
+import { campaignsApi } from '../api/campaigns'
 
 export function AppLayout() {
+  const { campaignId } = useParams<{ campaignId: string }>()
+  const { currentCampaign, setCurrentCampaign } = useCampaignStore()
+
+  useEffect(() => {
+    const id = Number(campaignId)
+    if (!id) return
+    // Always refresh campaign data; also handles reload when store was empty
+    if (!currentCampaign || currentCampaign.id !== id) {
+      campaignsApi.getById(id).then(setCurrentCampaign).catch(() => {})
+    }
+  }, [campaignId])
+
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
       <Sidebar />

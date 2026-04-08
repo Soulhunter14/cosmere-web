@@ -268,11 +268,11 @@ export function ConfirmDialog({
   return (
     <>
       <div
-        style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+        style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
         onClick={onCancel}
       />
       <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 61,
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 101,
         background: 'var(--surface-1)', borderTop: '1px solid var(--border-bright)',
         borderRadius: '20px 20px 0 0', padding: '8px 20px 32px',
         boxShadow: '0 -16px 48px rgba(0,0,0,0.5)',

@@ -271,9 +271,20 @@ export function GlobalNpcDetailPage() {
                         resize: 'vertical' as const, outline: 'none', boxSizing: 'border-box' as const, lineHeight: 1.6,
                       }}
                     />
-                  : <p style={{ fontSize: 13, color: f.talentos ? 'var(--text)' : 'var(--text-subtle)', lineHeight: 1.6, whiteSpace: 'pre-line' as const }}>
-                      {f.talentos || '—'}
-                    </p>
+                  : (() => {
+                      const text = f.talentos || ''
+                      if (!text) return <p style={{ fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.5 }}>—</p>
+                      const paragraphs = text.split('\n').filter((line: string) => line.trim() !== '')
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {paragraphs.map((para: string, i: number) => (
+                            <p key={i} style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.65, margin: 0, paddingLeft: 10, borderLeft: '2px solid var(--border)', paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                              {para}
+                            </p>
+                          ))}
+                        </div>
+                      )
+                    })()
                 }
               </div>
             </div>

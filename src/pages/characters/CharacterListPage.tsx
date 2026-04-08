@@ -280,13 +280,6 @@ export function CharacterListPage() {
     queryFn: () => charactersApi.getAll(id),
   })
 
-  // Players: auto-navigate to their character if it exists
-  useEffect(() => {
-    if (!isGm && characters && characters.length === 1) {
-      navigate(`/campaigns/${id}/characters/${characters[0].id}`, { replace: true })
-    }
-  }, [isGm, characters, id, navigate])
-
   const createMutation = useMutation({
     mutationFn: () => charactersApi.create(id, {
       name: newName, playerName: '', level: 1,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CharacterListPage } from '../characters/CharacterListPage'
-import { NpcListPage } from '../npcs/NpcListPage'
+import { NpcNotesPage } from '../npcs/NpcNotesPage'
 
 const TABS = [
   { id: 'characters', label: 'Personajes' },
@@ -40,7 +40,7 @@ export function PersonajesPage() {
           </button>
         ))}
       </div>
-      {activeTab === 'characters' ? <CharacterListPage /> : <NpcListPage />}
+      {activeTab === 'characters' ? <CharacterListPage /> : <NpcNotesPage />}
     </div>
   )
 }

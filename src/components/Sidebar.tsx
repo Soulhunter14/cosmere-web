@@ -24,7 +24,6 @@ const SECTION_LABELS: Record<string, string> = {
   encyclopedia: 'Mundo',
   gm: 'GM',
   characters: 'Personajes',
-  npcs: 'Personajes',
   'global-npcs': 'NPCs',
   sessions: 'Historia',
   diario: 'Historia',
@@ -35,7 +34,6 @@ const SECTION_LABELS: Record<string, string> = {
 const PARENT_SECTION: Record<string, string> = {
   catalog: 'encyclopedia',
   characters: 'personajes',
-  npcs: 'personajes',
   sessions: 'historia',
   diario: 'historia',
   'global-npcs': 'gm',

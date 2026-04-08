@@ -7,7 +7,6 @@ import { RegisterPage } from './pages/auth/RegisterPage'
 import { CampaignListPage } from './pages/campaigns/CampaignListPage'
 import { CampaignSettingsPage } from './pages/campaigns/CampaignSettingsPage'
 import { CharacterDetailPage } from './pages/characters/CharacterDetailPage'
-import { NpcDetailPage } from './pages/npcs/NpcDetailPage'
 import { GlobalNpcDetailPage } from './pages/gm/GlobalNpcDetailPage'
 import { CatalogPage } from './pages/catalog/CatalogPage'
 import { EncyclopediaPage } from './pages/encyclopedia/EncyclopediaPage'
@@ -53,7 +52,6 @@ export default function App() {
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />
-              <Route path="npcs/:npcId" element={<NpcDetailPage />} />
               <Route path="global-npcs/:npcId" element={<GlobalNpcDetailPage />} />
               <Route path="catalog" element={<CatalogPage />} />
             </Route>

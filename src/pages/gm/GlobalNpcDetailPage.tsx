@@ -54,7 +54,7 @@ const TEXT_FIELDS: [string, string][] = [
 type Tab = 'stats' | 'lore'
 
 export function GlobalNpcDetailPage() {
-  const { campaignId, npcId } = useParams<{ campaignId: string; npcId: string }>()
+  const { npcId } = useParams<{ campaignId: string; npcId: string }>()
   const id = Number(npcId)
   const qc = useQueryClient()
   const location = useLocation()

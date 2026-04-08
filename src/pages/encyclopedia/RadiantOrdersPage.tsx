@@ -1,7 +1,92 @@
 import { useState } from 'react'
 import { X, Zap } from 'lucide-react'
-import { RADIANT_ORDERS, PRIMER_IDEAL, type RadiantOrder } from '../../data/radiantOrders'
+import { RADIANT_ORDERS, RADIANT_REGLAS, PRIMER_IDEAL, type RadiantOrder, type RadiantRegla } from '../../data/radiantOrders'
 import { RadiantOrderIcon, RadiantOrderPlacard } from '../../components/RadiantOrderIcon'
+import { TalentActivation } from '../../components/TalentActivation'
+
+const TABS = [
+  { id: 'reglas', label: 'Reglas' },
+  { id: 'ordenes', label: 'Órdenes' },
+]
+
+// ── Reglas tab ───────────────────────────────────────────────
+function ReglaCard({ regla }: { regla: RadiantRegla }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 16px', textAlign: 'left', width: '100%',
+          background: 'var(--surface-1)', border: 'none', cursor: 'pointer',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 3 }}>{regla.title}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{regla.summary}</div>
+        </div>
+        <div style={{
+          fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: 0.6,
+          transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
+        }}>›</div>
+      </button>
+
+      {open && (
+        <div style={{ padding: '0 16px 16px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12 }}>
+            {regla.details.map((d) => (
+              <div key={d.label} style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                  {d.label}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{d.text}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Talent row (inside order sheet) ─────────────────────────
+function TalentoRow({ talento }: { talento: import('../../data/potencias').Talento }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <button
+      onClick={() => setOpen(!open)}
+      style={{
+        display: 'flex', flexDirection: 'column',
+        padding: '10px 12px', borderRadius: 10, textAlign: 'left', width: '100%',
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        cursor: 'pointer', transition: 'border-color 0.15s',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(180,190,254,0.25)')}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <TalentActivation type={talento.cost} compact />
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'white', flex: 1 }}>{talento.name}</div>
+        <div style={{ fontSize: 13, color: 'var(--text-subtle)', opacity: 0.6 }}>{open ? '▾' : '›'}</div>
+      </div>
+      {open && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {talento.prereq && (
+            <div style={{ fontSize: 10, color: 'var(--text-subtle)', fontStyle: 'italic' }}>
+              Prerrequisito: {talento.prereq}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            {talento.description}
+          </div>
+        </div>
+      )}
+    </button>
+  )
+}
 
 // ── Detail sheet ─────────────────────────────────────────────
 function OrderDetailSheet({ order, onClose }: { order: RadiantOrder; onClose: () => void }) {
@@ -118,6 +203,27 @@ function OrderDetailSheet({ order, onClose }: { order: RadiantOrder; onClose: ()
               <InfoRow label="Ideales" value={order.ideals} />
             </div>
           </Section>
+
+          {/* Talentos */}
+          {order.talentos.length > 0 && (
+            <Section label="Árbol de talentos" color={order.color}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {order.talentos.map((t) => (
+                  <TalentoRow key={t.name} talento={t} />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {order.talentos.length === 0 && (
+            <Section label="Árbol de talentos" color={order.color}>
+              <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-subtle)', lineHeight: 1.5 }}>
+                Los Forjadores de Vínculos tienen reglas únicas. Solo pueden existir tres simultáneamente. Consulta el capítulo 5 del libro para sus reglas completas.
+              </div>
+            </Section>
+          )}
+
+          <div style={{ height: 4 }} />
         </div>
       </div>
     </>
@@ -205,21 +311,54 @@ function OrderCard({ order, onClick }: { order: RadiantOrder; onClick: () => voi
 // ── Main page ────────────────────────────────────────────────
 export function RadiantOrdersPage() {
   const [selected, setSelected] = useState<RadiantOrder | null>(null)
+  const [tab, setTab] = useState('reglas')
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 20px 48px' }}>
       <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
         Órdenes Radiantes
       </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Las diez órdenes de los Caballeros Radiantes
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+        Las diez órdenes de los Caballeros Radiantes: reglas de Investidura e ideales
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {RADIANT_ORDERS.map((order) => (
-          <OrderCard key={order.id} order={order} onClick={() => setSelected(order)} />
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: '4px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              flex: 1, padding: '8px', borderRadius: 9, fontSize: 12, fontWeight: 700,
+              cursor: 'pointer',
+              background: tab === t.id ? 'var(--surface-3)' : 'transparent',
+              border: `1px solid ${tab === t.id ? 'var(--border-bright)' : 'transparent'}`,
+              color: tab === t.id ? 'white' : 'var(--text-muted)',
+              transition: 'all 0.15s',
+            }}
+          >
+            {t.label}
+          </button>
         ))}
       </div>
+
+      {/* Reglas tab */}
+      {tab === 'reglas' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {RADIANT_REGLAS.map((r) => (
+            <ReglaCard key={r.id} regla={r} />
+          ))}
+        </div>
+      )}
+
+      {/* Órdenes tab */}
+      {tab === 'ordenes' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {RADIANT_ORDERS.map((order) => (
+            <OrderCard key={order.id} order={order} onClick={() => setSelected(order)} />
+          ))}
+        </div>
+      )}
 
       {selected && <OrderDetailSheet order={selected} onClose={() => setSelected(null)} />}
     </div>

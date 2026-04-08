@@ -66,6 +66,77 @@ body {
   }
 }
 
+/* ─── Sidebar nav link hover / active states ─── */
+.nav-item {
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
+.nav-item[aria-current="page"] {
+  background: rgba(180,190,254,0.08);
+  border-color: rgba(180,190,254,0.14);
+  color: var(--brand-light);
+  box-shadow: inset 3px 0 0 var(--brand-light);
+  font-weight: 600;
+}
+.nav-item[aria-current="page"]:hover {
+  background: rgba(180,190,254,0.08);
+  color: var(--brand-light);
+}
+
+.nav-item-gm {
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.nav-item-gm:hover {
+  background: rgba(239,68,68,0.05);
+  color: #fca5a5;
+}
+.nav-item-gm[aria-current="page"] {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.22);
+  color: #f87171;
+  box-shadow: inset 3px 0 0 #f87171;
+  font-weight: 600;
+}
+.nav-item-gm[aria-current="page"]:hover {
+  background: rgba(239,68,68,0.08);
+  color: #f87171;
+}
+
+/* ─── Tablet icon sidebar ─── */
+.nav-icon-item {
+  color: var(--text-subtle);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.nav-icon-item:hover {
+  color: var(--text-muted);
+}
+.nav-icon-item[aria-current="page"] {
+  color: var(--brand-light);
+}
+.nav-icon-item-gm {
+  color: rgba(248,113,113,0.45);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.nav-icon-item-gm:hover {
+  color: #fca5a5;
+}
+.nav-icon-item-gm[aria-current="page"] {
+  color: #f87171;
+}
+
 /* PWA: full-screen body with safe area padding on standalone mode */
 @media all and (display-mode: standalone) {
   body {

@@ -1,9 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, Users, ScrollText, Clock, MapPin, LogOut } from 'lucide-react'
+import { CalendarDays, Users, Clock, MapPin, LogOut } from 'lucide-react'
 import { sessionsApi } from '../../api/sessions'
 import { charactersApi } from '../../api/characters'
-import { sideQuestsApi } from '../../api/sidequests'
 import { useCampaignStore } from '../../store/campaignStore'
 import type { Session } from '../../types'
 
@@ -31,17 +30,9 @@ export function HomeCampaignPage() {
     queryFn: () => charactersApi.getAll(cId),
   })
 
-  const { data: sidequests = [] } = useQuery({
-    queryKey: ['sidequests', cId],
-    queryFn: () => sideQuestsApi.getAll(cId),
-    enabled: isGm,
-  })
-
   const nextSession = sessions
     .filter((s) => !isPast(new Date(s.date)))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
-
-  const activeMissions = sidequests.filter((sq) => sq.started).length
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
@@ -84,10 +75,9 @@ export function HomeCampaignPage() {
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
         RESUMEN
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: isGm ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: 10, marginBottom: 40 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 40 }}>
         <StatCard icon={<Users size={16} />} label="Personajes" value={characters.length} />
         <StatCard icon={<CalendarDays size={16} />} label="Sesiones" value={sessions.length} />
-        {isGm && <StatCard icon={<ScrollText size={16} />} label="Misiones activas" value={activeMissions} accent />}
       </div>
 
       {/* Back to campaigns */}

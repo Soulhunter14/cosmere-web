@@ -1,6 +1,8 @@
+import type { ActivationType } from '../components/TalentActivation'
+
 export interface CombatAction {
   name: string
-  cost: string
+  cost: ActivationType
   description: string
 }
 
@@ -13,27 +15,27 @@ export interface CombatSection {
 
 export const COMBAT_ACTIONS: { actions: CombatAction[]; freeActions: CombatAction[]; reactions: CombatAction[] } = {
   actions: [
-    { name: 'Acometida', cost: '1 acción', description: 'Atacas con un arma que empuñas o sin armas contra la Defensa física del objetivo. Puedes usarla más de una vez por turno, pero cada ataque debe usar una mano diferente. Atacar con la mano secundaria cuesta 2 concentración.' },
-    { name: 'Moverse', cost: '1 acción', description: 'Te mueves una distancia igual o menor a tu valor de movimiento. Si te arrastras, trepas, nadas o te mueves sigilosamente, estás Ralentizado. Puedes usarla más de una vez por turno.' },
-    { name: 'Destrabarse', cost: '1 acción', description: 'Te alejas cuidadosamente de un enemigo sin activar Acometidas reactivas. Te mueves 1,5 metros.' },
-    { name: 'Obtener ventaja', cost: '1 acción', description: 'Usas una habilidad para buscar superioridad sobre tu oponente mediante tácticas, fintas o fuerza superior. Si la prueba tiene éxito, obtienes ventaja en tu próxima prueba con una habilidad diferente contra ese enemigo.' },
-    { name: 'Prevenirse', cost: '1 acción', description: 'Te escondes tras cobertura a 1,5 metros o menos. Todos los ataques contra ti sufren desventaja. El beneficio termina si atacas o te mueves. Si tienes arma con rasgo Defensiva, puedes crear cobertura móvil.' },
-    { name: 'Usar una habilidad', cost: '1 acción', description: 'Utilizas una de tus habilidades para realizar tareas desafiantes en el campo de batalla: prueba de Percepción, esconderte con Sigilo, usar Medicina para tratar a un aliado, etc.' },
-    { name: 'Interactuar', cost: '1 acción', description: 'Interactúas rápidamente con un objeto que puedes alcanzar sin necesidad de prueba: abrir/cerrar una puerta, recoger un objeto, desenvainar o envainar un arma, sacar algo de tu mochila, pasar algo a un aliado. Puede usarse más de una vez por turno.' },
-    { name: 'Recuperarse', cost: '2 acciones', description: 'Respiras profundamente y haces acopio de fuerzas. Tira tu dado de recuperación para recuperar salud y/o concentración, como en un descanso corto. Solo puede usarse una vez por escena.' },
-    { name: 'Agarrar', cost: '2 acciones', description: 'Haz prueba de Atletismo contra Defensa física de un personaje en tu cercanía. Si la superas, queda Inmovilizado hasta que quedes Inconsciente, elijas poner fin al efecto o ya no esté en tu cercanía.' },
-    { name: 'Empujar', cost: '2 acciones', description: 'Haz prueba de Atletismo contra Defensa física de un personaje en tu cercanía. Si la superas, empujas al objetivo 1,5 metros horizontalmente. Si empujas a quien te agarra, el efecto de Agarrar termina.' },
-    { name: 'Prepararse', cost: '1 + coste de la acción preparada', description: 'Eliges un detonante y una acción como respuesta. Si ese detonante ocurre antes de tu siguiente turno, puedes usar la acción elegida aunque no sea tu turno.' },
+    { name: 'Acometida', cost: 'action1', description: 'Atacas con un arma que empuñas o sin armas contra la Defensa física del objetivo. Puedes usarla más de una vez por turno, pero cada ataque debe usar una mano diferente. Atacar con la mano secundaria cuesta 2 concentración.' },
+    { name: 'Moverse', cost: 'action1', description: 'Te mueves una distancia igual o menor a tu valor de movimiento. Si te arrastras, trepas, nadas o te mueves sigilosamente, estás Ralentizado. Puedes usarla más de una vez por turno.' },
+    { name: 'Destrabarse', cost: 'action1', description: 'Te alejas cuidadosamente de un enemigo sin activar Acometidas reactivas. Te mueves 1,5 metros.' },
+    { name: 'Obtener ventaja', cost: 'action1', description: 'Usas una habilidad para buscar superioridad sobre tu oponente mediante tácticas, fintas o fuerza superior. Si la prueba tiene éxito, obtienes ventaja en tu próxima prueba con una habilidad diferente contra ese enemigo.' },
+    { name: 'Prevenirse', cost: 'action1', description: 'Te escondes tras cobertura a 1,5 metros o menos. Todos los ataques contra ti sufren desventaja. El beneficio termina si atacas o te mueves. Si tienes arma con rasgo Defensiva, puedes crear cobertura móvil.' },
+    { name: 'Usar una habilidad', cost: 'action1', description: 'Utilizas una de tus habilidades para realizar tareas desafiantes en el campo de batalla: prueba de Percepción, esconderte con Sigilo, usar Medicina para tratar a un aliado, etc.' },
+    { name: 'Interactuar', cost: 'action1', description: 'Interactúas rápidamente con un objeto que puedes alcanzar sin necesidad de prueba: abrir/cerrar una puerta, recoger un objeto, desenvainar o envainar un arma, sacar algo de tu mochila, pasar algo a un aliado. Puede usarse más de una vez por turno.' },
+    { name: 'Recuperarse', cost: 'action2', description: 'Respiras profundamente y haces acopio de fuerzas. Tira tu dado de recuperación para recuperar salud y/o concentración, como en un descanso corto. Solo puede usarse una vez por escena.' },
+    { name: 'Agarrar', cost: 'action2', description: 'Haz prueba de Atletismo contra Defensa física de un personaje en tu cercanía. Si la superas, queda Inmovilizado hasta que quedes Inconsciente, elijas poner fin al efecto o ya no esté en tu cercanía.' },
+    { name: 'Empujar', cost: 'action2', description: 'Haz prueba de Atletismo contra Defensa física de un personaje en tu cercanía. Si la superas, empujas al objetivo 1,5 metros horizontalmente. Si empujas a quien te agarra, el efecto de Agarrar termina.' },
+    { name: 'Prepararse', cost: 'special', description: 'Eliges un detonante y una acción como respuesta. Cuesta 1 acción más el coste de la acción que preparas. Si ese detonante ocurre antes de tu siguiente turno, puedes usar la acción elegida aunque no sea tu turno.' },
   ],
   freeActions: [
-    { name: 'Charlar', cost: 'Acción gratuita', description: 'Puedes hablar libremente en cualquier momento de tu turno. Los demás personajes pueden responder brevemente. Recuerda que cada ronda dura solo unos 10 segundos.' },
-    { name: 'Soltar', cost: 'Acción gratuita', description: 'Dejas caer cualquier cantidad de objetos que tengas en las manos u otro apéndice.' },
+    { name: 'Charlar', cost: 'free', description: 'Puedes hablar libremente en cualquier momento de tu turno. Los demás personajes pueden responder brevemente. Recuerda que cada ronda dura solo unos 10 segundos.' },
+    { name: 'Soltar', cost: 'free', description: 'Dejas caer cualquier cantidad de objetos que tengas en las manos u otro apéndice.' },
   ],
   reactions: [
-    { name: 'Acometida reactiva', cost: 'Reacción + 1 concentración', description: 'Cuando un enemigo abandona voluntariamente tu cercanía, puedes atacar con arma cuerpo a cuerpo contra su Defensa física.' },
-    { name: 'Ayudar', cost: 'Reacción + 1 concentración', description: 'Antes de que un aliado realice una prueba de habilidad, le otorgas ventaja. Debes estar al alcance o en su cercanía para ayudarlo de manera realista.' },
-    { name: 'Esquivar', cost: 'Reacción + 1 concentración', description: 'Antes de que un enemigo te elija como objetivo para un ataque, añades desventaja a su prueba. No funciona con ataques de zona o a varios objetivos.' },
-    { name: 'Evitar peligro', cost: 'Reacción', description: 'Cuando te encuentras en una situación de peligro (roca que cae, ser empujado desde un balcón), haz prueba de Agilidad para ponerte a salvo. CD 15 o igual al resultado de la prueba que lo desencadenó.' },
+    { name: 'Acometida reactiva', cost: 'reaction', description: 'Cuando un enemigo abandona voluntariamente tu cercanía, puedes atacar con arma cuerpo a cuerpo contra su Defensa física. Cuesta 1 punto de concentración.' },
+    { name: 'Ayudar', cost: 'reaction', description: 'Antes de que un aliado realice una prueba de habilidad, le otorgas ventaja. Debes estar al alcance o en su cercanía para ayudarlo de manera realista. Cuesta 1 punto de concentración.' },
+    { name: 'Esquivar', cost: 'reaction', description: 'Antes de que un enemigo te elija como objetivo para un ataque, añades desventaja a su prueba. No funciona con ataques de zona o a varios objetivos. Cuesta 1 punto de concentración.' },
+    { name: 'Evitar peligro', cost: 'reaction', description: 'Cuando te encuentras en una situación de peligro (roca que cae, ser empujado desde un balcón), haz prueba de Agilidad para ponerte a salvo. CD 15 o igual al resultado de la prueba que lo desencadenó.' },
   ],
 }
 

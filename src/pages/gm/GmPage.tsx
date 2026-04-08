@@ -1,18 +1,18 @@
 import { useState } from 'react'
-import { SideQuestListPage } from '../sidequests/SideQuestListPage'
-import { MatchListPage } from '../matches/MatchListPage'
 import { GmMessagesPage } from './GmMessagesPage'
+import { CaminapiedrasPage } from './CaminapiedrasPage'
+import { GlobalNpcListPage } from './GlobalNpcListPage'
 
 const TABS = [
-  { id: 'sidequests', label: 'Misiones' },
-  { id: 'matches', label: 'Combates' },
+  { id: 'npcs', label: 'NPCs' },
   { id: 'messages', label: 'Mensajes' },
+  { id: 'caminapiedras', label: 'Aventura' },
 ] as const
 
 type Tab = typeof TABS[number]['id']
 
 export function GmPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('sidequests')
+  const [activeTab, setActiveTab] = useState<Tab>('npcs')
 
   return (
     <div>
@@ -42,9 +42,9 @@ export function GmPage() {
           </button>
         ))}
       </div>
-      {activeTab === 'sidequests' && <SideQuestListPage />}
-      {activeTab === 'matches' && <MatchListPage />}
+      {activeTab === 'npcs' && <GlobalNpcListPage />}
       {activeTab === 'messages' && <GmMessagesPage />}
+      {activeTab === 'caminapiedras' && <CaminapiedrasPage />}
     </div>
   )
 }

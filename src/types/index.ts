@@ -109,36 +109,47 @@ export interface Npc extends Character {
   isVisibleToPlayers: boolean
 }
 
-// Matches
-export interface Scene {
+// Global NPCs (cross-campaign, from book appendices)
+export interface GlobalNpc {
   id: number
-  description: string
-  orderIndex: number
-}
-
-export interface Match {
-  id: number
-  campaignId: number
-  resolution: string
-  isCompleted: boolean
-  createdAt: string
-  completedAt?: string
-  scenes: Scene[]
-}
-
-// SideQuests
-export interface SideQuest {
-  id: number
-  campaignId: number
   name: string
-  summary: string
-  description: string
-  acts: string[]
-  rewards: string[]
-  benefits: string[]
-  notes: string
-  started: boolean
+  source: string
+  tipo: string
+  ascendencia: string
+  level: number
+  fuerza: number
+  velocidad: number
+  intelecto: number
+  voluntad: number
+  discernimiento: number
+  presencia: number
+  maxHealth: number
+  maxConcentration: number
+  maxInvestiture: number
+  agilidad: number
+  armasLigeras: number
+  armasPesadas: number
+  atletismo: number
+  hurto: number
+  sigilo: number
+  deduccion: number
+  disciplina: number
+  intimidacion: number
+  manufactura: number
+  medicina: number
+  conocimiento: number
+  engano: number
+  liderazgo: number
+  percepcion: number
+  perspicacia: number
+  persuasion: number
+  supervivencia: number
+  talentos: string
+  apariencia: string
+  notas: string
+  imageUrl?: string
   createdAt: string
+  updatedAt: string
 }
 
 // Sessions

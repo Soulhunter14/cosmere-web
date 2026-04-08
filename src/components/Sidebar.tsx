@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useCampaignStore } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
 import { notesApi } from '../api/notes'
-import { cn } from '../lib/utils'
 
 const navItems = [
   { to: 'home', label: 'Inicio', icon: House },
@@ -26,10 +25,9 @@ const SECTION_LABELS: Record<string, string> = {
   gm: 'GM',
   characters: 'Personajes',
   npcs: 'Personajes',
-  matches: 'Combates',
+  'global-npcs': 'NPCs',
   sessions: 'Historia',
   diario: 'Historia',
-  sidequests: 'Misiones',
   catalog: 'Catálogo',
   settings: 'Ajustes',
 }
@@ -40,8 +38,7 @@ const PARENT_SECTION: Record<string, string> = {
   npcs: 'personajes',
   sessions: 'historia',
   diario: 'historia',
-  sidequests: 'gm',
-  matches: 'gm',
+  'global-npcs': 'gm',
 }
 
 export function Sidebar() {
@@ -58,7 +55,8 @@ export function Sidebar() {
 
   const handleBack = () => {
     if (isDetailPage) {
-      navigate(`/${segments.slice(0, 3).join('/')}`)
+      const parent = PARENT_SECTION[currentSection]
+      navigate(`/${campaignBase}/${parent ?? currentSection}`)
     } else if (PARENT_SECTION[currentSection]) {
       navigate(`/${campaignBase}/${PARENT_SECTION[currentSection]}`)
     } else {
@@ -155,35 +153,8 @@ export function Sidebar() {
             <NavLink
               key={to}
               to={linkTo(to)}
-              className={({ isActive }) =>
-                cn('flex items-center gap-2.5 rounded-lg text-[13px] transition-all duration-150', isActive ? 'font-semibold' : 'font-medium')
-              }
-              style={({ isActive }) => isActive
-                ? {
-                    padding: '8px 10px',
-                    background: 'rgba(180,190,254,0.08)',
-                    border: '1px solid rgba(180,190,254,0.14)',
-                    color: 'var(--brand-light)',
-                    boxShadow: 'inset 3px 0 0 var(--brand-light)',
-                  }
-                : {
-                    padding: '8px 10px',
-                    color: 'var(--text-muted)',
-                    border: '1px solid transparent',
-                  }
-              }
-              onMouseEnter={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-                  e.currentTarget.style.color = 'var(--text)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.background = ''
-                  e.currentTarget.style.color = 'var(--text-muted)'
-                }
-              }}
+              className="nav-item flex items-center gap-2.5 text-[13px]"
+              style={{ padding: '8px 10px' }}
             >
               <Icon size={14} />
               {label}
@@ -201,35 +172,8 @@ export function Sidebar() {
                 <NavLink
                   key={to}
                   to={linkTo(to)}
-                  className={({ isActive }) =>
-                    cn('flex items-center gap-2.5 rounded-lg text-[13px] transition-all duration-150', isActive ? 'font-semibold' : 'font-medium')
-                  }
-                  style={({ isActive }) => isActive
-                    ? {
-                        padding: '8px 10px',
-                        background: 'rgba(239,68,68,0.08)',
-                        border: '1px solid rgba(239,68,68,0.22)',
-                        color: '#f87171',
-                        boxShadow: 'inset 3px 0 0 #f87171',
-                      }
-                    : {
-                        padding: '8px 10px',
-                        color: 'var(--text-muted)',
-                        border: '1px solid transparent',
-                      }
-                  }
-                  onMouseEnter={(e) => {
-                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                      e.currentTarget.style.background = 'rgba(239,68,68,0.05)'
-                      e.currentTarget.style.color = '#fca5a5'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                      e.currentTarget.style.background = ''
-                      e.currentTarget.style.color = 'var(--text-muted)'
-                    }
-                  }}
+                  className="nav-item-gm flex items-center gap-2.5 text-[13px]"
+                  style={{ padding: '8px 10px' }}
                 >
                   <Icon size={14} />
                   {label}
@@ -244,35 +188,8 @@ export function Sidebar() {
           <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)' }}>
             <NavLink
               to={`/campaigns/${currentCampaign.id}/settings`}
-              className={({ isActive }) =>
-                cn('flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150', isActive ? '' : '')
-              }
-              style={({ isActive }) => isActive
-                ? {
-                    padding: '8px 10px',
-                    background: 'rgba(180,190,254,0.08)',
-                    border: '1px solid rgba(180,190,254,0.14)',
-                    color: 'var(--brand-light)',
-                    boxShadow: 'inset 3px 0 0 var(--brand-light)',
-                  }
-                : {
-                    padding: '8px 10px',
-                    color: 'var(--text-muted)',
-                    border: '1px solid transparent',
-                  }
-              }
-              onMouseEnter={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-                  e.currentTarget.style.color = 'var(--text)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.background = ''
-                  e.currentTarget.style.color = 'var(--text-muted)'
-                }
-              }}
+              className="nav-item flex items-center gap-2.5 text-[13px]"
+              style={{ padding: '8px 10px' }}
             >
               <Settings2 size={14} />
               Ajustes
@@ -327,8 +244,19 @@ export function Sidebar() {
           opacity: 0.6,
         }} />
 
-        {/* Role dot */}
-        <div style={{ paddingTop: 20, paddingBottom: 14, display: 'flex', justifyContent: 'center', width: '100%', borderBottom: '1px solid var(--border)' }}>
+        {/* Role dot / back button */}
+        <div style={{ paddingTop: 14, paddingBottom: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%', borderBottom: '1px solid var(--border)' }}>
+          {showBack && (
+            <button
+              onClick={handleBack}
+              title={backLabel}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--text-subtle)', display: 'flex', borderRadius: 8 }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
           <div
             title={isGm ? 'Game Master' : 'Jugador'}
             style={{
@@ -346,32 +274,11 @@ export function Sidebar() {
               key={to}
               to={linkTo(to)}
               title={label}
-              style={({ isActive }) => ({
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 4,
-                padding: '10px 0',
-                width: '100%',
-                position: 'relative',
-                textDecoration: 'none',
-                color: isActive ? 'var(--brand-light)' : 'var(--text-subtle)',
-                transition: 'color 0.15s',
-              })}
-              onMouseEnter={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.color = 'var(--text-muted)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.color = 'var(--text-subtle)'
-                }
-              }}
+              className="nav-icon-item"
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 0', width: '100%', position: 'relative' }}
             >
               {({ isActive }) => (
                 <>
-                  {/* Active left bar */}
                   {isActive && (
                     <div style={{
                       position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
@@ -404,28 +311,8 @@ export function Sidebar() {
                   key={to}
                   to={linkTo(to)}
                   title={label}
-                  style={({ isActive }) => ({
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '10px 0',
-                    width: '100%',
-                    position: 'relative',
-                    textDecoration: 'none',
-                    color: isActive ? '#f87171' : 'rgba(248,113,113,0.45)',
-                    transition: 'color 0.15s',
-                  })}
-                  onMouseEnter={(e) => {
-                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                      e.currentTarget.style.color = '#fca5a5'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                      e.currentTarget.style.color = 'rgba(248,113,113,0.45)'
-                    }
-                  }}
+                  className="nav-icon-item-gm"
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 0', width: '100%', position: 'relative' }}
                 >
                   {({ isActive }) => (
                     <>
@@ -462,26 +349,18 @@ export function Sidebar() {
             <NavLink
               to={`/campaigns/${currentCampaign.id}/settings`}
               title="Ajustes"
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 36, height: 32, borderRadius: 8,
-                color: isActive ? 'var(--brand-light)' : 'var(--text-subtle)',
-                background: isActive ? 'rgba(180,190,254,0.1)' : 'transparent',
-                transition: 'color 0.15s, background 0.15s',
-                textDecoration: 'none',
-              })}
-              onMouseEnter={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.color = 'var(--text-muted)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (e.currentTarget.getAttribute('aria-current') !== 'page') {
-                  e.currentTarget.style.color = 'var(--text-subtle)'
-                }
-              }}
+              className="nav-icon-item"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 32, borderRadius: 8 }}
             >
-              <Settings2 size={15} />
+              {({ isActive }) => (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: '100%', height: '100%', borderRadius: 8,
+                  background: isActive ? 'rgba(180,190,254,0.1)' : 'transparent',
+                }}>
+                  <Settings2 size={15} />
+                </div>
+              )}
             </NavLink>
           </div>
         )}
@@ -515,7 +394,15 @@ export function Sidebar() {
           borderBottom: '1px solid var(--border)',
         }}
       >
-        {currentCampaign ? (
+        {showBack ? (
+          <button
+            onClick={handleBack}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, fontWeight: 600, padding: '4px 0' }}
+          >
+            <ChevronLeft size={16} />
+            {backLabel}
+          </button>
+        ) : currentCampaign ? (
           <span
             className="inline-flex items-center font-bold rounded-full uppercase tracking-wider"
             style={

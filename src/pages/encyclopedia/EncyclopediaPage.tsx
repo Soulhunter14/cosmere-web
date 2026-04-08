@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Shield, Swords, BookOpen } from 'lucide-react'
+import { Sparkles, Shield, Swords, BookOpen, Compass, Zap } from 'lucide-react'
 import { useCampaignStore } from '../../store/campaignStore'
 
 const TOPICS = [
@@ -29,6 +29,24 @@ const TOPICS = [
     accent: '#fb923c',
     bg: 'rgba(251,146,60,0.1)',
     bgHover: 'rgba(251,146,60,0.25)',
+  },
+  {
+    id: 'potencias',
+    label: 'Potencias',
+    description: 'Las diez potencias Radiantes: Abrasión, Adhesión, Cohesión, División, Gravitación, Iluminación, Progresión, Tensión, Transformación y Transportación.',
+    icon: Zap,
+    accent: '#fbbf24',
+    bg: 'rgba(251,191,36,0.1)',
+    bgHover: 'rgba(251,191,36,0.25)',
+  },
+  {
+    id: 'aventuras',
+    label: 'Aventuras',
+    description: 'Escenas, descanso, sucesos, estados y reglas de daño y lesiones.',
+    icon: Compass,
+    accent: '#60a5fa',
+    bg: 'rgba(96,165,250,0.1)',
+    bgHover: 'rgba(96,165,250,0.25)',
   },
   {
     id: 'catalog',

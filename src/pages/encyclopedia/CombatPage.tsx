@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { COMBAT_ACTIONS, COMBAT_SECTIONS } from '../../data/combatRules'
+import { TalentActivation } from '../../components/TalentActivation'
+import type { ActivationType } from '../../components/TalentActivation'
 
 const TABS = [
   { id: 'sections', label: 'Reglas' },
@@ -7,7 +9,7 @@ const TABS = [
   { id: 'reactions', label: 'Reacciones' },
 ]
 
-function ActionCard({ name, cost, description }: { name: string; cost: string; description: string }) {
+function ActionCard({ name, cost, description }: { name: string; cost: ActivationType; description: string }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -23,13 +25,7 @@ function ActionCard({ name, cost, description }: { name: string; cost: string; d
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{
-          fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 20, flexShrink: 0,
-          background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.2)',
-          color: 'var(--brand-light)',
-        }}>
-          {cost}
-        </div>
+        <TalentActivation type={cost} />
         <div style={{ fontSize: 13, fontWeight: 700, color: 'white', flex: 1 }}>{name}</div>
         <div style={{ fontSize: 14, color: 'var(--text-subtle)', opacity: 0.6 }}>{open ? '▾' : '›'}</div>
       </div>

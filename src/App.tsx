@@ -8,13 +8,14 @@ import { CampaignListPage } from './pages/campaigns/CampaignListPage'
 import { CampaignSettingsPage } from './pages/campaigns/CampaignSettingsPage'
 import { CharacterDetailPage } from './pages/characters/CharacterDetailPage'
 import { NpcDetailPage } from './pages/npcs/NpcDetailPage'
-import { MatchDetailPage } from './pages/matches/MatchDetailPage'
-import { SideQuestDetailPage } from './pages/sidequests/SideQuestDetailPage'
+import { GlobalNpcDetailPage } from './pages/gm/GlobalNpcDetailPage'
 import { CatalogPage } from './pages/catalog/CatalogPage'
 import { EncyclopediaPage } from './pages/encyclopedia/EncyclopediaPage'
 import { RadiantOrdersPage } from './pages/encyclopedia/RadiantOrdersPage'
 import { HeroicPathsPage } from './pages/encyclopedia/HeroicPathsPage'
 import { CombatPage } from './pages/encyclopedia/CombatPage'
+import { AventurasPage } from './pages/encyclopedia/AventurasPage'
+import { PotenciasPage } from './pages/encyclopedia/PotenciasPage'
 import { HomeCampaignPage } from './pages/home/HomeCampaignPage'
 import { PersonajesPage } from './pages/personajes/PersonajesPage'
 import { HistoriaPage } from './pages/historia/HistoriaPage'
@@ -46,13 +47,14 @@ export default function App() {
               <Route path="encyclopedia/radiant-orders" element={<RadiantOrdersPage />} />
               <Route path="encyclopedia/heroic-paths" element={<HeroicPathsPage />} />
               <Route path="encyclopedia/combat" element={<CombatPage />} />
+              <Route path="encyclopedia/aventuras" element={<AventurasPage />} />
+              <Route path="encyclopedia/potencias" element={<PotenciasPage />} />
               <Route path="gm" element={<GmPage />} />
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />
               <Route path="npcs/:npcId" element={<NpcDetailPage />} />
-              <Route path="matches/:matchId" element={<MatchDetailPage />} />
-              <Route path="sidequests/:sideQuestId" element={<SideQuestDetailPage />} />
+              <Route path="global-npcs/:npcId" element={<GlobalNpcDetailPage />} />
               <Route path="catalog" element={<CatalogPage />} />
             </Route>
           </Route>

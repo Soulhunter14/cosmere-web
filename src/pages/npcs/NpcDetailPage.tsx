@@ -67,7 +67,7 @@ const SECTIONS = [
 
 const BACKGROUND_FIELDS: [string, string][] = [
   ['proposito', 'Propósito'], ['obstaculo', 'Obstáculo'], ['metas', 'Metas'],
-  ['talentos', 'Talentos'], ['apariencia', 'Apariencia'], ['notas', 'Notas'],
+  ['apariencia', 'Apariencia'], ['notas', 'Notas'],
 ]
 
 type Tab = 'stats' | 'background' | 'bolsa'
@@ -170,7 +170,6 @@ export function NpcDetailPage() {
   const [marcosDelta, setMarcosDelta] = useState(1)
   const [itemPicker, setItemPicker] = useState<'weapon' | 'armor' | 'gear' | null>(null)
   const [confirmRemoveItem, setConfirmRemoveItem] = useState<{ type: 'weapon' | 'armor' | 'gear'; index: number; name: string } | null>(null)
-
   const { data: npc, isLoading } = useQuery<Npc>({
     queryKey: ['npc', cId, nId],
     queryFn: () => npcsApi.getById(cId, nId),
@@ -273,7 +272,8 @@ export function NpcDetailPage() {
             {/* Avatar */}
             <div style={{
               width: 56, height: 56, borderRadius: 16, flexShrink: 0,
-              background: 'rgba(0,0,0,0.25)', border: '2px solid rgba(255,255,255,0.2)',
+              background: 'rgba(0,0,0,0.25)',
+              border: '2px solid rgba(255,255,255,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 24, fontWeight: 800, color: 'white',
               opacity: npc.isVisibleToPlayers ? 1 : 0.6,
@@ -650,6 +650,21 @@ export function NpcDetailPage() {
                 </div>
               )
             })}
+
+            {/* Talentos */}
+            <div style={{ background: 'var(--surface-1)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 14, overflow: 'hidden' }}>
+              <div style={{ padding: '10px 14px', background: 'rgba(251,191,36,0.06)', borderBottom: '1px solid rgba(251,191,36,0.15)' }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#fbbf24', letterSpacing: '0.1em' }}>TALENTOS</span>
+              </div>
+              <div style={{ padding: '12px 14px' }}>
+                {editing
+                  ? <Input value={form?.talentos ?? ''} onChange={set('talentos')} placeholder="Rasgos especiales..." />
+                  : <p style={{ fontSize: 13, color: f.talentos ? 'var(--text)' : 'var(--text-subtle)', lineHeight: 1.6, whiteSpace: 'pre-line' as const }}>
+                      {f.talentos || '—'}
+                    </p>
+                }
+              </div>
+            </div>
           </div>
         )}
 

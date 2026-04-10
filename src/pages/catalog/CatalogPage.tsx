@@ -136,8 +136,8 @@ function DetailSheet({ selected, onClose }: { selected: SelectedItem; onClose: (
             {(selected.traits.length > 0 || selected.expertTraits.length > 0) && (
               <Section label="Rasgos">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {selected.traits.map((t) => <TraitChip key={t} label={t} />)}
-                  {selected.expertTraits.map((t) => <TraitChip key={t + '-ex'} label={t} expert />)}
+                  {selected.traits.map((t, i) => <TraitChip key={i} label={t} />)}
+                  {selected.expertTraits.map((t, i) => <TraitChip key={`ex-${i}`} label={t} expert />)}
                 </div>
               </Section>
             )}
@@ -164,8 +164,8 @@ function DetailSheet({ selected, onClose }: { selected: SelectedItem; onClose: (
             {(selected.traits.length > 0 || selected.expertTraits.length > 0) && (
               <Section label="Rasgos">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {selected.traits.map((t) => <TraitChip key={t} label={t} />)}
-                  {selected.expertTraits.map((t) => <TraitChip key={t + '-ex'} label={t} expert />)}
+                  {selected.traits.map((t, i) => <TraitChip key={i} label={t} />)}
+                  {selected.expertTraits.map((t, i) => <TraitChip key={`ex-${i}`} label={t} expert />)}
                 </div>
               </Section>
             )}
@@ -273,8 +273,8 @@ function WeaponCard({ weapon, typeName, skillName, damageTypeName, rangeName, tr
 
       {hasTraits && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 10 }}>
-          {traits.map((t) => <TraitChip key={t} label={t} />)}
-          {expertTraits.map((t) => <TraitChip key={t + '-ex'} label={t} expert />)}
+          {traits.map((t, i) => <TraitChip key={i} label={t} />)}
+          {expertTraits.map((t, i) => <TraitChip key={`ex-${i}`} label={t} expert />)}
         </div>
       )}
 
@@ -335,8 +335,8 @@ function ArmorCard({ armor, typeName, traits, expertTraits, accent, bg, bgHover,
 
       {hasTraits && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 10 }}>
-          {traits.map((t) => <TraitChip key={t} label={t} />)}
-          {expertTraits.map((t) => <TraitChip key={t + '-ex'} label={t} expert />)}
+          {traits.map((t, i) => <TraitChip key={i} label={t} />)}
+          {expertTraits.map((t, i) => <TraitChip key={`ex-${i}`} label={t} expert />)}
         </div>
       )}
     </div>

@@ -6,10 +6,12 @@ import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
 import type { WeaponCatalog, ArmorCatalog, GearItem } from '../../types'
 import { useCampaignStore } from '../../store/campaignStore'
+import { useAuthStore } from '../../store/authStore'
 import { Input, Spinner } from '../../components/ui'
 import type { Character, UpdateCharacterRequest } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
+import { POTENCIAS } from '../../data/potencias'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
 import { TalentActivation } from '../../components/TalentActivation'
 import type { ActivationType } from '../../components/TalentActivation'
@@ -97,6 +99,68 @@ const ATTR_MAP: Record<string, string> = {
   VEL: 'velocidad', FUE: 'fuerza', INT: 'intelecto',
   VOL: 'voluntad', PRE: 'presencia', DIS: 'discernimiento',
 }
+const ATRIBUTO_CODE: Record<string, string> = {
+  'Velocidad': 'VEL', 'Fuerza': 'FUE', 'Intelecto': 'INT',
+  'Voluntad': 'VOL', 'Presencia': 'PRE', 'Discernimiento': 'DIS',
+}
+// Primary and secondary slots per attribute code (no cross-section fallback)
+const ATRIBUTO_SLOTS: Record<string, [number, number]> = {
+  VEL: [1, 4], FUE: [1, 4], INT: [2, 5], VOL: [2, 5], DIS: [3, 6], PRE: [3, 6],
+}
+
+const SKILL_NAME_MAP: Record<string, string> = {
+  'Agilidad': 'agilidad', 'Armas Ligeras': 'armasLigeras', 'Armas Pesadas': 'armasPesadas',
+  'Atletismo': 'atletismo', 'Hurto': 'hurto', 'Sigilo': 'sigilo',
+  'Deducción': 'deduccion', 'Disciplina': 'disciplina', 'Intimidación': 'intimidacion',
+  'Manufactura': 'manufactura', 'Medicina': 'medicina', 'Conocimiento': 'conocimiento',
+  'Saber': 'conocimiento', 'Engaño': 'engano', 'Liderazgo': 'liderazgo',
+  'Percepción': 'percepcion', 'Perspicacia': 'perspicacia',
+  'Persuasión': 'persuasion', 'Supervivencia': 'supervivencia',
+}
+
+function checkPrereq(
+  prereq: string | undefined,
+  char: Character,
+  selected: string[],
+  heroicMainTalent: string | undefined,
+  radiantMainTalent: string | undefined,
+): { met: boolean; missing: string[] } {
+  if (!prereq) return { met: true, missing: [] }
+  const missing: string[] = []
+  // Split AND by "," or ";"
+  const andClauses = prereq.split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+  for (const clause of andClauses) {
+    // Temporarily mask "N o más" so the "o" isn't treated as OR
+    const masked = clause.replace(/(\d+) o más/g, '$1__GTE__')
+    const orParts = masked.split(/ [ou] /).map((s) => s.trim().replace(/__GTE__/g, ' o más'))
+    const clauseMet = orParts.some((part) => {
+      if (part.startsWith('tener ')) return true // narrative: assume met
+      const mainMatch = part.match(/^talento principal (.+)$/)
+      if (mainMatch) {
+        const n = mainMatch[1]
+        return heroicMainTalent === n || radiantMainTalent === n || selected.includes(n)
+      }
+      const talentMatch = part.match(/^talento (.+)$/)
+      if (talentMatch) return selected.includes(talentMatch[1])
+      const skillMatch = part.match(/^(.+?) (\d+) o más$/)
+      if (skillMatch) {
+        const skillName = skillMatch[1]
+        const minVal = parseInt(skillMatch[2])
+        const key = SKILL_NAME_MAP[skillName]
+        if (key) return ((char as any)[key] ?? 0) >= minVal
+        // Potencia valor check
+        for (let i = 1; i <= 6; i++) {
+          if ((char as any)[`habilidadPersonalizada${i}`] === skillName)
+            return ((char as any)[`habilidadPersonalizada${i}Valor`] ?? 0) >= minVal
+        }
+        return false
+      }
+      return selected.includes(part)
+    })
+    if (!clauseMet) missing.push(clause)
+  }
+  return { met: missing.length === 0, missing }
+}
 
 const SECTIONS = [
   {
@@ -112,7 +176,7 @@ const SECTIONS = [
       ['hurto',       'Hurto',        'velocidad', 'VEL'],
       ['sigilo',      'Sigilo',       'velocidad', 'VEL'],
     ] as [string, string, string, string][],
-    customN: 1,
+    customNs: [1, 4] as [number, number],
   },
   {
     key: 'cognitivo', label: 'Cognitivo',
@@ -127,7 +191,7 @@ const SECTIONS = [
       ['medicina',    'Medicina',    'intelecto', 'INT'],
       ['conocimiento','Conocimiento','intelecto', 'INT'],
     ] as [string, string, string, string][],
-    customN: 2,
+    customNs: [2, 5] as [number, number],
   },
   {
     key: 'espiritual', label: 'Espiritual',
@@ -142,7 +206,7 @@ const SECTIONS = [
       ['persuasion',  'Persuasión',  'presencia',      'PRE'],
       ['supervivencia','Supervivencia','discernimiento','DIS'],
     ] as [string, string, string, string][],
-    customN: 3,
+    customNs: [3, 6] as [number, number],
   },
 ]
 
@@ -159,6 +223,7 @@ export function CharacterDetailPage() {
   const qc = useQueryClient()
   const location = useLocation()
   const { isGm, currentCampaign } = useCampaignStore()
+  const { user: currentUser } = useAuthStore()
   const [editing, setEditing] = useState(!!(location.state as any)?.editing)
   const [form, setForm] = useState<Character | null>(null)
   const [tab, setTab] = useState<Tab>('stats')
@@ -262,6 +327,9 @@ export function CharacterDetailPage() {
 
   if (isLoading || !char) return <Spinner />
 
+  const isOwner = char.ownerId === currentUser?.id
+  const canEdit = isGm || isOwner
+
   const f = (editing && form ? form : char) as Character
   const set = (k: keyof UpdateCharacterRequest) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => prev ? { ...prev, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value } : prev)
@@ -273,17 +341,26 @@ export function CharacterDetailPage() {
   const radiantOrder = RADIANT_ORDERS.find((o) => o.id === f.caminoRadiante)
 
   // All talentos available from the character's paths
-  type AvailableTalento = { name: string; activation: ActivationType | null; description: string; source: string; sourceColor: string }
+  type AvailableTalento = { name: string; activation: ActivationType | null; description: string; source: string; sourceColor: string; prereq?: string }
   const availableTalentos: AvailableTalento[] = []
   if (heroicPath) {
     availableTalentos.push({ name: heroicPath.mainTalent, activation: null, description: heroicPath.mainTalentEffect, source: heroicPath.name, sourceColor: heroicPath.color })
     for (const spec of heroicPath.specialties)
-      for (const kt of spec.keyTalents)
-        availableTalentos.push({ name: kt.name, activation: kt.activation, description: kt.description, source: `${heroicPath.name} · ${spec.name}`, sourceColor: heroicPath.color })
+      for (const kt of spec.talentos)
+        availableTalentos.push({ name: kt.name, activation: kt.activation, description: kt.description, source: `${heroicPath.name} · ${spec.name}`, sourceColor: heroicPath.color, prereq: kt.prerequisites })
   }
   if (radiantOrder) {
     for (const t of radiantOrder.talentos)
-      availableTalentos.push({ name: t.name, activation: t.cost, description: t.description, source: radiantOrder.name, sourceColor: radiantOrder.color })
+      availableTalentos.push({ name: t.name, activation: t.cost, description: t.description, source: radiantOrder.name, sourceColor: radiantOrder.color, prereq: t.prereq })
+    for (const surgeName of radiantOrder.surges) {
+      const potencia = POTENCIAS.find((p) => p.name === surgeName)
+      if (potencia) {
+        // The potencia itself is a principal talento (base activation)
+        availableTalentos.push({ name: potencia.name, activation: potencia.costoBase, description: potencia.descripcion, source: radiantOrder.name, sourceColor: radiantOrder.color })
+        for (const t of potencia.talentos)
+          availableTalentos.push({ name: t.name, activation: t.cost, description: t.description, source: surgeName, sourceColor: radiantOrder.color, prereq: t.prereq })
+      }
+    }
   }
 
   const selectedTalentos: string[] = (() => { try { return JSON.parse(f.talentos || '[]') } catch { return [] } })()
@@ -318,7 +395,7 @@ export function CharacterDetailPage() {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <h1 style={{ fontSize: 20, fontWeight: 800, color: 'white', letterSpacing: '-0.03em', lineHeight: 1.2 }}>
-                  {editing ? (
+                  {editing && isGm ? (
                     <input
                       value={form?.name ?? ''}
                       onChange={set('name')}
@@ -367,7 +444,7 @@ export function CharacterDetailPage() {
           </div>
 
           {/* Edit / Save buttons */}
-          {isGm && (
+          {canEdit && (
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               {editing ? (
                 <>
@@ -520,7 +597,7 @@ export function CharacterDetailPage() {
                   )}
 
                   {/* Camino Heroico */}
-                  {editing ? (
+                  {editing && isGm ? (
                     <button onClick={() => setPicker('heroico')} style={{
                       ...cardStyle(), cursor: 'pointer', textAlign: 'left',
                       background: path ? path.colorBg : 'var(--surface-1)',
@@ -542,7 +619,7 @@ export function CharacterDetailPage() {
                   )}
 
                   {/* Camino Radiante */}
-                  {editing ? (
+                  {editing && isGm ? (
                     <button onClick={() => setPicker('radiante')} style={{
                       ...cardStyle(), cursor: 'pointer', textAlign: 'left',
                       background: order ? order.colorBg : 'var(--surface-1)',
@@ -616,15 +693,6 @@ export function CharacterDetailPage() {
             {/* Físico / Cognitivo / Espiritual sections */}
             {SECTIONS.map((section) => {
               const defValue = section.defense(f)
-              const n = section.customN as 1 | 2 | 3
-              const nameKey = `habilidadPersonalizada${n}` as keyof typeof f
-              const valorKey = `habilidadPersonalizada${n}Valor` as keyof typeof f
-              const attrKey = `habilidadPersonalizada${n}Atributo` as keyof typeof f
-              const customName = (f as any)[nameKey] as string
-              const customBase = (f as any)[valorKey] as number ?? 0
-              const customAttrCode = ((f as any)[attrKey] as string ?? '').toUpperCase()
-              const customBonus = customAttrCode && ATTR_MAP[customAttrCode] ? (f as any)[ATTR_MAP[customAttrCode]] ?? 0 : 0
-              const customTotal = customBase + customBonus
 
               return (
                 <div key={section.key} style={{
@@ -733,63 +801,89 @@ export function CharacterDetailPage() {
                       )
                     })}
 
-                    {/* Custom skill for this section */}
-                    {(editing || customName) && (
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '8px 14px',
-                        borderTop: `1px dashed ${section.colorBorder}`,
-                      }}>
-                        {editing ? (
-                          <>
-                            <select
-                              value={(form as any)?.[attrKey] ?? ''}
-                              onChange={(e) => setForm((prev) => prev ? { ...prev, [attrKey]: e.target.value } : prev)}
-                              style={{
-                                fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', flexShrink: 0,
-                                background: 'var(--surface-2)', border: '1px solid var(--border)',
-                                borderRadius: 4, padding: '2px 4px', cursor: 'pointer',
-                              }}
-                            >
-                              <option value="">—</option>
-                              {['VEL','FUE','INT','VOL','PRE','DIS'].map((a) => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                            <Input
-                              value={(form as any)?.[nameKey] ?? ''}
-                              onChange={(e) => setForm((prev) => prev ? { ...prev, [nameKey]: e.target.value } : prev)}
-                              placeholder="Habilidad personalizada..."
-                              style={{ flex: 1, fontSize: 13 }}
-                            />
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                              <Input
-                                type="number" min={0} max={10}
-                                value={customBase}
-                                onChange={set(valorKey as keyof UpdateCharacterRequest)}
-                                style={{ width: 52, padding: '3px 6px', textAlign: 'center', fontSize: 13 }}
-                              />
-                              <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>+{customBonus}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <span style={{
-                              fontSize: 9, fontWeight: 700, color: section.color,
-                              background: section.colorBg, border: `1px solid ${section.colorBorder}`,
-                              borderRadius: 4, padding: '2px 5px', flexShrink: 0,
-                            }}>
-                              {customAttrCode || '—'}
-                            </span>
-                            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500, flex: 1 }}>{customName}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                              <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{customBase}+{customBonus}</span>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: customTotal > 0 ? 'white' : 'var(--text-subtle)', minWidth: 20, textAlign: 'right' }}>
-                                {customTotal}
+                    {/* Custom skills for this section (slots n1 and n2) */}
+                    {section.customNs.map((n) => {
+                      const nameKey = `habilidadPersonalizada${n}` as keyof typeof f
+                      const valorKey = `habilidadPersonalizada${n}Valor` as keyof typeof f
+                      const attrKey = `habilidadPersonalizada${n}Atributo` as keyof typeof f
+                      const customName = (f as any)[nameKey] as string
+                      const customBase = (f as any)[valorKey] as number ?? 0
+                      const customAttrCode = ((f as any)[attrKey] as string ?? '').toUpperCase()
+                      const customBonus = customAttrCode && ATTR_MAP[customAttrCode] ? (f as any)[ATTR_MAP[customAttrCode]] ?? 0 : 0
+                      const customTotal = customBase + customBonus
+                      const isPotencia = !!radiantOrder?.surges.includes(customName)
+
+                      if (!editing && !customName) return null
+
+                      return (
+                        <div key={n} style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 14px',
+                          borderTop: `1px dashed ${section.colorBorder}`,
+                        }}>
+                          {editing ? (
+                            <>
+                              {isPotencia ? (
+                                <span style={{
+                                  fontSize: 9, fontWeight: 700, color: section.color, flexShrink: 0,
+                                  background: section.colorBg, border: `1px solid ${section.colorBorder}`,
+                                  borderRadius: 4, padding: '2px 5px',
+                                }}>{customAttrCode}</span>
+                              ) : (
+                                <select
+                                  value={(form as any)?.[attrKey] ?? ''}
+                                  onChange={(e) => setForm((prev) => prev ? { ...prev, [attrKey]: e.target.value } : prev)}
+                                  style={{
+                                    fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', flexShrink: 0,
+                                    background: 'var(--surface-2)', border: '1px solid var(--border)',
+                                    borderRadius: 4, padding: '2px 4px', cursor: 'pointer',
+                                  }}
+                                >
+                                  <option value="">—</option>
+                                  {['VEL','FUE','INT','VOL','PRE','DIS'].map((a) => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                              )}
+                              {isPotencia ? (
+                                <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{customName}</span>
+                              ) : (
+                                <Input
+                                  value={(form as any)?.[nameKey] ?? ''}
+                                  onChange={(e) => setForm((prev) => prev ? { ...prev, [nameKey]: e.target.value } : prev)}
+                                  placeholder="Habilidad personalizada..."
+                                  style={{ flex: 1, fontSize: 13 }}
+                                />
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                <Input
+                                  type="number" min={0} max={10}
+                                  value={customBase}
+                                  onChange={set(valorKey as keyof UpdateCharacterRequest)}
+                                  style={{ width: 52, padding: '3px 6px', textAlign: 'center', fontSize: 13 }}
+                                />
+                                <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>+{customBonus}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, color: section.color,
+                                background: section.colorBg, border: `1px solid ${section.colorBorder}`,
+                                borderRadius: 4, padding: '2px 5px', flexShrink: 0,
+                              }}>
+                                {customAttrCode || '—'}
                               </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
+                              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500, flex: 1 }}>{customName}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{customBase}+{customBonus}</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: customTotal > 0 ? 'white' : 'var(--text-subtle)', minWidth: 20, textAlign: 'right' }}>
+                                  {customTotal}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )
@@ -865,8 +959,9 @@ export function CharacterDetailPage() {
             )}
             {selectedTalentos.map((name) => {
               const t = talentosMap.get(name)
-              const isMainTalent = heroicPath?.mainTalent === name || radiantOrder?.talentos[0]?.name === name
-              const mainPath = heroicPath?.mainTalent === name ? heroicPath : radiantOrder?.talentos[0]?.name === name ? radiantOrder : null
+              const isPotenciaMain = !!radiantOrder?.surges.includes(name)
+              const isMainTalent = heroicPath?.mainTalent === name || radiantOrder?.talentos[0]?.name === name || isPotenciaMain
+              const mainPath = heroicPath?.mainTalent === name ? heroicPath : (radiantOrder?.talentos[0]?.name === name || isPotenciaMain) ? radiantOrder : null
               return (
                 <div key={name} style={{ background: 'var(--surface-1)', border: `1px solid ${isMainTalent ? (mainPath?.colorBorder ?? 'var(--border)') : 'var(--border)'}`, borderRadius: 14, padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
@@ -1240,7 +1335,7 @@ export function CharacterDetailPage() {
             const oldPath = HEROIC_PATHS.find((p) => p.id === (form?.caminoHeroico ?? char.caminoHeroico))
             const newPath = HEROIC_PATHS.find((p) => p.id === id)
             const current: string[] = (() => { try { return JSON.parse((form?.talentos ?? char.talentos) || '[]') } catch { return [] } })()
-            const oldNames = oldPath ? [oldPath.mainTalent, ...oldPath.specialties.flatMap((s) => s.keyTalents.map((kt) => kt.name))] : []
+            const oldNames = oldPath ? [oldPath.mainTalent, ...oldPath.specialties.flatMap((s) => s.talentos.map((kt) => kt.name))] : []
             const filtered = current.filter((n) => !oldNames.includes(n))
             const next = newPath ? [newPath.mainTalent, ...filtered.filter((n) => n !== newPath.mainTalent)] : filtered
             setForm((prev) => prev ? { ...prev, caminoHeroico: id, talentos: JSON.stringify(next) } : prev)
@@ -1260,11 +1355,51 @@ export function CharacterDetailPage() {
             const oldOrder = RADIANT_ORDERS.find((o) => o.id === (form?.caminoRadiante ?? char.caminoRadiante))
             const newOrder = RADIANT_ORDERS.find((o) => o.id === id)
             const current: string[] = (() => { try { return JSON.parse((form?.talentos ?? char.talentos) || '[]') } catch { return [] } })()
-            const oldNames = oldOrder ? oldOrder.talentos.map((t) => t.name) : []
-            const filtered = current.filter((n) => !oldNames.includes(n))
+            // Remove old spren bond talentos + old potencia names + old potencia sub-talentos
+            const oldSprenNames = oldOrder ? oldOrder.talentos.map((t) => t.name) : []
+            const oldPotenciaNames = oldOrder
+              ? oldOrder.surges.flatMap((s) => {
+                  const p = POTENCIAS.find((p) => p.name === s)
+                  if (!p) return []
+                  return [p.name, ...p.talentos.map((t) => t.name)]
+                })
+              : []
+            const filtered = current.filter((n) => !oldSprenNames.includes(n) && !oldPotenciaNames.includes(n))
             const mainName = newOrder?.talentos[0]?.name
-            const next = mainName ? [mainName, ...filtered.filter((n) => n !== mainName)] : filtered
-            setForm((prev) => prev ? { ...prev, caminoRadiante: id, talentos: JSON.stringify(next) } : prev)
+            // Also auto-add the potencia name itself (base activation) for each surge
+            const potenciaMainNames = (newOrder?.surges ?? []).filter((s): s is string => !!POTENCIAS.find((p) => p.name === s))
+            const autoAdd = [mainName, ...potenciaMainNames].filter((n): n is string => !!n)
+            const base = filtered.filter((n) => !autoAdd.includes(n))
+            const next = [...autoAdd, ...base]
+            // Update habilidadPersonalizada slots for new surges
+            const surgeUpdates: Record<string, string | number> = {}
+            const oldSurges = oldOrder?.surges ?? []
+            // Clear old surge slots (check all 6 slots)
+            for (let i = 1; i <= 6; i++) {
+              const curName = ((form ?? char) as any)[`habilidadPersonalizada${i}`] as string
+              if (oldSurges.includes(curName)) {
+                surgeUpdates[`habilidadPersonalizada${i}`] = ''
+                surgeUpdates[`habilidadPersonalizada${i}Valor`] = 0
+                surgeUpdates[`habilidadPersonalizada${i}Atributo`] = ''
+              }
+            }
+            // Assign each surge to its correct section slots (no cross-section fallback)
+            for (const surge of newOrder?.surges ?? []) {
+              const potencia = POTENCIAS.find((p) => p.name === surge)
+              const code = potencia ? (ATRIBUTO_CODE[potencia.atributo] ?? '') : ''
+              const sectionSlots: number[] = code ? (ATRIBUTO_SLOTS[code] ?? []) : []
+              for (const slot of sectionSlots) {
+                const curInSlot = (surgeUpdates[`habilidadPersonalizada${slot}`] as string | undefined)
+                  ?? (((form ?? char) as any)[`habilidadPersonalizada${slot}`] as string)
+                if (!curInSlot) {
+                  surgeUpdates[`habilidadPersonalizada${slot}`] = surge
+                  surgeUpdates[`habilidadPersonalizada${slot}Valor`] = 1
+                  surgeUpdates[`habilidadPersonalizada${slot}Atributo`] = code
+                  break
+                }
+              }
+            }
+            setForm((prev) => prev ? { ...prev, caminoRadiante: id, talentos: JSON.stringify(next), ...(surgeUpdates as any) } : prev)
           }}
           onClose={() => setPicker(null)}
         />
@@ -1272,7 +1407,15 @@ export function CharacterDetailPage() {
 
       {/* Talento picker */}
       {talentoPicker && (() => {
-        const unselected = availableTalentos.filter((t) => !selectedTalentos.includes(t.name) && t.name !== heroicPath?.mainTalent && t.name !== radiantOrder?.talentos[0]?.name)
+        const autoAdded = new Set([heroicPath?.mainTalent, radiantOrder?.talentos[0]?.name, ...(radiantOrder?.surges ?? [])])
+        const unselected = availableTalentos
+          .filter((t) => !selectedTalentos.includes(t.name) && !autoAdded.has(t.name))
+          .map((t) => {
+            const { met, missing } = checkPrereq(t.prereq, f, selectedTalentos, heroicPath?.mainTalent, radiantOrder?.talentos[0]?.name)
+            return { ...t, met, missing }
+          })
+        const available = unselected.filter((t) => t.met)
+        const locked = unselected.filter((t) => !t.met)
         return (
           <>
             <div onClick={() => setTalentoPicker(false)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
@@ -1293,7 +1436,7 @@ export function CharacterDetailPage() {
                 </button>
               </div>
               <div style={{ overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {unselected.map((t) => (
+                {available.map((t) => (
                   <button
                     key={t.name}
                     onClick={() => { talentosMutation.mutate([...selectedTalentos, t.name]); setTalentoPicker(false) }}
@@ -1317,10 +1460,43 @@ export function CharacterDetailPage() {
                     <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{t.description}</p>
                   </button>
                 ))}
-                {unselected.length === 0 && (
+                {available.length === 0 && locked.length === 0 && (
                   <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '20px 0' }}>
                     Ya has aprendido todos los talentos disponibles.
                   </p>
+                )}
+                {locked.length > 0 && (
+                  <>
+                    {available.length > 0 && <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />}
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', margin: '4px 0 0' }}>BLOQUEADOS</p>
+                    {locked.map((t) => (
+                      <div
+                        key={t.name}
+                        style={{
+                          display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
+                          borderRadius: 12, textAlign: 'left', width: '100%',
+                          background: 'var(--surface-2)', border: '1px solid var(--border)',
+                          opacity: 0.5,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>🔒 {t.name}</span>
+                          {t.activation && <TalentActivation type={t.activation} compact />}
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                            padding: '2px 6px', borderRadius: 20,
+                            background: `color-mix(in srgb, ${t.sourceColor} 12%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${t.sourceColor} 30%, transparent)`,
+                            color: t.sourceColor,
+                          }}>{t.source.toUpperCase()}</span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#f59e0b', lineHeight: 1.4, margin: 0, fontStyle: 'italic' }}>
+                          Requiere: {t.missing.join(' · ')}
+                        </p>
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{t.description}</p>
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
             </div>

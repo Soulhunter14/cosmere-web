@@ -84,6 +84,15 @@ export interface Character {
   habilidadPersonalizada3: string
   habilidadPersonalizada3Valor: number
   habilidadPersonalizada3Atributo: string
+  habilidadPersonalizada4: string
+  habilidadPersonalizada4Valor: number
+  habilidadPersonalizada4Atributo: string
+  habilidadPersonalizada5: string
+  habilidadPersonalizada5Valor: number
+  habilidadPersonalizada5Atributo: string
+  habilidadPersonalizada6: string
+  habilidadPersonalizada6Valor: number
+  habilidadPersonalizada6Atributo: string
   proposito: string
   obstaculo: string
   metas: string

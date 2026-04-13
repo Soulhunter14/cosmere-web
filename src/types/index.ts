@@ -215,6 +215,7 @@ export interface WeaponCatalog {
   rangeId: number
   traitIds: number[]
   expertTraitIds: number[]
+  isCustom: boolean
 }
 
 export interface ArmorCatalog {
@@ -224,6 +225,7 @@ export interface ArmorCatalog {
   desvio: number
   traitIds: number[]
   expertTraitIds: number[]
+  isCustom: boolean
 }
 
 export interface GearItem {

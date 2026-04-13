@@ -156,7 +156,7 @@ function PathDetailSheet({ path, onClose }: { path: HeroicPath; onClose: () => v
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {specialty.keyTalents.map((t) => (
+              {specialty.talentos.map((t) => (
                 <div key={t.name} style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                     <TalentActivation type={t.activation} compact />
@@ -223,7 +223,7 @@ export function HeroicPathsPage() {
   const [selected, setSelected] = useState<HeroicPath | null>(null)
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 20px 48px' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
       <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
         Caminos Heroicos
       </h1>

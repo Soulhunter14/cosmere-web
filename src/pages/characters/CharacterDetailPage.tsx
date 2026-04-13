@@ -894,6 +894,24 @@ export function CharacterDetailPage() {
         {/* BACKGROUND TAB */}
         {tab === 'background' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {!editing && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => { setForm({ ...char }); setEditing(true) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    background: 'transparent', border: '1px solid var(--border-bright)',
+                    color: 'var(--text-subtle)', borderRadius: 8, padding: '5px 12px',
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--brand-light)'; e.currentTarget.style.borderColor = 'rgba(180,190,254,0.4)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-subtle)'; e.currentTarget.style.borderColor = 'var(--border-bright)' }}
+                >
+                  <Edit2 size={11} />
+                  Editar trasfondo
+                </button>
+              </div>
+            )}
             {BACKGROUND_FIELDS.map(([k, label]) => (
               <div key={k} style={{
                 background: 'var(--surface-1)', border: '1px solid var(--border)',
@@ -1373,7 +1391,7 @@ export function CharacterDetailPage() {
             const next = [...autoAdd, ...base]
             // Update habilidadPersonalizada slots for new surges
             const surgeUpdates: Record<string, string | number> = {}
-            const oldSurges = oldOrder?.surges ?? []
+            const oldSurges = (oldOrder?.surges ?? []) as string[]
             // Clear old surge slots (check all 6 slots)
             for (let i = 1; i <= 6; i++) {
               const curName = ((form ?? char) as any)[`habilidadPersonalizada${i}`] as string

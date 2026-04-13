@@ -163,7 +163,7 @@ export const SESSIONS: Session[] = [
   },
   {
     "number": 4,
-    "title": "Ecos en el Campamento]",
+    "title": "Ecos en el Campamento",
     "slug": "sesion-04",
     "body": "El grupo llega a los Campamentos de Guerra.\n\nBuscan información sobre [[PJ - Liss]], descubriendo pistas que los llevan al [[Lugar - Rocabrote Rojo]].\n\n[[PJ - Kaligula]] tiene una visión de un encapuchado: [[NPC - Mraize]].\n\nEl grupo interactúa con mercaderes y soldados, y recibe recompensas de [[NPC - Tet Rebin]].\n\n[[PJ - Raito]] ayuda a los olvidados en la zona médica, donde jura proteger a los portadores del [[Lugar - Puente Nueve]].\n\nLa sesión termina con el grupo planificando sus movimientos para el día siguiente.",
     "preview": "El grupo llega a los Campamentos de Guerra.",

@@ -459,7 +459,7 @@ function ChapterDetail({ chapter, onBack }: { chapter: AdventureChapter; onBack:
   const [tab, setTab] = useState<DetailTab>('resumen')
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {/* Sticky header */}
       <div style={{
@@ -737,7 +737,7 @@ export function CaminapiedrasPage() {
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 20px 48px' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
       <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
         Caminapiedras
       </h1>

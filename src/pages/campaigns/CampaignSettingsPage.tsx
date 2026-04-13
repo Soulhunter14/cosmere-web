@@ -47,7 +47,7 @@ export function CampaignSettingsPage() {
   if (isLoading) return <Spinner />
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 600, margin: '0 auto' }}>
+    <div style={{ padding: '24px 20px', maxWidth: 680, margin: '0 auto' }}>
 
       {/* ── Header ───────────────────────────────────────────── */}
       <div style={{ marginBottom: 28 }}>
@@ -226,7 +226,7 @@ export function CampaignSettingsPage() {
           onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(244,63,94,0.08)')}
         >
           <LogOut size={13} />
-          Salir
+          Cerrar sesión
         </button>
       </div>
 

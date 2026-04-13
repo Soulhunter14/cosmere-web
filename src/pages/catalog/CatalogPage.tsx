@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Sword, Shield, Package, RefreshCw, X } from 'lucide-react'
+import { Sword, Shield, Package, X, Plus, Trash2 } from 'lucide-react'
 import { catalogApi } from '../../api/catalog'
-import { Spinner, ConfirmDialog } from '../../components/ui'
+import type { CreateWeaponPayload, CreateArmorPayload } from '../../api/catalog'
+import { Spinner } from '../../components/ui'
 import { useCampaignStore } from '../../store/campaignStore'
 import type { WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
 
@@ -48,7 +49,28 @@ function EmptyState({ label }: { label: string }) {
 }
 
 // ── Detail sheet ─────────────────────────────────────────────
-function DetailSheet({ selected, onClose }: { selected: SelectedItem; onClose: () => void }) {
+function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onClose: () => void; isGm: boolean }) {
+  const qc = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const deleteWeaponMutation = useMutation({
+    mutationFn: () => catalogApi.deleteWeapon((selected as { item: WeaponCatalog }).item.id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-weapons'] }); onClose() },
+  })
+  const deleteArmorMutation = useMutation({
+    mutationFn: () => catalogApi.deleteArmor((selected as { item: ArmorCatalog }).item.id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-armor'] }); onClose() },
+  })
+
+  const isCustom =
+    (selected.kind === 'weapon' && selected.item.isCustom) ||
+    (selected.kind === 'armor' && selected.item.isCustom)
+
+  const handleDelete = () => {
+    if (selected.kind === 'weapon') deleteWeaponMutation.mutate()
+    else if (selected.kind === 'armor') deleteArmorMutation.mutate()
+  }
+
   const tab = TABS.find((t) => t.key === (selected.kind === 'weapon' ? 'weapons' : selected.kind === 'armor' ? 'armor' : 'gear'))!
 
   return (
@@ -98,13 +120,49 @@ function DetailSheet({ selected, onClose }: { selected: SelectedItem; onClose: (
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', flexShrink: 0 }}
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {isGm && isCustom && !confirmDelete && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={{ background: 'rgba(251,113,133,0.1)', border: '1px solid rgba(251,113,133,0.25)', borderRadius: 8, cursor: 'pointer', padding: '5px 8px', color: '#fb7185', display: 'flex', alignItems: 'center' }}
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
+
+        {/* Confirm delete */}
+        {confirmDelete && (
+          <div style={{
+            background: 'rgba(251,113,133,0.08)', border: '1px solid rgba(251,113,133,0.25)',
+            borderRadius: 12, padding: '12px 14px', marginBottom: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>¿Eliminar este ítem?</span>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                style={{ padding: '5px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-subtle)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteWeaponMutation.isPending || deleteArmorMutation.isPending}
+                style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: '#fb7185', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Weapon detail */}
         {selected.kind === 'weapon' && (
@@ -388,23 +446,287 @@ function GearCard({ gear, accent, bg, bgHover, onClick }: {
   )
 }
 
+// ── Form helpers ─────────────────────────────────────────────
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+const inputStyle: React.CSSProperties = {
+  background: 'var(--surface-2)', border: '1px solid var(--border)',
+  borderRadius: 10, padding: '9px 12px', fontSize: 13, color: 'var(--text)',
+  width: '100%', boxSizing: 'border-box' as const, outline: 'none',
+}
+
+const selectStyle: React.CSSProperties = {
+  ...inputStyle, appearance: 'none' as const, cursor: 'pointer',
+}
+
+function MultiSelect({ options, selected, onChange }: {
+  options: CatalogOption[]
+  selected: number[]
+  onChange: (ids: number[]) => void
+}) {
+  const toggle = (id: number) =>
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {options.map((o) => {
+        const active = selected.includes(o.id)
+        return (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => toggle(o.id)}
+            style={{
+              fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
+              border: active ? '1px solid rgba(251,113,133,0.5)' : '1px solid var(--border)',
+              background: active ? 'rgba(251,113,133,0.12)' : 'var(--surface-2)',
+              color: active ? '#fb7185' : 'var(--text-subtle)',
+              cursor: 'pointer', transition: 'all 0.12s',
+            }}
+          >
+            {o.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Create Weapon Sheet ───────────────────────────────────────
+function CreateWeaponSheet({ onClose, options }: {
+  onClose: () => void
+  options: {
+    weaponTypes: CatalogOption[]; skills: CatalogOption[]; damageTypes: CatalogOption[]
+    ranges: CatalogOption[]; traits: CatalogOption[]
+  }
+}) {
+  const qc = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: catalogApi.createWeapon,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-weapons'] }); onClose() },
+  })
+
+  const [form, setForm] = useState<CreateWeaponPayload>({
+    name: '', weaponTypeId: 0, skillId: 0,
+    damageDiceCount: 1, damageDiceValue: 6,
+    damageTypeId: 0, rangeId: 0,
+    traitIds: [], expertTraitIds: [],
+  })
+
+  const set = <K extends keyof CreateWeaponPayload>(k: K, v: CreateWeaponPayload[K]) =>
+    setForm((f) => ({ ...f, [k]: v }))
+
+  const valid = form.name.trim() && form.weaponTypeId && form.skillId &&
+    form.damageDiceCount > 0 && form.damageDiceValue > 0 &&
+    form.damageTypeId && form.rangeId
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!valid) return
+    mutation.mutate(form)
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
+      <div style={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 61,
+        background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
+        border: '1px solid var(--border-bright)', borderBottom: 'none',
+        padding: `20px 20px calc(20px + var(--sab, 0px))`,
+        maxHeight: '90vh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: 'white' }}>Nueva Arma</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <FormField label="Nombre">
+            <input style={inputStyle} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Nombre del arma" />
+          </FormField>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Tipo">
+              <select style={selectStyle} value={form.weaponTypeId} onChange={(e) => set('weaponTypeId', +e.target.value)}>
+                <option value={0}>— Seleccionar —</option>
+                {options.weaponTypes.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Habilidad">
+              <select style={selectStyle} value={form.skillId} onChange={(e) => set('skillId', +e.target.value)}>
+                <option value={0}>— Seleccionar —</option>
+                {options.skills.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </FormField>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <FormField label="Dados">
+              <input style={inputStyle} type="number" min={1} value={form.damageDiceCount} onChange={(e) => set('damageDiceCount', +e.target.value)} />
+            </FormField>
+            <FormField label="Caras">
+              <input style={inputStyle} type="number" min={1} value={form.damageDiceValue} onChange={(e) => set('damageDiceValue', +e.target.value)} />
+            </FormField>
+            <FormField label="Tipo daño">
+              <select style={selectStyle} value={form.damageTypeId} onChange={(e) => set('damageTypeId', +e.target.value)}>
+                <option value={0}>—</option>
+                {options.damageTypes.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </FormField>
+          </div>
+
+          <FormField label="Alcance">
+            <select style={selectStyle} value={form.rangeId} onChange={(e) => set('rangeId', +e.target.value)}>
+              <option value={0}>— Seleccionar —</option>
+              {options.ranges.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </FormField>
+
+          <FormField label="Rasgos">
+            <MultiSelect options={options.traits} selected={form.traitIds} onChange={(ids) => set('traitIds', ids)} />
+          </FormField>
+
+          <FormField label="Rasgos de experto">
+            <MultiSelect options={options.traits} selected={form.expertTraitIds} onChange={(ids) => set('expertTraitIds', ids)} />
+          </FormField>
+
+          <button
+            type="submit"
+            disabled={!valid || mutation.isPending}
+            style={{
+              padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 14,
+              border: 'none', cursor: valid ? 'pointer' : 'not-allowed',
+              background: valid ? '#fb7185' : 'var(--surface-3)',
+              color: valid ? 'white' : 'var(--text-subtle)',
+              transition: 'all 0.15s', marginTop: 4,
+            }}
+          >
+            {mutation.isPending ? 'Guardando…' : 'Crear Arma'}
+          </button>
+          {mutation.isError && (
+            <p style={{ fontSize: 12, color: '#fb7185', textAlign: 'center', margin: 0 }}>Error al guardar. Inténtalo de nuevo.</p>
+          )}
+        </form>
+      </div>
+    </>
+  )
+}
+
+// ── Create Armor Sheet ────────────────────────────────────────
+function CreateArmorSheet({ onClose, options }: {
+  onClose: () => void
+  options: { armorTypes: CatalogOption[]; traits: CatalogOption[] }
+}) {
+  const qc = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: catalogApi.createArmor,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-armor'] }); onClose() },
+  })
+
+  const [form, setForm] = useState<CreateArmorPayload>({
+    name: '', armorTypeId: 0, desvio: 0, traitIds: [], expertTraitIds: [],
+  })
+
+  const set = <K extends keyof CreateArmorPayload>(k: K, v: CreateArmorPayload[K]) =>
+    setForm((f) => ({ ...f, [k]: v }))
+
+  const valid = form.name.trim() && form.armorTypeId
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!valid) return
+    mutation.mutate(form)
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
+      <div style={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 61,
+        background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
+        border: '1px solid var(--border-bright)', borderBottom: 'none',
+        padding: `20px 20px calc(20px + var(--sab, 0px))`,
+        maxHeight: '90vh', overflowY: 'auto',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: 'white' }}>Nueva Armadura</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <FormField label="Nombre">
+            <input style={inputStyle} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Nombre de la armadura" />
+          </FormField>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Tipo">
+              <select style={selectStyle} value={form.armorTypeId} onChange={(e) => set('armorTypeId', +e.target.value)}>
+                <option value={0}>— Seleccionar —</option>
+                {options.armorTypes.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Desvío (DEF)">
+              <input style={inputStyle} type="number" min={0} value={form.desvio} onChange={(e) => set('desvio', +e.target.value)} />
+            </FormField>
+          </div>
+
+          <FormField label="Rasgos">
+            <MultiSelect options={options.traits} selected={form.traitIds} onChange={(ids) => set('traitIds', ids)} />
+          </FormField>
+
+          <FormField label="Rasgos de experto">
+            <MultiSelect options={options.traits} selected={form.expertTraitIds} onChange={(ids) => set('expertTraitIds', ids)} />
+          </FormField>
+
+          <button
+            type="submit"
+            disabled={!valid || mutation.isPending}
+            style={{
+              padding: '12px', borderRadius: 12, fontWeight: 700, fontSize: 14,
+              border: 'none', cursor: valid ? 'pointer' : 'not-allowed',
+              background: valid ? '#67e8f9' : 'var(--surface-3)',
+              color: valid ? '#0e1a1c' : 'var(--text-subtle)',
+              transition: 'all 0.15s', marginTop: 4,
+            }}
+          >
+            {mutation.isPending ? 'Guardando…' : 'Crear Armadura'}
+          </button>
+          {mutation.isError && (
+            <p style={{ fontSize: 12, color: '#fb7185', textAlign: 'center', margin: 0 }}>Error al guardar. Inténtalo de nuevo.</p>
+          )}
+        </form>
+      </div>
+    </>
+  )
+}
+
 // ── Main page ───────────────────────────────────────────────
 export function CatalogPage() {
   const [tab, setTab] = useState<Tab>('weapons')
   const [selected, setSelected] = useState<SelectedItem | null>(null)
-  const [confirmReimport, setConfirmReimport] = useState(false)
+  const [showCreateWeapon, setShowCreateWeapon] = useState(false)
+  const [showCreateArmor, setShowCreateArmor] = useState(false)
   const { isGm } = useCampaignStore()
-  const queryClient = useQueryClient()
-
-  const reimportMutation = useMutation({
-    mutationFn: catalogApi.reimport,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['catalog-weapons'] })
-      queryClient.invalidateQueries({ queryKey: ['catalog-armor'] })
-      queryClient.invalidateQueries({ queryKey: ['catalog-gear'] })
-      queryClient.invalidateQueries({ queryKey: ['opts'] })
-    },
-  })
 
   // Item data
   const { data: weapons, isLoading: wLoad } = useQuery({ queryKey: ['catalog-weapons'], queryFn: catalogApi.getWeapons })
@@ -432,7 +754,7 @@ export function CatalogPage() {
   const activeTab = TABS.find((t) => t.key === tab)!
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {/* ── Header ──────────────────────────────────────── */}
       <div style={{ padding: '28px 20px 0' }}>
@@ -440,20 +762,19 @@ export function CatalogPage() {
           <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)' }}>
             Catálogo
           </h1>
-          {isGm && (
+          {isGm && (tab === 'weapons' || tab === 'armor') && (
             <button
-              onClick={() => setConfirmReimport(true)}
-              title="Reimportar catálogo base"
+              onClick={() => tab === 'weapons' ? setShowCreateWeapon(true) : setShowCreateArmor(true)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 10px', borderRadius: 8, marginTop: 2,
-                fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.2)',
-                color: '#a78bfa',
+                padding: '7px 13px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: tab === 'weapons' ? 'rgba(251,113,133,0.12)' : 'rgba(103,232,249,0.1)',
+                color: tab === 'weapons' ? '#fb7185' : '#67e8f9',
+                fontSize: 12, fontWeight: 700,
               }}
             >
-              <RefreshCw size={11} />
-              Reimportar
+              <Plus size={13} />
+              {tab === 'weapons' ? 'Arma' : 'Armadura'}
             </button>
           )}
         </div>
@@ -559,16 +880,30 @@ export function CatalogPage() {
       </div>
 
       {/* ── Detail sheet ────────────────────────────────── */}
-      {selected && <DetailSheet selected={selected} onClose={() => setSelected(null)} />}
+      {selected && <DetailSheet selected={selected} onClose={() => setSelected(null)} isGm={isGm} />}
 
-      <ConfirmDialog
-        open={confirmReimport}
-        title="Reimportar catálogo"
-        message="Esto reemplazará todas las armas, armaduras, equipo y opciones con los datos base del sistema. ¿Continuar?"
-        confirmLabel="Reimportar"
-        onConfirm={() => { setConfirmReimport(false); reimportMutation.mutate() }}
-        onCancel={() => setConfirmReimport(false)}
-      />
+      {/* ── Create sheets ───────────────────────────────── */}
+      {showCreateWeapon && (
+        <CreateWeaponSheet
+          onClose={() => setShowCreateWeapon(false)}
+          options={{
+            weaponTypes: optWeaponType ?? [],
+            skills: optSkill ?? [],
+            damageTypes: optDamageType ?? [],
+            ranges: optRange ?? [],
+            traits: optWeaponTrait ?? [],
+          }}
+        />
+      )}
+      {showCreateArmor && (
+        <CreateArmorSheet
+          onClose={() => setShowCreateArmor(false)}
+          options={{
+            armorTypes: optArmorType ?? [],
+            traits: optArmorTrait ?? [],
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -155,7 +155,7 @@ export function AventurasPage() {
   const [tab, setTab] = useState('escenas')
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 20px 48px' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
       <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
         Aventuras
       </h1>
@@ -164,17 +164,17 @@ export function AventurasPage() {
       </p>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, padding: '4px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, overflowX: 'auto' }}>
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             style={{
-              flex: 1, minWidth: 56, padding: '8px 4px', borderRadius: 9, fontSize: 11, fontWeight: 700,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-              background: tab === t.id ? 'var(--surface-3)' : 'transparent',
-              border: `1px solid ${tab === t.id ? 'var(--border-bright)' : 'transparent'}`,
-              color: tab === t.id ? 'white' : 'var(--text-muted)',
+              padding: '7px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+              cursor: 'pointer', border: 'none', whiteSpace: 'nowrap',
+              background: tab === t.id ? 'rgba(180,190,254,0.12)' : 'transparent',
+              outline: `1px solid ${tab === t.id ? 'rgba(180,190,254,0.2)' : 'transparent'}`,
+              color: tab === t.id ? 'var(--brand-light)' : 'var(--text-subtle)',
               transition: 'all 0.15s',
             }}
           >

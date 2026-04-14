@@ -50,7 +50,6 @@ export interface Character {
   voluntad: number
   discernimiento: number
   presencia: number
-  health: number
   maxHealth: number
   maxConcentration: number
   maxInvestiture: number
@@ -95,8 +94,8 @@ export interface Character {
   habilidadPersonalizada6Atributo: string
   proposito: string
   obstaculo: string
-  metas: string
   talentos: string
+  metas: Meta[]
   apariencia: string
   notas: string
   conexiones: string
@@ -110,7 +109,36 @@ export interface Character {
 }
 
 export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante'> & { ownerId?: number }
-export type UpdateCharacterRequest = Omit<Character, 'id' | 'campaignId' | 'createdAt' | 'updatedAt'>
+export type UpdateCharacterRequest = Omit<Character, 'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas'>
+
+// Metas
+export interface Meta {
+  id: number
+  characterId: number
+  titulo: string
+  descripcion: string
+  hitos: number
+  estado: 'activa' | 'concluida'
+  tipoConclusion: 'exito' | 'crecimiento' | 'fracaso' | null
+  notasConclusion: string
+  createdAt: string
+}
+
+export interface CreateMetaRequest {
+  titulo: string
+  descripcion: string
+}
+
+export interface UpdateMetaRequest {
+  titulo: string
+  descripcion: string
+  hitos: number
+}
+
+export interface ConcludeMetaRequest {
+  tipoConclusion: 'exito' | 'crecimiento' | 'fracaso'
+  notasConclusion: string
+}
 
 // NPC Notes (player personal notes about NPCs they encounter)
 export interface NpcNote {
@@ -185,6 +213,45 @@ export interface CreateSessionRequest {
   notes: string
 }
 
+// Session Proposals
+export type ProposalStatus = 'Pending' | 'Promoted' | 'Rejected'
+
+export interface ProposalDateResponse {
+  id: number
+  proposedDate: string
+  canCount: number
+  cannotCount: number
+  currentUserVote: boolean | null
+}
+
+export interface ProposalResponse {
+  id: number
+  campaignId: number
+  title: string
+  notes: string
+  status: ProposalStatus
+  createdAt: string
+  resolvedAt: string | null
+  promotedSessionId: number | null
+  dates: ProposalDateResponse[]
+}
+
+export interface CreateProposalRequest {
+  title: string
+  notes: string
+  proposedDates: string[]
+}
+
+export interface CastVoteRequest {
+  canAttend: boolean
+}
+
+export interface PromoteProposalRequest {
+  proposalDateId: number
+  title: string
+  location: string
+}
+
 // Notes
 export interface Note {
   id: number
@@ -199,7 +266,7 @@ export interface Note {
 }
 
 export interface CreateNoteRequest {
-  toUserId: number
+  toUserIds: number[]
   content: string
 }
 
@@ -240,4 +307,20 @@ export interface CatalogOption {
   id: number
   name: string
   description: string
+}
+
+// Locked Days
+export interface LockedDay {
+  id: number
+  campaignId: number
+  userId: number
+  userDisplayName: string
+  date: string
+  note: string
+  createdAt: string
+}
+
+export interface CreateLockedDayRequest {
+  date: string
+  note: string
 }

@@ -1,32 +1,21 @@
 import { useState } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell } from 'lucide-react'
+import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useCampaignStore } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
 import { notesApi } from '../api/notes'
 
-const navItems = [
-  { to: 'home', label: 'Inicio', icon: House },
-  { to: 'personajes', label: 'Personajes', icon: Users },
-  { to: 'historia', label: 'Historia', icon: BookOpen },
-  { to: 'encyclopedia', label: 'Mundo', icon: Globe },
-]
-
-const gmNavItems = [
-  { to: 'gm', label: 'GM', icon: Sword },
-]
-
 const SECTION_LABELS: Record<string, string> = {
   home: 'Inicio',
   personajes: 'Personajes',
-  historia: 'Historia',
-  encyclopedia: 'Mundo',
-  gm: 'GM',
+  historia: 'Partida',
+  encyclopedia: 'Enciclopedia',
+  gm: 'Director',
   characters: 'Personajes',
   'global-npcs': 'NPCs',
-  sessions: 'Historia',
-  diario: 'Historia',
+  sessions: 'Partida',
+  diario: 'Partida',
   catalog: 'Catálogo',
   settings: 'Ajustes',
 }
@@ -41,6 +30,24 @@ const PARENT_SECTION: Record<string, string> = {
 
 export function Sidebar() {
   const { currentCampaign, isGm } = useCampaignStore()
+
+  const navItems = isGm
+    ? [
+        { to: 'home', label: 'Inicio', icon: House },
+        { to: 'historia', label: 'Partida', icon: BookOpen },
+        { to: 'encyclopedia', label: 'Enciclopedia', icon: Globe },
+      ]
+    : [
+        { to: 'home', label: 'Inicio', icon: House },
+        { to: 'personajes', label: 'Personaje', icon: Users },
+        { to: 'historia', label: 'Partida', icon: BookOpen },
+        { to: 'encyclopedia', label: 'Enciclopedia', icon: Globe },
+      ]
+
+  const gmNavItems = [
+    { to: 'personajes', label: 'Personajes', icon: Users },
+    { to: 'gm', label: 'Director', icon: Sword },
+  ]
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
   const location = useLocation()
@@ -64,9 +71,14 @@ export function Sidebar() {
 
   const showBack = isDetailPage || !!PARENT_SECTION[currentSection]
 
+  const resolveLabel = (key: string) => {
+    if (!isGm && (key === 'personajes' || key === 'characters')) return 'Personaje'
+    return SECTION_LABELS[key] ?? key
+  }
+
   const backLabel = isDetailPage
-    ? (SECTION_LABELS[currentSection] ?? 'Atrás')
-    : SECTION_LABELS[PARENT_SECTION[currentSection]] ?? 'Atrás'
+    ? resolveLabel(currentSection)
+    : resolveLabel(PARENT_SECTION[currentSection])
 
   const handleLogout = () => {
     logout()
@@ -143,6 +155,7 @@ export function Sidebar() {
               {isGm ? 'Game Master' : 'Jugador'}
             </span>
           )}
+
         </div>
 
         {/* Nav */}
@@ -211,15 +224,26 @@ export function Sidebar() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              style={{ padding: 6, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', flexShrink: 0, display: 'flex', alignItems: 'center' }}
-              title="Cerrar sesión"
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-            >
-              <LogOut size={13} />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+              <button
+                onClick={() => navigate('/campaigns')}
+                style={{ padding: 6, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', display: 'flex', alignItems: 'center' }}
+                title="Volver a campañas"
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+              >
+                <LayoutGrid size={13} />
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{ padding: 6, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', display: 'flex', alignItems: 'center' }}
+                title="Cerrar sesión"
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+              >
+                <LogOut size={13} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -501,6 +525,19 @@ export function Sidebar() {
               </NavLink>
             )}
             <button
+              onClick={() => { setShowUserMenu(false); navigate('/campaigns') }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                width: '100%', padding: '12px 20px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: 14, fontWeight: 600,
+                textAlign: 'left',
+              }}
+            >
+              <LayoutGrid size={16} />
+              Volver a campañas
+            </button>
+            <button
               onClick={() => { handleLogout(); setShowUserMenu(false) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -557,9 +594,10 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {isGm && (
+        {isGm && gmNavItems.map(({ to, label, icon: Icon }) => (
           <NavLink
-            to={linkTo('gm')}
+            key={to}
+            to={linkTo(to)}
             className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-all duration-150"
             style={({ isActive }) => ({
               color: isActive ? '#f87171' : 'rgba(248,113,113,0.5)',
@@ -574,15 +612,15 @@ export function Sidebar() {
                     background: isActive ? 'rgba(239,68,68,0.12)' : 'transparent',
                   }}
                 >
-                  <Sword size={16} />
+                  <Icon size={16} />
                 </div>
                 <span className="text-[9px] font-semibold leading-none" style={{ letterSpacing: '0.02em' }}>
-                  GM
+                  {label}
                 </span>
               </>
             )}
           </NavLink>
-        )}
+        ))}
       </nav>
     </>
   )

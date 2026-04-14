@@ -17,6 +17,7 @@ import { AventurasPage } from './pages/encyclopedia/AventurasPage'
 import { PotenciasPage } from './pages/encyclopedia/PotenciasPage'
 import { HomeCampaignPage } from './pages/home/HomeCampaignPage'
 import { PersonajesPage } from './pages/personajes/PersonajesPage'
+import { MetasDetailPage } from './pages/personajes/MetasDetailPage'
 import { HistoriaPage } from './pages/historia/HistoriaPage'
 import { GmPage } from './pages/gm/GmPage'
 
@@ -41,6 +42,7 @@ export default function App() {
               <Route index element={<Navigate to="home" replace />} />
               <Route path="home" element={<HomeCampaignPage />} />
               <Route path="personajes" element={<PersonajesPage />} />
+              <Route path="personajes/metas/:characterId" element={<MetasDetailPage />} />
               <Route path="historia" element={<HistoriaPage />} />
               <Route path="encyclopedia" element={<EncyclopediaPage />} />
               <Route path="encyclopedia/radiant-orders" element={<RadiantOrdersPage />} />
@@ -52,6 +54,8 @@ export default function App() {
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />
+              <Route path="gm/characters/:characterId" element={<CharacterDetailPage />} />
+              <Route path="gm/metas/:characterId" element={<MetasDetailPage />} />
               <Route path="global-npcs/:npcId" element={<GlobalNpcDetailPage />} />
               <Route path="catalog" element={<CatalogPage />} />
             </Route>

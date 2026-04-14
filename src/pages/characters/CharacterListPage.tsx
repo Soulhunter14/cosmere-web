@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, ArrowRight, Heart, Users, UserCheck, UserX } from 'lucide-react'
+import { Plus, Trash2, ArrowRight, Users, UserCheck, UserX } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
@@ -29,7 +29,7 @@ function CharacterCard({
   onAssign,
   players,
 }: {
-  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; health: number; maxHealth: number; ownerId?: number }
+  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; maxHealth: number; ownerId?: number }
   isGm: boolean
   ownerName?: string
   onOpen: () => void
@@ -40,7 +40,6 @@ function CharacterCard({
   const [hovered, setHovered] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
   const gradient = AVATAR_GRADIENTS[character.id % AVATAR_GRADIENTS.length]
-  const hpPct = character.maxHealth > 0 ? Math.round((character.health / character.maxHealth) * 100) : 0
 
   return (
     <>
@@ -131,18 +130,6 @@ function CharacterCard({
             </div>
           )}
 
-          {/* HP bar */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Heart size={9} style={{ color: '#fb7185', flexShrink: 0 }} />
-              <div style={{ flex: 1, height: 3, borderRadius: 4, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', borderRadius: 4, background: 'linear-gradient(90deg,#f43f5e,#fb7185)', width: `${hpPct}%`, transition: 'width 0.4s ease' }} />
-              </div>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, minWidth: 28, textAlign: 'right' }}>
-                {character.health}/{character.maxHealth}
-              </span>
-            </div>
-          </div>
         </div>
 
         {/* Actions */}
@@ -260,7 +247,7 @@ function CharacterCard({
   )
 }
 
-export function CharacterListPage() {
+export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId: number) => string } = {}) {
   const { campaignId } = useParams<{ campaignId: string }>()
   const id = Number(campaignId)
   const navigate = useNavigate()
@@ -289,7 +276,7 @@ export function CharacterListPage() {
     onSuccess: (char) => {
       qc.invalidateQueries({ queryKey: ['characters', id] })
       setCreating(false); setNewName(''); setNewOwnerId(null)
-      navigate(`/campaigns/${id}/characters/${char.id}`, { state: { editing: true } })
+      navigate(makeDetailPath ? makeDetailPath(char.id) : `/campaigns/${id}/characters/${char.id}`, { state: { editing: true } })
     },
   })
 
@@ -494,7 +481,7 @@ export function CharacterListPage() {
             character={c}
             isGm={isGm}
             ownerName={getOwnerName(c.ownerId)}
-            onOpen={() => navigate(`/campaigns/${id}/characters/${c.id}`)}
+            onOpen={() => navigate(makeDetailPath ? makeDetailPath(c.id) : `/campaigns/${id}/characters/${c.id}`)}
             onDelete={() => setConfirmDelete({ open: true, id: c.id, name: c.name })}
             onAssign={(ownerId) => assignMutation.mutate({ charId: c.id, ownerId })}
             players={players}

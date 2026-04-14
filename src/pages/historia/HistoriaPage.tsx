@@ -4,19 +4,21 @@ import { useQuery } from '@tanstack/react-query'
 import { DiarioPage } from '../diario/DiarioPage'
 import { SessionsPage } from '../sessions/SessionsPage'
 import { NotasPage } from './NotasPage'
+import { NpcNotesPage } from '../npcs/NpcNotesPage'
 import { notesApi } from '../../api/notes'
 import { useCampaignStore } from '../../store/campaignStore'
 
 const TABS = [
-  { id: 'diario', label: 'Diario' },
   { id: 'sessions', label: 'Calendario' },
-  { id: 'notas', label: 'Notas' },
+  { id: 'npcs', label: 'NPCs' },
+  { id: 'diario', label: 'Diario' },
+  { id: 'notas', label: 'Mensajes' },
 ] as const
 
 type Tab = typeof TABS[number]['id']
 
 export function HistoriaPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('diario')
+  const [activeTab, setActiveTab] = useState<Tab>('sessions')
   const { campaignId } = useParams<{ campaignId: string }>()
   const cId = Number(campaignId)
   const { isGm } = useCampaignStore()
@@ -77,6 +79,7 @@ export function HistoriaPage() {
       {activeTab === 'diario' && <DiarioPage />}
       {activeTab === 'sessions' && <SessionsPage />}
       {activeTab === 'notas' && <NotasPage />}
+      {activeTab === 'npcs' && <NpcNotesPage />}
     </div>
   )
 }

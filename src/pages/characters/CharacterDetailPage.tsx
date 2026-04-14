@@ -211,7 +211,7 @@ const SECTIONS = [
 ]
 
 const BACKGROUND_FIELDS = [
-  ['proposito', 'Propósito'], ['obstaculo', 'Obstáculo'], ['metas', 'Metas'],
+  ['proposito', 'Propósito'], ['obstaculo', 'Obstáculo'],
   ['apariencia', 'Apariencia'], ['notas', 'Notas'],
 ]
 

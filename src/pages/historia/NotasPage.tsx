@@ -30,11 +30,11 @@ export function NotasPage() {
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
-          Notas
+          Mensajes
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
           {unread.length > 0
-            ? `${unread.length} nota${unread.length !== 1 ? 's' : ''} sin leer`
+            ? `${unread.length} mensaje${unread.length !== 1 ? 's' : ''} sin leer`
             : 'Todo al día'}
         </p>
       </div>
@@ -52,10 +52,10 @@ export function NotasPage() {
             <Bell size={20} style={{ color: 'var(--text-subtle)' }} />
           </div>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
-            Sin notas todavía
+            Sin mensajes todavía
           </h3>
           <p style={{ fontSize: 13, color: 'var(--text-subtle)' }}>
-            El GM puede enviarte notas privadas aquí.
+            El GM puede enviarte mensajes privados aquí.
           </p>
         </div>
       ) : (

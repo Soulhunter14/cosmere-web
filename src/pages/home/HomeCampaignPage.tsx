@@ -1,6 +1,6 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, Users, Clock, MapPin, LogOut } from 'lucide-react'
+import { CalendarDays, Users, Clock, MapPin } from 'lucide-react'
 import { sessionsApi } from '../../api/sessions'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
@@ -17,7 +17,6 @@ const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', '
 export function HomeCampaignPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
   const cId = Number(campaignId)
-  const navigate = useNavigate()
   const { currentCampaign, isGm } = useCampaignStore()
 
   const { data: sessions = [] } = useQuery({
@@ -80,22 +79,6 @@ export function HomeCampaignPage() {
         <StatCard icon={<CalendarDays size={16} />} label="Sesiones" value={sessions.length} />
       </div>
 
-      {/* Back to campaigns */}
-      <button
-        onClick={() => navigate('/campaigns')}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: 'none', border: '1px solid var(--border)',
-          borderRadius: 12, padding: '11px 16px', cursor: 'pointer',
-          color: 'var(--text-subtle)', fontSize: 13, fontWeight: 600,
-          width: '100%', transition: 'border-color 0.15s, color 0.15s',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(251,113,133,0.3)'; e.currentTarget.style.color = '#fb7185' }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-subtle)' }}
-      >
-        <LogOut size={14} />
-        Volver a campañas
-      </button>
     </div>
   )
 }

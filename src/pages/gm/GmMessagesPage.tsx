@@ -15,8 +15,26 @@ export function GmMessagesPage() {
 
   const players = (currentCampaign as CampaignDetail | null)?.members?.filter((m) => m.role === 'player') ?? []
 
-  const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null)
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<number>>(new Set())
   const [content, setContent] = useState('')
+
+  const allSelected = players.length > 0 && selectedPlayerIds.size === players.length
+
+  function togglePlayer(id: number) {
+    setSelectedPlayerIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedPlayerIds(new Set())
+    } else {
+      setSelectedPlayerIds(new Set(players.map((p) => p.userId)))
+    }
+  }
 
   const { data: sentNotes = [], isLoading } = useQuery({
     queryKey: ['notes', cId],
@@ -24,10 +42,11 @@ export function GmMessagesPage() {
   })
 
   const sendMutation = useMutation({
-    mutationFn: () => notesApi.create(cId, { toUserId: selectedPlayerId!, content }),
+    mutationFn: () => notesApi.create(cId, { toUserIds: [...selectedPlayerIds], content }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['notes', cId] })
       setContent('')
+      setSelectedPlayerIds(new Set())
     },
   })
 
@@ -42,7 +61,7 @@ export function GmMessagesPage() {
           Mensajes
         </h1>
         <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          Envía notas privadas a los jugadores
+          Envía mensajes privados a los jugadores
         </p>
       </div>
 
@@ -61,30 +80,46 @@ export function GmMessagesPage() {
           </p>
         ) : (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-            {players.map((p) => (
-              <button
-                key={p.userId}
-                onClick={() => setSelectedPlayerId(selectedPlayerId === p.userId ? null : p.userId)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  padding: '7px 12px', borderRadius: 10, cursor: 'pointer',
-                  border: `1px solid ${selectedPlayerId === p.userId ? 'rgba(180,190,254,0.3)' : 'var(--border)'}`,
-                  background: selectedPlayerId === p.userId ? 'rgba(180,190,254,0.1)' : 'var(--surface-2)',
-                  color: selectedPlayerId === p.userId ? 'var(--brand-light)' : 'var(--text-muted)',
-                  fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
-                }}
-              >
-                <div style={{
-                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                  background: 'linear-gradient(135deg,#7c3aed,#6366f1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 9, fontWeight: 700, color: 'white',
-                }}>
-                  {p.displayName[0].toUpperCase()}
-                </div>
-                {p.displayName}
-              </button>
-            ))}
+            <button
+              onClick={toggleAll}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '7px 12px', borderRadius: 10, cursor: 'pointer',
+                border: `1px solid ${allSelected ? 'rgba(180,190,254,0.3)' : 'var(--border)'}`,
+                background: allSelected ? 'rgba(180,190,254,0.1)' : 'var(--surface-2)',
+                color: allSelected ? 'var(--brand-light)' : 'var(--text-muted)',
+                fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+              }}
+            >
+              Todos
+            </button>
+            {players.map((p) => {
+              const active = selectedPlayerIds.has(p.userId)
+              return (
+                <button
+                  key={p.userId}
+                  onClick={() => togglePlayer(p.userId)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '7px 12px', borderRadius: 10, cursor: 'pointer',
+                    border: `1px solid ${active ? 'rgba(180,190,254,0.3)' : 'var(--border)'}`,
+                    background: active ? 'rgba(180,190,254,0.1)' : 'var(--surface-2)',
+                    color: active ? 'var(--brand-light)' : 'var(--text-muted)',
+                    fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{
+                    width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                    background: 'linear-gradient(135deg,#7c3aed,#6366f1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 700, color: 'white',
+                  }}>
+                    {p.displayName[0].toUpperCase()}
+                  </div>
+                  {p.displayName}
+                </button>
+              )
+            })}
           </div>
         )}
 
@@ -110,14 +145,14 @@ export function GmMessagesPage() {
 
         <button
           onClick={() => sendMutation.mutate()}
-          disabled={!selectedPlayerId || !content.trim() || sendMutation.isPending}
+          disabled={selectedPlayerIds.size === 0 || !content.trim() || sendMutation.isPending}
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
             marginTop: 10, padding: '9px 16px',
             background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
             color: 'white', border: 'none', borderRadius: 10,
             fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            opacity: !selectedPlayerId || !content.trim() || sendMutation.isPending ? 0.5 : 1,
+            opacity: selectedPlayerIds.size === 0 || !content.trim() || sendMutation.isPending ? 0.5 : 1,
             boxShadow: '0 2px 10px rgba(139,92,246,0.35)',
             transition: 'opacity 0.15s',
           }}

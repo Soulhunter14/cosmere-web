@@ -11,6 +11,8 @@ export interface CreateWeaponPayload {
   rangeId: number
   traitIds: number[]
   expertTraitIds: number[]
+  description: string
+  weight: number
 }
 
 export interface CreateArmorPayload {
@@ -19,6 +21,8 @@ export interface CreateArmorPayload {
   desvio: number
   traitIds: number[]
   expertTraitIds: number[]
+  description: string
+  weight: number
 }
 
 export const catalogApi = {
@@ -33,4 +37,10 @@ export const catalogApi = {
     client.post<ArmorCatalog>('/catalog/armor', payload).then((r) => r.data),
   deleteWeapon: (id: number) => client.delete(`/catalog/weapons/${id}`),
   deleteArmor: (id: number) => client.delete(`/catalog/armor/${id}`),
+  updateWeaponDescription: (id: number, description: string) =>
+    client.put(`/catalog/weapons/${id}/description`, { description }),
+  updateArmorDescription: (id: number, description: string) =>
+    client.put(`/catalog/armor/${id}/description`, { description }),
+  updateGearDescription: (id: number, description: string) =>
+    client.put(`/catalog/gear/${id}/description`, { description }),
 }

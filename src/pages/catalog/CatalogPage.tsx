@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Sword, Shield, Package, X, Plus, Trash2 } from 'lucide-react'
+import { Sword, Shield, Package, X, Plus, Trash2, Pencil, Check } from 'lucide-react'
 import { catalogApi } from '../../api/catalog'
 import type { CreateWeaponPayload, CreateArmorPayload } from '../../api/catalog'
 import { Spinner } from '../../components/ui'
@@ -9,9 +9,11 @@ import type { WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../..
 
 type Tab = 'weapons' | 'armor' | 'gear'
 
+type TraitEntry = { name: string; description: string }
+
 type SelectedItem =
-  | { kind: 'weapon'; item: WeaponCatalog; typeName: string; skillName: string; damageTypeName: string; rangeName: string; traits: string[]; expertTraits: string[] }
-  | { kind: 'armor';  item: ArmorCatalog;  typeName: string; traits: string[]; expertTraits: string[] }
+  | { kind: 'weapon'; item: WeaponCatalog; typeName: string; skillName: string; damageTypeName: string; rangeName: string; traits: TraitEntry[]; expertTraits: TraitEntry[] }
+  | { kind: 'armor';  item: ArmorCatalog;  typeName: string; traits: TraitEntry[]; expertTraits: TraitEntry[] }
   | { kind: 'gear';   item: GearItem }
 
 const TABS = [
@@ -23,6 +25,12 @@ const TABS = [
 function buildMap(options?: CatalogOption[]): Map<number, string> {
   const m = new Map<number, string>()
   options?.forEach((o) => m.set(o.id, o.name))
+  return m
+}
+
+function buildFullMap(options?: CatalogOption[]): Map<number, CatalogOption> {
+  const m = new Map<number, CatalogOption>()
+  options?.forEach((o) => m.set(o.id, o))
   return m
 }
 
@@ -40,6 +48,32 @@ function TraitChip({ label, expert }: { label: string; expert?: boolean }) {
   )
 }
 
+function TraitRow({ name, description, expert }: { name: string; description: string; expert?: boolean }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '8px 12px', borderRadius: 10,
+      background: expert ? 'rgba(251,191,36,0.06)' : 'var(--surface-2)',
+      border: expert ? '1px solid rgba(251,191,36,0.2)' : '1px solid var(--border)',
+    }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0,
+        color: expert ? '#fbbf24' : 'var(--text-subtle)',
+      }}>
+        {expert ? '★' : '·'}
+      </span>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: expert ? '#fbbf24' : 'var(--text)', marginBottom: description ? 2 : 0 }}>
+          {name}
+        </div>
+        {description && (
+          <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{description}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function EmptyState({ label }: { label: string }) {
   return (
     <p style={{ textAlign: 'center', padding: '48px 16px', fontSize: 13, color: 'var(--text-subtle)' }}>
@@ -52,6 +86,39 @@ function EmptyState({ label }: { label: string }) {
 function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onClose: () => void; isGm: boolean }) {
   const qc = useQueryClient()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editingDesc, setEditingDesc] = useState(false)
+  const [descDraft, setDescDraft] = useState('')
+
+  const currentDescription =
+    selected.kind === 'weapon' ? selected.item.description
+    : selected.kind === 'armor' ? selected.item.description
+    : selected.item.description
+
+  const descQueryKey =
+    selected.kind === 'weapon' ? 'catalog-weapons'
+    : selected.kind === 'armor' ? 'catalog-armor'
+    : 'catalog-gear'
+
+  const updateDescMutation = useMutation({
+    mutationFn: (description: string) => {
+      if (selected.kind === 'weapon') return catalogApi.updateWeaponDescription(selected.item.id, description)
+      if (selected.kind === 'armor') return catalogApi.updateArmorDescription(selected.item.id, description)
+      return catalogApi.updateGearDescription(selected.item.id, description)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [descQueryKey] })
+      setEditingDesc(false)
+    },
+  })
+
+  const startEditDesc = () => {
+    setDescDraft(currentDescription)
+    setEditingDesc(true)
+  }
+
+  const saveDesc = () => {
+    if (!updateDescMutation.isPending) updateDescMutation.mutate(descDraft)
+  }
 
   const deleteWeaponMutation = useMutation({
     mutationFn: () => catalogApi.deleteWeapon((selected as { item: WeaponCatalog }).item.id),
@@ -187,18 +254,31 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
                 <StatPill label="Habilidad" value={selected.skillName} />
                 <StatPill label="Tipo" value={selected.typeName} />
                 <StatPill label="Alcance" value={selected.rangeName} />
+                <StatPill label="Peso" value={`${selected.item.weight} kg`} />
               </div>
             </Section>
 
             {/* Traits */}
             {(selected.traits.length > 0 || selected.expertTraits.length > 0) && (
               <Section label="Rasgos">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {selected.traits.map((t, i) => <TraitChip key={i} label={t} />)}
-                  {selected.expertTraits.map((t, i) => <TraitChip key={`ex-${i}`} label={t} expert />)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {selected.traits.map((t, i) => <TraitRow key={i} name={t.name} description={t.description} />)}
+                  {selected.expertTraits.map((t, i) => <TraitRow key={`ex-${i}`} name={t.name} description={t.description} expert />)}
                 </div>
               </Section>
             )}
+
+            <DescriptionSection
+              description={currentDescription}
+              isGm={isGm}
+              editing={editingDesc}
+              draft={descDraft}
+              saving={updateDescMutation.isPending}
+              onStartEdit={startEditDesc}
+              onDraftChange={setDescDraft}
+              onSave={saveDesc}
+              onCancel={() => setEditingDesc(false)}
+            />
           </div>
         )}
 
@@ -216,17 +296,32 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
             </Section>
 
             <Section label="Tipo">
-              <StatPill label="Tipo" value={selected.typeName} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <StatPill label="Tipo" value={selected.typeName} />
+                <StatPill label="Peso" value={`${selected.item.weight} kg`} />
+              </div>
             </Section>
 
             {(selected.traits.length > 0 || selected.expertTraits.length > 0) && (
               <Section label="Rasgos">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {selected.traits.map((t, i) => <TraitChip key={i} label={t} />)}
-                  {selected.expertTraits.map((t, i) => <TraitChip key={`ex-${i}`} label={t} expert />)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {selected.traits.map((t, i) => <TraitRow key={i} name={t.name} description={t.description} />)}
+                  {selected.expertTraits.map((t, i) => <TraitRow key={`ex-${i}`} name={t.name} description={t.description} expert />)}
                 </div>
               </Section>
             )}
+
+            <DescriptionSection
+              description={currentDescription}
+              isGm={isGm}
+              editing={editingDesc}
+              draft={descDraft}
+              saving={updateDescMutation.isPending}
+              onStartEdit={startEditDesc}
+              onDraftChange={setDescDraft}
+              onSave={saveDesc}
+              onCancel={() => setEditingDesc(false)}
+            />
           </div>
         )}
 
@@ -239,13 +334,18 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
                 <StatPill label="Precio" value={`${selected.item.price} mc`} />
               </div>
             </Section>
-            {selected.item.description && (
-              <Section label="Descripción">
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
-                  {selected.item.description}
-                </p>
-              </Section>
-            )}
+
+            <DescriptionSection
+              description={currentDescription}
+              isGm={isGm}
+              editing={editingDesc}
+              draft={descDraft}
+              saving={updateDescMutation.isPending}
+              onStartEdit={startEditDesc}
+              onDraftChange={setDescDraft}
+              onSave={saveDesc}
+              onCancel={() => setEditingDesc(false)}
+            />
           </div>
         )}
       </div>
@@ -260,6 +360,74 @@ function Section({ label, children }: { label: string; children: React.ReactNode
         {label}
       </div>
       {children}
+    </div>
+  )
+}
+
+function DescriptionSection({
+  description, isGm, editing, draft, saving,
+  onStartEdit, onDraftChange, onSave, onCancel,
+}: {
+  description: string; isGm: boolean; editing: boolean; draft: string; saving: boolean
+  onStartEdit: () => void; onDraftChange: (v: string) => void; onSave: () => void; onCancel: () => void
+}) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Descripción
+        </div>
+        {isGm && !editing && (
+          <button
+            onClick={onStartEdit}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: 'var(--text-subtle)', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <Pencil size={12} />
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => onDraftChange(e.target.value)}
+            placeholder="Añade una descripción..."
+            rows={4}
+            style={{
+              background: 'var(--surface-2)', border: '1px solid var(--border-bright)',
+              borderRadius: 10, padding: '9px 12px', fontSize: 13, color: 'var(--text)',
+              width: '100%', boxSizing: 'border-box', outline: 'none', resize: 'vertical',
+              lineHeight: 1.5, fontFamily: 'inherit',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={onCancel}
+              style={{ padding: '5px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-subtle)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={onSave}
+              disabled={saving}
+              style={{ padding: '5px 14px', borderRadius: 8, border: 'none', background: '#6ee7b7', color: '#0a1a13', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+            >
+              <Check size={12} />
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      ) : description ? (
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+          {description}
+        </p>
+      ) : (
+        <p style={{ fontSize: 13, color: 'var(--text-subtle)', fontStyle: 'italic', margin: 0 }}>
+          Sin descripción
+        </p>
+      )}
     </div>
   )
 }
@@ -520,6 +688,7 @@ function CreateWeaponSheet({ onClose, options }: {
     damageDiceCount: 1, damageDiceValue: 6,
     damageTypeId: 0, rangeId: 0,
     traitIds: [], expertTraitIds: [],
+    description: '', weight: 0,
   })
 
   const set = <K extends keyof CreateWeaponPayload>(k: K, v: CreateWeaponPayload[K]) =>
@@ -597,12 +766,26 @@ function CreateWeaponSheet({ onClose, options }: {
             </select>
           </FormField>
 
+          <FormField label="Peso (kg)">
+            <input style={inputStyle} type="number" min={0} step={0.5} value={form.weight} onChange={(e) => set('weight', +e.target.value)} />
+          </FormField>
+
           <FormField label="Rasgos">
             <MultiSelect options={options.traits} selected={form.traitIds} onChange={(ids) => set('traitIds', ids)} />
           </FormField>
 
           <FormField label="Rasgos de experto">
             <MultiSelect options={options.traits} selected={form.expertTraitIds} onChange={(ids) => set('expertTraitIds', ids)} />
+          </FormField>
+
+          <FormField label="Descripción (opcional)">
+            <textarea
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5, fontFamily: 'inherit' }}
+              rows={3}
+              value={form.description}
+              onChange={(e) => set('description', e.target.value)}
+              placeholder="Descripción del arma..."
+            />
           </FormField>
 
           <button
@@ -639,7 +822,7 @@ function CreateArmorSheet({ onClose, options }: {
   })
 
   const [form, setForm] = useState<CreateArmorPayload>({
-    name: '', armorTypeId: 0, desvio: 0, traitIds: [], expertTraitIds: [],
+    name: '', armorTypeId: 0, desvio: 0, traitIds: [], expertTraitIds: [], description: '', weight: 0,
   })
 
   const set = <K extends keyof CreateArmorPayload>(k: K, v: CreateArmorPayload[K]) =>
@@ -690,12 +873,26 @@ function CreateArmorSheet({ onClose, options }: {
             </FormField>
           </div>
 
+          <FormField label="Peso (kg)">
+            <input style={inputStyle} type="number" min={0} step={0.5} value={form.weight} onChange={(e) => set('weight', +e.target.value)} />
+          </FormField>
+
           <FormField label="Rasgos">
             <MultiSelect options={options.traits} selected={form.traitIds} onChange={(ids) => set('traitIds', ids)} />
           </FormField>
 
           <FormField label="Rasgos de experto">
             <MultiSelect options={options.traits} selected={form.expertTraitIds} onChange={(ids) => set('expertTraitIds', ids)} />
+          </FormField>
+
+          <FormField label="Descripción (opcional)">
+            <textarea
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5, fontFamily: 'inherit' }}
+              rows={3}
+              value={form.description}
+              onChange={(e) => set('description', e.target.value)}
+              placeholder="Descripción de la armadura..."
+            />
           </FormField>
 
           <button
@@ -742,13 +939,15 @@ export function CatalogPage() {
   const { data: optArmorType }   = useQuery({ queryKey: ['opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE') })
   const { data: optArmorTrait }  = useQuery({ queryKey: ['opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT') })
 
-  const wtMap  = buildMap(optWeaponType)
-  const skMap  = buildMap(optSkill)
-  const dtMap  = buildMap(optDamageType)
-  const rMap   = buildMap(optRange)
-  const wtrMap = buildMap(optWeaponTrait)
-  const atMap  = buildMap(optArmorType)
-  const atrMap = buildMap(optArmorTrait)
+  const wtMap      = buildMap(optWeaponType)
+  const skMap      = buildMap(optSkill)
+  const dtMap      = buildMap(optDamageType)
+  const rMap       = buildMap(optRange)
+  const wtrMap     = buildMap(optWeaponTrait)
+  const atMap      = buildMap(optArmorType)
+  const atrMap     = buildMap(optArmorTrait)
+  const wtrFullMap = buildFullMap(optWeaponTrait)
+  const atrFullMap = buildFullMap(optArmorTrait)
 
   const isLoading = wLoad || aLoad || gLoad
   const activeTab = TABS.find((t) => t.key === tab)!
@@ -828,14 +1027,14 @@ export function CatalogPage() {
               const skillName       = skMap.get(w.skillId) ?? '—'
               const damageTypeName  = dtMap.get(w.damageTypeId) ?? '—'
               const rangeName       = rMap.get(w.rangeId) ?? '—'
-              const traits          = w.traitIds.map((id) => wtrMap.get(id) ?? '?')
-              const expertTraits    = w.expertTraitIds.map((id) => wtrMap.get(id) ?? '?')
+              const traits          = w.traitIds.map((id) => ({ name: wtrMap.get(id) ?? '?', description: wtrFullMap.get(id)?.description ?? '' }))
+              const expertTraits    = w.expertTraitIds.map((id) => ({ name: wtrMap.get(id) ?? '?', description: wtrFullMap.get(id)?.description ?? '' }))
               return (
                 <WeaponCard
                   key={w.id} weapon={w}
                   typeName={typeName} skillName={skillName}
                   damageTypeName={damageTypeName} rangeName={rangeName}
-                  traits={traits} expertTraits={expertTraits}
+                  traits={traits.map((t) => t.name)} expertTraits={expertTraits.map((t) => t.name)}
                   accent={activeTab.accent} bg={activeTab.bg} bgHover={activeTab.bgHover}
                   onClick={() => setSelected({ kind: 'weapon', item: w, typeName, skillName, damageTypeName, rangeName, traits, expertTraits })}
                 />
@@ -850,12 +1049,12 @@ export function CatalogPage() {
             {armor?.length === 0 && <EmptyState label="armaduras" />}
             {armor?.map((a) => {
               const typeName     = atMap.get(a.armorTypeId) ?? '—'
-              const traits       = a.traitIds.map((id) => atrMap.get(id) ?? '?')
-              const expertTraits = a.expertTraitIds.map((id) => atrMap.get(id) ?? '?')
+              const traits       = a.traitIds.map((id) => ({ name: atrMap.get(id) ?? '?', description: atrFullMap.get(id)?.description ?? '' }))
+              const expertTraits = a.expertTraitIds.map((id) => ({ name: atrMap.get(id) ?? '?', description: atrFullMap.get(id)?.description ?? '' }))
               return (
                 <ArmorCard
                   key={a.id} armor={a}
-                  typeName={typeName} traits={traits} expertTraits={expertTraits}
+                  typeName={typeName} traits={traits.map((t) => t.name)} expertTraits={expertTraits.map((t) => t.name)}
                   accent={activeTab.accent} bg={activeTab.bg} bgHover={activeTab.bgHover}
                   onClick={() => setSelected({ kind: 'armor', item: a, typeName, traits, expertTraits })}
                 />

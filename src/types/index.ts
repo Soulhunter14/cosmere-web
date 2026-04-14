@@ -283,6 +283,8 @@ export interface WeaponCatalog {
   traitIds: number[]
   expertTraitIds: number[]
   isCustom: boolean
+  description: string
+  weight: number
 }
 
 export interface ArmorCatalog {
@@ -293,6 +295,8 @@ export interface ArmorCatalog {
   traitIds: number[]
   expertTraitIds: number[]
   isCustom: boolean
+  description: string
+  weight: number
 }
 
 export interface GearItem {

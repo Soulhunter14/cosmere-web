@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Edit2, Save, X, Heart, ChevronDown, Trash2, Plus } from 'lucide-react'
+import { Edit2, Save, X, Heart, ChevronDown, Trash2, Plus, Info } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
-import type { WeaponCatalog, ArmorCatalog, GearItem } from '../../types'
+import type { WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { Input, Spinner } from '../../components/ui'
@@ -233,6 +233,7 @@ export function CharacterDetailPage() {
   const [marcosDelta, setMarcosDelta] = useState(1)
   const [itemPicker, setItemPicker] = useState<'weapon' | 'armor' | 'gear' | null>(null)
   const [confirmRemoveItem, setConfirmRemoveItem] = useState<{ type: 'weapon' | 'armor' | 'gear'; index: number; name: string } | null>(null)
+  const [bolsaDetail, setBolsaDetail] = useState<{ kind: 'weapon' | 'armor' | 'gear'; name: string } | null>(null)
   const [talentoPicker, setTalentoPicker] = useState(false)
 
   const { data: char, isLoading } = useQuery<Character>({
@@ -286,6 +287,25 @@ export function CharacterDetailPage() {
     queryFn: catalogApi.getGear,
     enabled: tab === 'bolsa',
   })
+
+  // Catalog option lookups (shared queryKey with CatalogPage for cache reuse)
+  const { data: optWeaponType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE'),  enabled: tab === 'bolsa' })
+  const { data: optSkill }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL'),        enabled: tab === 'bolsa' })
+  const { data: optDamageType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE'),  enabled: tab === 'bolsa' })
+  const { data: optRange }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE'),        enabled: tab === 'bolsa' })
+  const { data: optWeaponTrait } = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT'), enabled: tab === 'bolsa' })
+  const { data: optArmorType }   = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE'),   enabled: tab === 'bolsa' })
+  const { data: optArmorTrait }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT'),  enabled: tab === 'bolsa' })
+
+  const buildOptMap     = (opts?: CatalogOption[]) => { const m = new Map<number, string>();      opts?.forEach((o) => m.set(o.id, o.name)); return m }
+  const buildOptFullMap = (opts?: CatalogOption[]) => { const m = new Map<number, CatalogOption>(); opts?.forEach((o) => m.set(o.id, o));      return m }
+  const wtMap  = buildOptMap(optWeaponType)
+  const skMap  = buildOptMap(optSkill)
+  const dtMap  = buildOptMap(optDamageType)
+  const rMap   = buildOptMap(optRange)
+  const atMap  = buildOptMap(optArmorType)
+  const wtrMap = buildOptFullMap(optWeaponTrait)
+  const atrMap = buildOptFullMap(optArmorTrait)
 
   const talentosMutation = useMutation({
     mutationFn: (names: string[]) =>
@@ -1113,6 +1133,45 @@ export function CharacterDetailPage() {
               )}
             </div>
 
+            {/* Weight capacity */}
+            {(() => {
+              const getCapacity = (f: number) => {
+                if (f === 0) return 22.5
+                if (f <= 2) return 45
+                if (f <= 4) return 112.5
+                if (f <= 6) return 225
+                if (f <= 8) return 1125
+                return 2250
+              }
+              const capacity = getCapacity(char.fuerza ?? 0)
+              const currentWeight =
+                (char.weapons ?? []).reduce((sum, name) => sum + (catalogWeapons.find((w) => w.name === name)?.weight ?? 0), 0) +
+                (char.armor ?? []).reduce((sum, name) => sum + (catalogArmor.find((a) => a.name === name)?.weight ?? 0), 0) +
+                (char.equipment ?? []).reduce((sum, name) => sum + (catalogGear.find((g) => g.name === name)?.weight ?? 0), 0)
+              const pct = Math.min(currentWeight / capacity, 1)
+              const barColor = pct >= 1 ? '#f87171' : pct >= 0.75 ? '#fbbf24' : '#34d399'
+              const weightLabel = Number.isInteger(currentWeight) ? `${currentWeight}` : currentWeight.toFixed(1)
+              const capLabel = Number.isInteger(capacity) ? `${capacity}` : capacity.toFixed(1)
+              return (
+                <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399', letterSpacing: '0.08em' }}>CAPACIDAD DE CARGA</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>Fuerza <strong style={{ color: 'var(--text)' }}>{char.fuerza ?? 0}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: barColor }}>{weightLabel}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-subtle)' }}>/ {capLabel} kg</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct * 100}%`, borderRadius: 3, background: barColor, transition: 'width 0.3s, background 0.3s' }} />
+                  </div>
+                  {pct >= 1 && (
+                    <div style={{ fontSize: 11, color: '#f87171', marginTop: 6, fontWeight: 600 }}>¡Sobrecargado!</div>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* Items sections */}
             {([
               { type: 'weapon' as const, label: 'Armas', items: char.weapons ?? [], color: '#f87171', colorBg: 'rgba(239,68,68,0.1)', colorBorder: 'rgba(239,68,68,0.25)' },
@@ -1138,7 +1197,8 @@ export function CharacterDetailPage() {
 
                 {/* Item list */}
                 {items.map((name, idx) => {
-                  const isEquipped = type === 'armor' && char.equippedArmor === name
+                  const equippedIndex = type === 'armor' ? items.findIndex((n) => n === char.equippedArmor) : -1
+                  const isEquipped = type === 'armor' && idx === equippedIndex
                   return (
                     <div key={idx} style={{
                       display: 'flex', alignItems: 'center', gap: 10,
@@ -1147,6 +1207,12 @@ export function CharacterDetailPage() {
                       background: isEquipped ? 'rgba(251,191,36,0.05)' : 'transparent',
                     }}>
                       <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, flex: 1 }}>{name}</span>
+                      <button
+                        onClick={() => setBolsaDetail({ kind: type === 'weapon' ? 'weapon' : type === 'armor' ? 'armor' : 'gear', name })}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', display: 'flex', flexShrink: 0 }}
+                      >
+                        <Info size={14} />
+                      </button>
                       {type === 'armor' && (
                         <button
                           onClick={() => {
@@ -1328,6 +1394,201 @@ export function CharacterDetailPage() {
           </div>
         </>
       )}
+
+      {/* Bolsa item detail sheet */}
+      {bolsaDetail && (() => {
+        const onClose = () => setBolsaDetail(null)
+        const weapon = bolsaDetail.kind === 'weapon' ? catalogWeapons.find((w) => w.name === bolsaDetail.name) : null
+        const armor  = bolsaDetail.kind === 'armor'  ? catalogArmor.find((a) => a.name === bolsaDetail.name) : null
+        const gear   = bolsaDetail.kind === 'gear'   ? catalogGear.find((g) => g.name === bolsaDetail.name) : null
+        const colors = {
+          weapon: { accent: '#f87171', bg: 'rgba(239,68,68,0.1)', bgHover: 'rgba(239,68,68,0.25)' },
+          armor:  { accent: '#fbbf24', bg: 'rgba(251,191,36,0.1)',  bgHover: 'rgba(251,191,36,0.25)' },
+          gear:   { accent: '#34d399', bg: 'rgba(52,211,153,0.1)',  bgHover: 'rgba(52,211,153,0.25)' },
+        }[bolsaDetail.kind]
+        return (
+          <>
+            <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
+            <div style={{
+              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
+              background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
+              border: '1px solid var(--border-bright)', borderBottom: 'none',
+              padding: '20px 20px calc(20px + var(--sab, 0px))',
+              maxHeight: '85vh', overflowY: 'auto',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
+              </div>
+
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>{bolsaDetail.name}</div>
+                <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Weapon detail */}
+              {weapon && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Daño</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'monospace', color: colors.accent, padding: '4px 14px', borderRadius: 10, background: colors.bg, border: `1px solid ${colors.bgHover}` }}>
+                        {weapon.damageDiceCount}d{weapon.damageDiceValue}
+                      </span>
+                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{dtMap.get(weapon.damageTypeId) ?? '—'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Estadísticas</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                      {[
+                        { label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' },
+                        { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' },
+                        { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' },
+                        { label: 'Peso', value: `${weapon.weight} kg` },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {(weapon.traitIds.length > 0 || weapon.expertTraitIds.length > 0) && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Rasgos</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {weapon.traitIds.map((id) => {
+                          const opt = wtrMap.get(id)
+                          return (
+                            <div key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: 'var(--text-subtle)' }}>·</span>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
+                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {weapon.expertTraitIds.map((id) => {
+                          const opt = wtrMap.get(id)
+                          return (
+                            <div key={`ex-${id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: '#fbbf24' }}>★</span>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
+                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {weapon.description && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{weapon.description}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Armor detail */}
+              {armor && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Defensa</div>
+                    <span style={{ fontSize: 20, fontWeight: 900, color: colors.accent, padding: '4px 14px', borderRadius: 10, background: colors.bg, border: `1px solid ${colors.bgHover}` }}>
+                      +{armor.desvio} DEF
+                    </span>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Tipo</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                      {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }].map(({ label, value }) => (
+                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {(armor.traitIds.length > 0 || armor.expertTraitIds.length > 0) && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Rasgos</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {armor.traitIds.map((id) => {
+                          const opt = atrMap.get(id)
+                          return (
+                            <div key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: 'var(--text-subtle)' }}>·</span>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
+                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {armor.expertTraitIds.map((id) => {
+                          const opt = atrMap.get(id)
+                          return (
+                            <div key={`ex-${id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: '#fbbf24' }}>★</span>
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
+                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {armor.description && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{armor.description}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Gear detail */}
+              {gear && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Detalles</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: `${gear.price} mc` }].map(({ label, value }) => (
+                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {gear.description && (
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{gear.description}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Item not found in catalog */}
+              {!weapon && !armor && !gear && (
+                <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '24px 0' }}>
+                  No se encontró información en el catálogo.
+                </p>
+              )}
+            </div>
+          </>
+        )
+      })()}
 
       {/* Path pickers */}
       {picker === 'ascendencia' && (

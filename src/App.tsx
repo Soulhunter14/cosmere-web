@@ -18,6 +18,8 @@ import { PotenciasPage } from './pages/encyclopedia/PotenciasPage'
 import { HomeCampaignPage } from './pages/home/HomeCampaignPage'
 import { PersonajesPage } from './pages/personajes/PersonajesPage'
 import { MetasDetailPage } from './pages/personajes/MetasDetailPage'
+import { TalentosDetailPage } from './pages/personajes/TalentosDetailPage'
+import { BolsaDetailPage } from './pages/personajes/BolsaDetailPage'
 import { HistoriaPage } from './pages/historia/HistoriaPage'
 import { GmPage } from './pages/gm/GmPage'
 
@@ -43,6 +45,8 @@ export default function App() {
               <Route path="home" element={<HomeCampaignPage />} />
               <Route path="personajes" element={<PersonajesPage />} />
               <Route path="personajes/metas/:characterId" element={<MetasDetailPage />} />
+              <Route path="personajes/talentos/:characterId" element={<TalentosDetailPage />} />
+              <Route path="personajes/bolsa/:characterId" element={<BolsaDetailPage />} />
               <Route path="historia" element={<HistoriaPage />} />
               <Route path="encyclopedia" element={<EncyclopediaPage />} />
               <Route path="encyclopedia/radiant-orders" element={<RadiantOrdersPage />} />
@@ -56,6 +60,8 @@ export default function App() {
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />
               <Route path="gm/characters/:characterId" element={<CharacterDetailPage />} />
               <Route path="gm/metas/:characterId" element={<MetasDetailPage />} />
+              <Route path="gm/talentos/:characterId" element={<TalentosDetailPage />} />
+              <Route path="gm/bolsa/:characterId" element={<BolsaDetailPage />} />
               <Route path="global-npcs/:npcId" element={<GlobalNpcDetailPage />} />
               <Route path="catalog" element={<CatalogPage />} />
             </Route>

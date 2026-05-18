@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Edit2, Save, X, Heart, ChevronDown, Trash2, Plus, Info } from 'lucide-react'
+import { Edit2, Save, X, Heart, ChevronDown } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { catalogApi } from '../../api/catalog'
-import type { WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { Input, Spinner } from '../../components/ui'
@@ -13,8 +11,6 @@ import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { POTENCIAS } from '../../data/potencias'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { TalentActivation } from '../../components/TalentActivation'
-import type { ActivationType } from '../../components/TalentActivation'
 
 interface PickerOption { id: string; label: string; sublabel?: string; color: string; colorBg: string; colorBorder: string; icon?: string }
 
@@ -108,59 +104,6 @@ const ATRIBUTO_SLOTS: Record<string, [number, number]> = {
   VEL: [1, 4], FUE: [1, 4], INT: [2, 5], VOL: [2, 5], DIS: [3, 6], PRE: [3, 6],
 }
 
-const SKILL_NAME_MAP: Record<string, string> = {
-  'Agilidad': 'agilidad', 'Armas Ligeras': 'armasLigeras', 'Armas Pesadas': 'armasPesadas',
-  'Atletismo': 'atletismo', 'Hurto': 'hurto', 'Sigilo': 'sigilo',
-  'Deducción': 'deduccion', 'Disciplina': 'disciplina', 'Intimidación': 'intimidacion',
-  'Manufactura': 'manufactura', 'Medicina': 'medicina', 'Conocimiento': 'conocimiento',
-  'Saber': 'conocimiento', 'Engaño': 'engano', 'Liderazgo': 'liderazgo',
-  'Percepción': 'percepcion', 'Perspicacia': 'perspicacia',
-  'Persuasión': 'persuasion', 'Supervivencia': 'supervivencia',
-}
-
-function checkPrereq(
-  prereq: string | undefined,
-  char: Character,
-  selected: string[],
-  heroicMainTalent: string | undefined,
-  radiantMainTalent: string | undefined,
-): { met: boolean; missing: string[] } {
-  if (!prereq) return { met: true, missing: [] }
-  const missing: string[] = []
-  // Split AND by "," or ";"
-  const andClauses = prereq.split(/[,;]/).map((s) => s.trim()).filter(Boolean)
-  for (const clause of andClauses) {
-    // Temporarily mask "N o más" so the "o" isn't treated as OR
-    const masked = clause.replace(/(\d+) o más/g, '$1__GTE__')
-    const orParts = masked.split(/ [ou] /).map((s) => s.trim().replace(/__GTE__/g, ' o más'))
-    const clauseMet = orParts.some((part) => {
-      if (part.startsWith('tener ')) return true // narrative: assume met
-      const mainMatch = part.match(/^talento principal (.+)$/)
-      if (mainMatch) {
-        const n = mainMatch[1]
-        return heroicMainTalent === n || radiantMainTalent === n || selected.includes(n)
-      }
-      const talentMatch = part.match(/^talento (.+)$/)
-      if (talentMatch) return selected.includes(talentMatch[1])
-      const skillMatch = part.match(/^(.+?) (\d+) o más$/)
-      if (skillMatch) {
-        const skillName = skillMatch[1]
-        const minVal = parseInt(skillMatch[2])
-        const key = SKILL_NAME_MAP[skillName]
-        if (key) return ((char as any)[key] ?? 0) >= minVal
-        // Potencia valor check
-        for (let i = 1; i <= 6; i++) {
-          if ((char as any)[`habilidadPersonalizada${i}`] === skillName)
-            return ((char as any)[`habilidadPersonalizada${i}Valor`] ?? 0) >= minVal
-        }
-        return false
-      }
-      return selected.includes(part)
-    })
-    if (!clauseMet) missing.push(clause)
-  }
-  return { met: missing.length === 0, missing }
-}
 
 const SECTIONS = [
   {
@@ -215,7 +158,7 @@ const BACKGROUND_FIELDS = [
   ['apariencia', 'Apariencia'], ['notas', 'Notas'],
 ]
 
-type Tab = 'stats' | 'background' | 'bolsa' | 'talentos'
+type Tab = 'stats' | 'background'
 
 export function CharacterDetailPage() {
   const { campaignId, characterId } = useParams<{ campaignId: string; characterId: string }>()
@@ -228,13 +171,6 @@ export function CharacterDetailPage() {
   const [form, setForm] = useState<Character | null>(null)
   const [tab, setTab] = useState<Tab>('stats')
   const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | null>(null)
-  const [marcos, setMarcos] = useState({ infusas: 0, opacas: 0 })
-  const [marcosDialog, setMarcosDialog] = useState<'add' | 'remove' | null>(null)
-  const [marcosDelta, setMarcosDelta] = useState(1)
-  const [itemPicker, setItemPicker] = useState<'weapon' | 'armor' | 'gear' | null>(null)
-  const [confirmRemoveItem, setConfirmRemoveItem] = useState<{ type: 'weapon' | 'armor' | 'gear'; index: number; name: string } | null>(null)
-  const [bolsaDetail, setBolsaDetail] = useState<{ kind: 'weapon' | 'armor' | 'gear'; name: string } | null>(null)
-  const [talentoPicker, setTalentoPicker] = useState(false)
 
   const { data: char, isLoading } = useQuery<Character>({
     queryKey: ['character', cId, chId],
@@ -242,10 +178,6 @@ export function CharacterDetailPage() {
   })
 
   useEffect(() => { if (char) setForm({ ...char }) }, [char])
-  useEffect(() => {
-    if (char) setMarcos({ infusas: char.marcosInfusas ?? 0, opacas: char.marcosOpacas ?? 0 })
-  }, [char])
-
   const updateMutation = useMutation({
     mutationFn: () => charactersApi.update(cId, chId, (form ?? char) as UpdateCharacterRequest),
     onSuccess: () => {
@@ -253,97 +185,6 @@ export function CharacterDetailPage() {
       setEditing(false)
     },
   })
-
-  const marcosMutation = useMutation({
-    mutationFn: (m: { infusas: number; opacas: number }) =>
-      charactersApi.update(cId, chId, { ...(char as UpdateCharacterRequest), marcosInfusas: m.infusas, marcosOpacas: m.opacas }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
-  })
-
-  function applyMarcos(infusas: number, opacas: number) {
-    const next = { infusas: Math.max(0, infusas), opacas: Math.max(0, opacas) }
-    setMarcos(next)
-    marcosMutation.mutate(next)
-  }
-
-  const desvioMutation = useMutation({
-    mutationFn: (patch: { equippedArmor: string; desvio: number }) =>
-      charactersApi.update(cId, chId, { ...(char as UpdateCharacterRequest), ...patch }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
-  })
-
-  const { data: catalogWeapons = [] } = useQuery<WeaponCatalog[]>({
-    queryKey: ['catalog', 'weapons'],
-    queryFn: catalogApi.getWeapons,
-    enabled: tab === 'bolsa',
-  })
-  const { data: catalogArmor = [] } = useQuery<ArmorCatalog[]>({
-    queryKey: ['catalog', 'armor'],
-    queryFn: catalogApi.getArmor,
-    enabled: tab === 'bolsa' || tab === 'stats',
-  })
-  const { data: catalogGear = [] } = useQuery<GearItem[]>({
-    queryKey: ['catalog', 'gear'],
-    queryFn: catalogApi.getGear,
-    enabled: tab === 'bolsa',
-  })
-
-  // Catalog option lookups (shared queryKey with CatalogPage for cache reuse)
-  const { data: optWeaponType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE'),  enabled: tab === 'bolsa' })
-  const { data: optSkill }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL'),        enabled: tab === 'bolsa' })
-  const { data: optDamageType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE'),  enabled: tab === 'bolsa' })
-  const { data: optRange }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE'),        enabled: tab === 'bolsa' })
-  const { data: optWeaponTrait } = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT'), enabled: tab === 'bolsa' })
-  const { data: optArmorType }   = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE'),   enabled: tab === 'bolsa' })
-  const { data: optArmorTrait }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT'),  enabled: tab === 'bolsa' })
-
-  const buildOptMap     = (opts?: CatalogOption[]) => { const m = new Map<number, string>();      opts?.forEach((o) => m.set(o.id, o.name)); return m }
-  const buildOptFullMap = (opts?: CatalogOption[]) => { const m = new Map<number, CatalogOption>(); opts?.forEach((o) => m.set(o.id, o));      return m }
-  const wtMap  = buildOptMap(optWeaponType)
-  const skMap  = buildOptMap(optSkill)
-  const dtMap  = buildOptMap(optDamageType)
-  const rMap   = buildOptMap(optRange)
-  const atMap  = buildOptMap(optArmorType)
-  const wtrMap = buildOptFullMap(optWeaponTrait)
-  const atrMap = buildOptFullMap(optArmorTrait)
-
-  const talentosMutation = useMutation({
-    mutationFn: (names: string[]) =>
-      charactersApi.update(cId, chId, { ...(char as UpdateCharacterRequest), talentos: JSON.stringify(names) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
-  })
-
-  const itemsMutation = useMutation({
-    mutationFn: (patch: { weapons?: string[]; armor?: string[]; equipment?: string[]; equippedArmor?: string; desvio?: number }) =>
-      charactersApi.update(cId, chId, { ...(char as UpdateCharacterRequest), ...patch }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
-  })
-
-  function addItem(type: 'weapon' | 'armor' | 'gear', name: string) {
-    if (type === 'weapon') itemsMutation.mutate({ weapons: [...(char?.weapons ?? []), name] })
-    else if (type === 'armor') itemsMutation.mutate({ armor: [...(char?.armor ?? []), name] })
-    else itemsMutation.mutate({ equipment: [...(char?.equipment ?? []), name] })
-    setItemPicker(null)
-  }
-
-  function removeItem(type: 'weapon' | 'armor' | 'gear', index: number) {
-    if (type === 'weapon') {
-      const next = (char?.weapons ?? []).filter((_, i) => i !== index)
-      itemsMutation.mutate({ weapons: next })
-    } else if (type === 'armor') {
-      const removedName = (char?.armor ?? [])[index]
-      const next = (char?.armor ?? []).filter((_, i) => i !== index)
-      const wasEquipped = removedName && char?.equippedArmor === removedName
-      itemsMutation.mutate({
-        armor: next,
-        ...(wasEquipped ? { equippedArmor: '', desvio: 0 } : {}),
-      })
-    } else {
-      const next = (char?.equipment ?? []).filter((_, i) => i !== index)
-      itemsMutation.mutate({ equipment: next })
-    }
-    setConfirmRemoveItem(null)
-  }
 
   if (isLoading || !char) return <Spinner />
 
@@ -355,42 +196,12 @@ export function CharacterDetailPage() {
     setForm((prev) => prev ? { ...prev, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value } : prev)
 
   const gradient = AVATAR_GRADIENTS[char.id % AVATAR_GRADIENTS.length]
-  const marcosTotal = marcos.infusas + marcos.opacas
 
-  const heroicPath = HEROIC_PATHS.find((p) => p.id === f.caminoHeroico)
   const radiantOrder = RADIANT_ORDERS.find((o) => o.id === f.caminoRadiante)
-
-  // All talentos available from the character's paths
-  type AvailableTalento = { name: string; activation: ActivationType | null; description: string; source: string; sourceColor: string; prereq?: string }
-  const availableTalentos: AvailableTalento[] = []
-  if (heroicPath) {
-    availableTalentos.push({ name: heroicPath.mainTalent, activation: null, description: heroicPath.mainTalentEffect, source: heroicPath.name, sourceColor: heroicPath.color })
-    for (const spec of heroicPath.specialties)
-      for (const kt of spec.talentos)
-        availableTalentos.push({ name: kt.name, activation: kt.activation, description: kt.description, source: `${heroicPath.name} · ${spec.name}`, sourceColor: heroicPath.color, prereq: kt.prerequisites })
-  }
-  if (radiantOrder) {
-    for (const t of radiantOrder.talentos)
-      availableTalentos.push({ name: t.name, activation: t.cost, description: t.description, source: radiantOrder.name, sourceColor: radiantOrder.color, prereq: t.prereq })
-    for (const surgeName of radiantOrder.surges) {
-      const potencia = POTENCIAS.find((p) => p.name === surgeName)
-      if (potencia) {
-        // The potencia itself is a principal talento (base activation)
-        availableTalentos.push({ name: potencia.name, activation: potencia.costoBase, description: potencia.descripcion, source: radiantOrder.name, sourceColor: radiantOrder.color })
-        for (const t of potencia.talentos)
-          availableTalentos.push({ name: t.name, activation: t.cost, description: t.description, source: surgeName, sourceColor: radiantOrder.color, prereq: t.prereq })
-      }
-    }
-  }
-
-  const selectedTalentos: string[] = (() => { try { return JSON.parse(f.talentos || '[]') } catch { return [] } })()
-  const talentosMap = new Map(availableTalentos.map((t) => [t.name, t]))
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'stats', label: 'Stats' },
     { key: 'background', label: 'Trasfondo' },
-    { key: 'talentos', label: 'Talentos' },
-    { key: 'bolsa', label: 'Bolsa' },
   ]
 
   return (
@@ -710,6 +521,41 @@ export function CharacterDetailPage() {
               )
             })()}
 
+            {/* Movimiento + Dado de recuperación + Alcance de sentidos */}
+            {(() => {
+              const vel = f.velocidad ?? 0
+              const vol = f.voluntad ?? 0
+              const dis = f.discernimiento ?? 0
+              const movimiento = vel === 0 ? '6 m' : vel <= 2 ? '7,5 m' : vel <= 4 ? '9 m' : vel <= 6 ? '12 m' : vel <= 8 ? '18 m' : '24 m'
+              const dadoRec    = vol === 0 ? '1d4'  : vol <= 2 ? '1d6'  : vol <= 4 ? '1d8'  : vol <= 6 ? '1d10' : vol <= 8 ? '1d12' : '1d20'
+              const alcance    = dis === 0 ? '1,5 m' : dis <= 2 ? '3 m' : dis <= 4 ? '6 m' : dis <= 6 ? '15 m' : dis <= 8 ? '30 m' : 'Sin límite'
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                  <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>MOVIMIENTO</span>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#34d399', lineHeight: 1 }}>{movimiento}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>por acción · VEL {vel}</div>
+                  </div>
+                  <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>DADO DE RECUPERACIÓN</span>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#c084fc', lineHeight: 1 }}>{dadoRec}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>VOL {vol}</div>
+                  </div>
+                  <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>ALCANCE SENTIDOS</span>
+                    </div>
+                    <div style={{ fontSize: dis >= 9 ? 12 : 18, fontWeight: 800, color: '#38bdf8', lineHeight: 1 }}>{alcance}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>DIS {dis}</div>
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Físico / Cognitivo / Espiritual sections */}
             {SECTIONS.map((section) => {
               const defValue = section.defense(f)
@@ -955,640 +801,8 @@ export function CharacterDetailPage() {
             ))}
           </div>
         )}
-
-        {/* TALENTOS TAB */}
-        {tab === 'talentos' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-            {/* Header with add button */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em' }}>
-                {selectedTalentos.length} TALENTO{selectedTalentos.length !== 1 ? 'S' : ''}
-              </span>
-              <button
-                onClick={() => setTalentoPicker(true)}
-                disabled={availableTalentos.filter((t) => !selectedTalentos.includes(t.name)).length === 0}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '6px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
-                  background: 'rgba(251,191,36,0.12)', color: '#fbbf24',
-                  fontSize: 12, fontWeight: 700,
-                  opacity: availableTalentos.filter((t) => !selectedTalentos.includes(t.name)).length === 0 ? 0.4 : 1,
-                }}
-              >
-                <Plus size={12} /> Añadir talento
-              </button>
-            </div>
-
-            {/* No paths selected */}
-            {!heroicPath && !radiantOrder && (
-              <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
-                <p style={{ fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.5 }}>
-                  Asigna un Camino Heroico u Orden Radiante en la pestaña Stats para ver los talentos disponibles.
-                </p>
-              </div>
-            )}
-
-            {/* Selected talentos */}
-            {selectedTalentos.length === 0 && (heroicPath || radiantOrder) && (
-              <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
-                <p style={{ fontSize: 13, color: 'var(--text-subtle)' }}>Ningún talento aprendido aún.</p>
-              </div>
-            )}
-            {selectedTalentos.map((name) => {
-              const t = talentosMap.get(name)
-              const isPotenciaMain = !!radiantOrder?.surges.includes(name)
-              const isMainTalent = heroicPath?.mainTalent === name || radiantOrder?.talentos[0]?.name === name || isPotenciaMain
-              const mainPath = heroicPath?.mainTalent === name ? heroicPath : (radiantOrder?.talentos[0]?.name === name || isPotenciaMain) ? radiantOrder : null
-              return (
-                <div key={name} style={{ background: 'var(--surface-1)', border: `1px solid ${isMainTalent ? (mainPath?.colorBorder ?? 'var(--border)') : 'var(--border)'}`, borderRadius: 14, padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{name}</span>
-                      {isMainTalent && mainPath && (
-                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 6px', borderRadius: 20, background: mainPath.colorBg, border: `1px solid ${mainPath.colorBorder}`, color: mainPath.color }}>
-                          PRINCIPAL
-                        </span>
-                      )}
-                      {t?.activation && <TalentActivation type={t.activation} compact />}
-                      {t && (
-                        <span style={{
-                          fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
-                          padding: '2px 6px', borderRadius: 20,
-                          background: `color-mix(in srgb, ${t.sourceColor} 12%, transparent)`,
-                          border: `1px solid color-mix(in srgb, ${t.sourceColor} 30%, transparent)`,
-                          color: t.sourceColor,
-                        }}>{t.source.toUpperCase()}</span>
-                      )}
-                    </div>
-                    {!isMainTalent && (
-                      <button
-                        onClick={() => talentosMutation.mutate(selectedTalentos.filter((n) => n !== name))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--text-subtle)', flexShrink: 0 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  {t && <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{t.description}</p>}
-                  {!t && <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0, fontStyle: 'italic' }}>Talento personalizado</p>}
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* BOLSA TAB */}
-        {tab === 'bolsa' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-            {/* Marcos card */}
-            <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
-
-              {/* Header */}
-              <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em' }}>MARCOS</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: 'white', lineHeight: 1.1, marginTop: 2 }}>
-                    {marcosTotal}
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-subtle)', marginLeft: 6 }}>total</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => { setMarcosDelta(1); setMarcosDialog('add') }}
-                    style={{
-                      padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                      background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#34d399',
-                    }}
-                  >
-                    + Añadir
-                  </button>
-                  <button
-                    onClick={() => { setMarcosDelta(1); setMarcosDialog('remove') }}
-                    disabled={marcosTotal === 0}
-                    style={{
-                      padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: marcosTotal === 0 ? 'not-allowed' : 'pointer',
-                      background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: marcosTotal === 0 ? 'var(--text-subtle)' : '#f87171',
-                      opacity: marcosTotal === 0 ? 0.5 : 1,
-                    }}
-                  >
-                    − Gastar
-                  </button>
-                </div>
-              </div>
-
-              {/* State row */}
-              <div style={{ display: 'flex' }}>
-
-                {/* Infusas */}
-                <div style={{ flex: 1, padding: '14px 16px', borderRight: '1px solid var(--border)', textAlign: 'center' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', letterSpacing: '0.08em', marginBottom: 8 }}>INFUSAS</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                    <button
-                      onClick={() => applyMarcos(marcos.infusas - 1, marcos.opacas + 1)}
-                      disabled={marcos.infusas === 0 || marcosMutation.isPending}
-                      style={{
-                        width: 32, height: 32, borderRadius: '50%', fontSize: 18, fontWeight: 700,
-                        cursor: (marcos.infusas === 0 || marcosMutation.isPending) ? 'not-allowed' : 'pointer',
-                        background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        opacity: (marcos.infusas === 0 || marcosMutation.isPending) ? 0.4 : 1,
-                      }}
-                    >{marcosMutation.isPending ? '…' : '−'}</button>
-                    <span style={{ fontSize: 28, fontWeight: 800, color: '#93c5fd', minWidth: 28 }}>{marcos.infusas}</span>
-                    <button
-                      onClick={() => applyMarcos(marcos.infusas + 1, marcos.opacas - 1)}
-                      disabled={marcos.opacas === 0 || marcosMutation.isPending}
-                      style={{
-                        width: 32, height: 32, borderRadius: '50%', fontSize: 18, fontWeight: 700,
-                        cursor: (marcos.opacas === 0 || marcosMutation.isPending) ? 'not-allowed' : 'pointer',
-                        background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        opacity: (marcos.opacas === 0 || marcosMutation.isPending) ? 0.4 : 1,
-                      }}
-                    >{marcosMutation.isPending ? '…' : '+'}</button>
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-subtle)', marginTop: 6 }}>brillantes</div>
-                </div>
-
-                {/* Opacas */}
-                <div style={{ flex: 1, padding: '14px 16px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 8 }}>OPACAS</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-muted)', minWidth: 28 }}>{marcos.opacas}</span>
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-subtle)', marginTop: 6 }}>apagadas</div>
-                </div>
-
-              </div>
-
-              {/* Hint */}
-              {marcosTotal > 0 && (
-                <div style={{ padding: '8px 16px 12px', fontSize: 11, color: 'var(--text-subtle)', textAlign: 'center' }}>
-                  Usa +/− en Infusas para cambiar el estado de un Marco
-                </div>
-              )}
-            </div>
-
-            {/* Weight capacity */}
-            {(() => {
-              const getCapacity = (f: number) => {
-                if (f === 0) return 22.5
-                if (f <= 2) return 45
-                if (f <= 4) return 112.5
-                if (f <= 6) return 225
-                if (f <= 8) return 1125
-                return 2250
-              }
-              const capacity = getCapacity(char.fuerza ?? 0)
-              const currentWeight =
-                (char.weapons ?? []).reduce((sum, name) => sum + (catalogWeapons.find((w) => w.name === name)?.weight ?? 0), 0) +
-                (char.armor ?? []).reduce((sum, name) => sum + (catalogArmor.find((a) => a.name === name)?.weight ?? 0), 0) +
-                (char.equipment ?? []).reduce((sum, name) => sum + (catalogGear.find((g) => g.name === name)?.weight ?? 0), 0)
-              const pct = Math.min(currentWeight / capacity, 1)
-              const barColor = pct >= 1 ? '#f87171' : pct >= 0.75 ? '#fbbf24' : '#34d399'
-              const weightLabel = Number.isInteger(currentWeight) ? `${currentWeight}` : currentWeight.toFixed(1)
-              const capLabel = Number.isInteger(capacity) ? `${capacity}` : capacity.toFixed(1)
-              return (
-                <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399', letterSpacing: '0.08em' }}>CAPACIDAD DE CARGA</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>Fuerza <strong style={{ color: 'var(--text)' }}>{char.fuerza ?? 0}</strong></span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: barColor }}>{weightLabel}</span>
-                    <span style={{ fontSize: 13, color: 'var(--text-subtle)' }}>/ {capLabel} kg</span>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct * 100}%`, borderRadius: 3, background: barColor, transition: 'width 0.3s, background 0.3s' }} />
-                  </div>
-                  {pct >= 1 && (
-                    <div style={{ fontSize: 11, color: '#f87171', marginTop: 6, fontWeight: 600 }}>¡Sobrecargado!</div>
-                  )}
-                </div>
-              )
-            })()}
-
-            {/* Items sections */}
-            {([
-              { type: 'weapon' as const, label: 'Armas', items: char.weapons ?? [], color: '#f87171', colorBg: 'rgba(239,68,68,0.1)', colorBorder: 'rgba(239,68,68,0.25)' },
-              { type: 'armor' as const, label: 'Armaduras', items: char.armor ?? [], color: '#fbbf24', colorBg: 'rgba(251,191,36,0.1)', colorBorder: 'rgba(251,191,36,0.25)' },
-              { type: 'gear' as const, label: 'Equipo', items: char.equipment ?? [], color: '#34d399', colorBg: 'rgba(52,211,153,0.1)', colorBorder: 'rgba(52,211,153,0.25)' },
-            ] as const).map(({ type, label, items, color, colorBg, colorBorder }) => (
-              <div key={type} style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
-
-                {/* Section header */}
-                <div style={{ padding: '12px 16px', borderBottom: items.length > 0 ? '1px solid var(--border)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: '0.08em' }}>{label.toUpperCase()}</span>
-                  <button
-                    onClick={() => setItemPicker(type)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
-                      borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                      background: colorBg, border: `1px solid ${colorBorder}`, color,
-                    }}
-                  >
-                    <Plus size={11} />Añadir
-                  </button>
-                </div>
-
-                {/* Item list */}
-                {items.map((name, idx) => {
-                  const equippedIndex = type === 'armor' ? items.findIndex((n) => n === char.equippedArmor) : -1
-                  const isEquipped = type === 'armor' && idx === equippedIndex
-                  return (
-                    <div key={idx} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 16px',
-                      borderTop: idx > 0 ? '1px solid var(--border)' : 'none',
-                      background: isEquipped ? 'rgba(251,191,36,0.05)' : 'transparent',
-                    }}>
-                      <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, flex: 1 }}>{name}</span>
-                      <button
-                        onClick={() => setBolsaDetail({ kind: type === 'weapon' ? 'weapon' : type === 'armor' ? 'armor' : 'gear', name })}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', display: 'flex', flexShrink: 0 }}
-                      >
-                        <Info size={14} />
-                      </button>
-                      {type === 'armor' && (
-                        <button
-                          onClick={() => {
-                            const armorData = catalogArmor.find((a) => a.name === name)
-                            desvioMutation.mutate(
-                              isEquipped
-                                ? { equippedArmor: '', desvio: 0 }
-                                : { equippedArmor: name, desvio: armorData?.desvio ?? 0 }
-                            )
-                          }}
-                          style={{
-                            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
-                            border: `1px solid ${isEquipped ? 'rgba(251,191,36,0.4)' : 'var(--border)'}`,
-                            background: isEquipped ? 'rgba(251,191,36,0.12)' : 'var(--surface-2)',
-                            color: isEquipped ? '#fbbf24' : 'var(--text-subtle)',
-                            cursor: 'pointer', flexShrink: 0,
-                          }}
-                        >
-                          {isEquipped ? 'Equipada' : 'Equipar'}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setConfirmRemoveItem({ type, index: idx, name })}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', display: 'flex', flexShrink: 0 }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )
-                })}
-
-                {items.length === 0 && (
-                  <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--text-subtle)', textAlign: 'center' }}>
-                    Sin {label.toLowerCase()} equipadas
-                  </div>
-                )}
-              </div>
-            ))}
-
-          </div>
-        )}
       </div>
 
-      {/* Marcos add/remove dialog */}
-      {marcosDialog && (
-        <>
-          <div onClick={() => setMarcosDialog(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-          <div style={{
-            position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-            background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-            border: '1px solid var(--border-bright)', borderBottom: 'none',
-            padding: '20px 20px calc(24px + var(--sab, 0px))',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
-              {marcosDialog === 'add' ? 'Añadir Marcos' : 'Gastar Marcos'}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-subtle)', marginBottom: 20 }}>
-              {marcosDialog === 'add'
-                ? 'Los Marcos se añaden como Infusas.'
-                : `Tienes ${marcosTotal} Marco${marcosTotal !== 1 ? 's' : ''}. Se gastan primero las Opacas.`}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 24 }}>
-              <button
-                onClick={() => setMarcosDelta((d) => Math.max(1, d - 1))}
-                style={{ width: 40, height: 40, borderRadius: '50%', fontSize: 20, fontWeight: 700, cursor: 'pointer', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >−</button>
-              <span style={{ fontSize: 32, fontWeight: 800, color: 'white', minWidth: 40, textAlign: 'center' }}>{marcosDelta}</span>
-              <button
-                onClick={() => setMarcosDelta((d) => marcosDialog === 'remove' ? Math.min(marcosTotal, d + 1) : d + 1)}
-                style={{ width: 40, height: 40, borderRadius: '50%', fontSize: 20, fontWeight: 700, cursor: 'pointer', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >+</button>
-            </div>
-            <button
-              onClick={() => {
-                if (marcosDialog === 'add') {
-                  applyMarcos(marcos.infusas + marcosDelta, marcos.opacas)
-                } else {
-                  // remove from opacas first, then infusas
-                  let toRemove = Math.min(marcosDelta, marcosTotal)
-                  const newOpacas = Math.max(0, marcos.opacas - toRemove)
-                  const removed = marcos.opacas - newOpacas
-                  const newInfusas = Math.max(0, marcos.infusas - (toRemove - removed))
-                  applyMarcos(newInfusas, newOpacas)
-                }
-                setMarcosDialog(null)
-              }}
-              style={{
-                width: '100%', padding: '13px', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', border: 'none',
-                background: marcosDialog === 'add' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                color: marcosDialog === 'add' ? '#34d399' : '#f87171',
-              }}
-            >
-              {marcosDialog === 'add' ? `Añadir ${marcosDelta} Marco${marcosDelta !== 1 ? 's' : ''}` : `Gastar ${marcosDelta} Marco${marcosDelta !== 1 ? 's' : ''}`}
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* Catalog item picker */}
-      {itemPicker && (() => {
-        const config = {
-          weapon: { label: 'Armas', color: '#f87171', items: catalogWeapons.map((w) => ({ id: w.name, label: w.name })) },
-          armor:  { label: 'Armaduras', color: '#fbbf24', items: catalogArmor.map((a) => ({ id: a.name, label: a.name })) },
-          gear:   { label: 'Equipo', color: '#34d399', items: catalogGear.map((g) => ({ id: g.name, label: g.name })) },
-        }[itemPicker]
-        return (
-          <>
-            <div onClick={() => setItemPicker(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-            <div style={{
-              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-              background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-              border: '1px solid var(--border-bright)', borderBottom: 'none',
-              maxHeight: '70vh', display: 'flex', flexDirection: 'column',
-              paddingBottom: 'calc(16px + var(--sab, 0px))',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
-                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 16px', flexShrink: 0 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Añadir {config.label}</span>
-                <button onClick={() => setItemPicker(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
-                  <X size={18} />
-                </button>
-              </div>
-              <div style={{ overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {config.items.length === 0 && (
-                  <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '20px 0' }}>Cargando...</p>
-                )}
-                {config.items.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => addItem(itemPicker, item.id)}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
-                        background: 'var(--surface-2)', border: '1px solid var(--border)',
-                        color: 'var(--text)', textAlign: 'left', width: '100%',
-                      }}
-                    >
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{item.label}</span>
-                    </button>
-                  ))}
-              </div>
-            </div>
-          </>
-        )
-      })()}
-
-      {/* Confirm remove item */}
-      {confirmRemoveItem && (
-        <>
-          <div onClick={() => setConfirmRemoveItem(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-          <div style={{
-            position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-            background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-            border: '1px solid var(--border-bright)', borderBottom: 'none',
-            padding: '20px 20px calc(24px + var(--sab, 0px))',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>¿Retirar del inventario?</div>
-            <div style={{ fontSize: 13, color: 'var(--text-subtle)', marginBottom: 24 }}>
-              Se eliminará <strong style={{ color: 'var(--text)' }}>{confirmRemoveItem.name}</strong> del inventario de {char.name}.
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={() => setConfirmRemoveItem(null)}
-                style={{ flex: 1, padding: '12px', borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: 'pointer', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)' }}
-              >Cancelar</button>
-              <button
-                onClick={() => removeItem(confirmRemoveItem.type, confirmRemoveItem.index)}
-                style={{ flex: 1, padding: '12px', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(239,68,68,0.2)', color: '#f87171' }}
-              >Retirar</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Bolsa item detail sheet */}
-      {bolsaDetail && (() => {
-        const onClose = () => setBolsaDetail(null)
-        const weapon = bolsaDetail.kind === 'weapon' ? catalogWeapons.find((w) => w.name === bolsaDetail.name) : null
-        const armor  = bolsaDetail.kind === 'armor'  ? catalogArmor.find((a) => a.name === bolsaDetail.name) : null
-        const gear   = bolsaDetail.kind === 'gear'   ? catalogGear.find((g) => g.name === bolsaDetail.name) : null
-        const colors = {
-          weapon: { accent: '#f87171', bg: 'rgba(239,68,68,0.1)', bgHover: 'rgba(239,68,68,0.25)' },
-          armor:  { accent: '#fbbf24', bg: 'rgba(251,191,36,0.1)',  bgHover: 'rgba(251,191,36,0.25)' },
-          gear:   { accent: '#34d399', bg: 'rgba(52,211,153,0.1)',  bgHover: 'rgba(52,211,153,0.25)' },
-        }[bolsaDetail.kind]
-        return (
-          <>
-            <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
-            <div style={{
-              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-              background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-              border: '1px solid var(--border-bright)', borderBottom: 'none',
-              padding: '20px 20px calc(20px + var(--sab, 0px))',
-              maxHeight: '85vh', overflowY: 'auto',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-              </div>
-
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
-                <div style={{ fontSize: 17, fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>{bolsaDetail.name}</div>
-                <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Weapon detail */}
-              {weapon && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Daño</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'monospace', color: colors.accent, padding: '4px 14px', borderRadius: 10, background: colors.bg, border: `1px solid ${colors.bgHover}` }}>
-                        {weapon.damageDiceCount}d{weapon.damageDiceValue}
-                      </span>
-                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{dtMap.get(weapon.damageTypeId) ?? '—'}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Estadísticas</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                      {[
-                        { label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' },
-                        { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' },
-                        { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' },
-                        { label: 'Peso', value: `${weapon.weight} kg` },
-                      ].map(({ label, value }) => (
-                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {(weapon.traitIds.length > 0 || weapon.expertTraitIds.length > 0) && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Rasgos</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {weapon.traitIds.map((id) => {
-                          const opt = wtrMap.get(id)
-                          return (
-                            <div key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: 'var(--text-subtle)' }}>·</span>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
-                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
-                              </div>
-                            </div>
-                          )
-                        })}
-                        {weapon.expertTraitIds.map((id) => {
-                          const opt = wtrMap.get(id)
-                          return (
-                            <div key={`ex-${id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: '#fbbf24' }}>★</span>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
-                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {weapon.description && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
-                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{weapon.description}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Armor detail */}
-              {armor && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Defensa</div>
-                    <span style={{ fontSize: 20, fontWeight: 900, color: colors.accent, padding: '4px 14px', borderRadius: 10, background: colors.bg, border: `1px solid ${colors.bgHover}` }}>
-                      +{armor.desvio} DEF
-                    </span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Tipo</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                      {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }].map(({ label, value }) => (
-                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {(armor.traitIds.length > 0 || armor.expertTraitIds.length > 0) && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Rasgos</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {armor.traitIds.map((id) => {
-                          const opt = atrMap.get(id)
-                          return (
-                            <div key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: 'var(--text-subtle)' }}>·</span>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
-                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
-                              </div>
-                            </div>
-                          )
-                        })}
-                        {armor.expertTraitIds.map((id) => {
-                          const opt = atrMap.get(id)
-                          return (
-                            <div key={`ex-${id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: '#fbbf24' }}>★</span>
-                              <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>
-                                {opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {armor.description && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
-                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{armor.description}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Gear detail */}
-              {gear && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Detalles</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: `${gear.price} mc` }].map(({ label, value }) => (
-                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {gear.description && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
-                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{gear.description}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Item not found in catalog */}
-              {!weapon && !armor && !gear && (
-                <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '24px 0' }}>
-                  No se encontró información en el catálogo.
-                </p>
-              )}
-            </div>
-          </>
-        )
-      })()}
 
       {/* Path pickers */}
       {picker === 'ascendencia' && (
@@ -1684,104 +898,6 @@ export function CharacterDetailPage() {
         />
       )}
 
-      {/* Talento picker */}
-      {talentoPicker && (() => {
-        const autoAdded = new Set([heroicPath?.mainTalent, radiantOrder?.talentos[0]?.name, ...(radiantOrder?.surges ?? [])])
-        const unselected = availableTalentos
-          .filter((t) => !selectedTalentos.includes(t.name) && !autoAdded.has(t.name))
-          .map((t) => {
-            const { met, missing } = checkPrereq(t.prereq, f, selectedTalentos, heroicPath?.mainTalent, radiantOrder?.talentos[0]?.name)
-            return { ...t, met, missing }
-          })
-        const available = unselected.filter((t) => t.met)
-        const locked = unselected.filter((t) => !t.met)
-        return (
-          <>
-            <div onClick={() => setTalentoPicker(false)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-            <div style={{
-              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-              background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-              border: '1px solid var(--border-bright)', borderBottom: 'none',
-              maxHeight: '75vh', display: 'flex', flexDirection: 'column',
-              paddingBottom: 'calc(16px + var(--sab, 0px))',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
-                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 14px', flexShrink: 0 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Añadir talento</span>
-                <button onClick={() => setTalentoPicker(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
-                  <X size={18} />
-                </button>
-              </div>
-              <div style={{ overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {available.map((t) => (
-                  <button
-                    key={t.name}
-                    onClick={() => { talentosMutation.mutate([...selectedTalentos, t.name]); setTalentoPicker(false) }}
-                    style={{
-                      display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
-                      borderRadius: 12, cursor: 'pointer', textAlign: 'left', width: '100%',
-                      background: 'var(--surface-2)', border: '1px solid var(--border)',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{t.name}</span>
-                      {t.activation && <TalentActivation type={t.activation} compact />}
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
-                        padding: '2px 6px', borderRadius: 20,
-                        background: `color-mix(in srgb, ${t.sourceColor} 12%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${t.sourceColor} 30%, transparent)`,
-                        color: t.sourceColor,
-                      }}>{t.source.toUpperCase()}</span>
-                    </div>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{t.description}</p>
-                  </button>
-                ))}
-                {available.length === 0 && locked.length === 0 && (
-                  <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '20px 0' }}>
-                    Ya has aprendido todos los talentos disponibles.
-                  </p>
-                )}
-                {locked.length > 0 && (
-                  <>
-                    {available.length > 0 && <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />}
-                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', margin: '4px 0 0' }}>BLOQUEADOS</p>
-                    {locked.map((t) => (
-                      <div
-                        key={t.name}
-                        style={{
-                          display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
-                          borderRadius: 12, textAlign: 'left', width: '100%',
-                          background: 'var(--surface-2)', border: '1px solid var(--border)',
-                          opacity: 0.5,
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>🔒 {t.name}</span>
-                          {t.activation && <TalentActivation type={t.activation} compact />}
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
-                            padding: '2px 6px', borderRadius: 20,
-                            background: `color-mix(in srgb, ${t.sourceColor} 12%, transparent)`,
-                            border: `1px solid color-mix(in srgb, ${t.sourceColor} 30%, transparent)`,
-                            color: t.sourceColor,
-                          }}>{t.source.toUpperCase()}</span>
-                        </div>
-                        <p style={{ fontSize: 11, color: '#f59e0b', lineHeight: 1.4, margin: 0, fontStyle: 'italic' }}>
-                          Requiere: {t.missing.join(' · ')}
-                        </p>
-                        <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{t.description}</p>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            </div>
-          </>
-        )
-      })()}
     </div>
   )
 }

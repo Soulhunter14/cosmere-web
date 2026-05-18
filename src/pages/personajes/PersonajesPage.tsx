@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Target, ArrowRight, BookOpen } from 'lucide-react'
+import { Target, ArrowRight, BookOpen, Sparkles, ShoppingBag } from 'lucide-react'
 import { CharacterListPage } from '../characters/CharacterListPage'
 import { MetasPage } from './MetasPage'
+import { TalentosPage } from './TalentosPage'
+import { BolsaPage } from './BolsaPage'
 import { Spinner } from '../../components/ui'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
@@ -23,7 +25,9 @@ const AVATAR_GRADIENTS = [
 
 const GM_TABS = [
   { id: 'characters', label: 'Personajes' },
-  { id: 'metas', label: 'Metas' },
+  { id: 'metas',     label: 'Metas' },
+  { id: 'talentos',  label: 'Talentos' },
+  { id: 'bolsa',     label: 'Bolsa' },
 ] as const
 
 type GmTab = typeof GM_TABS[number]['id']
@@ -62,7 +66,9 @@ function GmPersonajesView() {
         ))}
       </div>
       {activeTab === 'characters' && <CharacterListPage />}
-      {activeTab === 'metas' && <MetasPage />}
+      {activeTab === 'metas'     && <MetasPage />}
+      {activeTab === 'talentos'  && <TalentosPage />}
+      {activeTab === 'bolsa'     && <BolsaPage />}
     </div>
   )
 }
@@ -184,10 +190,7 @@ function PlayerPersonajesPage() {
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(180,190,254,0.25)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)' }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
         >
-          <div style={{
-            width: 40, height: 40, borderRadius: 12, background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.2)', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Target size={18} style={{ color: 'var(--brand-light)' }} />
           </div>
           <div style={{ flex: 1 }}>
@@ -195,6 +198,52 @@ function PlayerPersonajesPage() {
             <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0 }}>
               {activeMetas > 0 ? `${activeMetas} meta${activeMetas !== 1 ? 's' : ''} activa${activeMetas !== 1 ? 's' : ''}` : 'Objetivos de tu personaje'}
             </p>
+          </div>
+          <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
+        </button>
+
+        {/* Talentos card */}
+        <button
+          onClick={() => navigate(`/campaigns/${cId}/personajes/talentos/${character.id}`)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 16,
+            padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
+            background: 'var(--surface-1)', border: '1px solid var(--border)',
+            textAlign: 'left', width: '100%',
+            transition: 'border-color 0.15s, box-shadow 0.15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(251,191,36,0.25)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
+        >
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Sparkles size={18} style={{ color: '#fbbf24' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: '0 0 2px' }}>Talentos</p>
+            <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0 }}>Habilidades especiales de tu personaje</p>
+          </div>
+          <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
+        </button>
+
+        {/* Bolsa card */}
+        <button
+          onClick={() => navigate(`/campaigns/${cId}/personajes/bolsa/${character.id}`)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 16,
+            padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
+            background: 'var(--surface-1)', border: '1px solid var(--border)',
+            textAlign: 'left', width: '100%',
+            transition: 'border-color 0.15s, box-shadow 0.15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(52,211,153,0.25)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
+        >
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShoppingBag size={18} style={{ color: '#34d399' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: '0 0 2px' }}>Bolsa</p>
+            <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0 }}>Inventario, marcos y equipo</p>
           </div>
           <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
         </button>

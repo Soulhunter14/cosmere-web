@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Edit2, Save, X, Heart, ChevronDown } from 'lucide-react'
+import { Edit2, Save, X, Heart, ChevronDown, Sword } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
@@ -11,6 +11,11 @@ import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { POTENCIAS } from '../../data/potencias'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import {
+  getFormaActiva, withFormaActiva, getFormasDisponibles,
+  CANTOR_COLOR, FORMA_ACTIVA_PREFIX,
+  type FormaBonusMap,
+} from '../../data/cantores'
 
 interface PickerOption { id: string; label: string; sublabel?: string; color: string; colorBg: string; colorBorder: string; icon?: string }
 
@@ -110,7 +115,7 @@ const SECTIONS = [
     key: 'fisico', label: 'Físico',
     color: '#fb7185', colorBg: 'rgba(251,113,133,0.08)', colorBorder: 'rgba(251,113,133,0.25)',
     attrs: [['fuerza', 'FUE'], ['velocidad', 'VEL']] as [string, string][],
-    defense: (c: Character) => 10 + c.fuerza + c.velocidad,
+    defKey: 'defensaFisica',
     skills: [
       ['agilidad',    'Agilidad',     'velocidad', 'VEL'],
       ['armasLigeras','Armas Ligeras','velocidad', 'VEL'],
@@ -125,7 +130,7 @@ const SECTIONS = [
     key: 'cognitivo', label: 'Cognitivo',
     color: '#60a5fa', colorBg: 'rgba(96,165,250,0.08)', colorBorder: 'rgba(96,165,250,0.25)',
     attrs: [['intelecto', 'INT'], ['voluntad', 'VOL']] as [string, string][],
-    defense: (c: Character) => 10 + c.intelecto + c.voluntad,
+    defKey: 'defensaCognitiva',
     skills: [
       ['deduccion',   'Deducción',   'intelecto', 'INT'],
       ['disciplina',  'Disciplina',  'voluntad',  'VOL'],
@@ -140,7 +145,7 @@ const SECTIONS = [
     key: 'espiritual', label: 'Espiritual',
     color: '#a78bfa', colorBg: 'rgba(167,139,250,0.08)', colorBorder: 'rgba(167,139,250,0.25)',
     attrs: [['discernimiento', 'DIS'], ['presencia', 'PRE']] as [string, string][],
-    defense: (c: Character) => 10 + c.discernimiento + c.presencia,
+    defKey: 'defensaEspiritual',
     skills: [
       ['engano',      'Engaño',      'presencia',      'PRE'],
       ['liderazgo',   'Liderazgo',   'presencia',      'PRE'],
@@ -170,11 +175,12 @@ export function CharacterDetailPage() {
   const [editing, setEditing] = useState(!!(location.state as any)?.editing)
   const [form, setForm] = useState<Character | null>(null)
   const [tab, setTab] = useState<Tab>('stats')
-  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | null>(null)
+  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | null>(null)
+  const [enCombate, setEnCombate] = useState(false)
 
   const { data: char, isLoading } = useQuery<Character>({
-    queryKey: ['character', cId, chId],
-    queryFn: () => charactersApi.getById(cId, chId),
+    queryKey: ['character', cId, chId, enCombate],
+    queryFn: () => charactersApi.getById(cId, chId, enCombate),
   })
 
   useEffect(() => { if (char) setForm({ ...char }) }, [char])
@@ -186,12 +192,26 @@ export function CharacterDetailPage() {
     },
   })
 
+  const formaMutation = useMutation({
+    mutationFn: (newTalentos: string[]) =>
+      charactersApi.update(cId, chId, { ...char, talentos: JSON.stringify(newTalentos) } as UpdateCharacterRequest),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
+  })
+
   if (isLoading || !char) return <Spinner />
 
   const isOwner = char.ownerId === currentUser?.id
   const canEdit = isGm || isOwner
 
   const f = (editing && form ? form : char) as Character
+
+  // ── Forma (Oyente/Cantor) ──────────────────────────────────────────────────
+  const isCantor = char.ascendencia === 'Oyente'
+  const rawTalentos: string[] = (() => { try { return JSON.parse(char.talentos || '[]') } catch { return [] } })()
+  const formasDisponibles = isCantor ? getFormasDisponibles(rawTalentos) : []
+  const formaActiva = isCantor ? getFormaActiva(rawTalentos) : null
+  const formaActivaData = formaActiva ? (formasDisponibles.find((fo) => fo.nombre === formaActiva) ?? null) : null
+  const formaBonus: FormaBonusMap = formaActivaData?.bonusAtributos ?? {}
   const set = (k: keyof UpdateCharacterRequest) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => prev ? { ...prev, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value } : prev)
 
@@ -347,7 +367,7 @@ export function CharacterDetailPage() {
               <Heart size={14} style={{ color: '#fb7185', flexShrink: 0 }} />
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>SALUD</span>
               <span style={{ marginLeft: 'auto', fontSize: 20, fontWeight: 800, color: 'white', fontVariantNumeric: 'tabular-nums' }}>
-                {f.maxHealth}
+                {f.salud?.total ?? f.maxHealth}
               </span>
             </div>
           )}
@@ -385,6 +405,44 @@ export function CharacterDetailPage() {
         {/* STATS TAB */}
         {tab === 'stats' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Combat toggle + Forma toggle */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setEnCombate((v) => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 16px', borderRadius: 12, cursor: 'pointer',
+                  border: `1px solid ${enCombate ? 'rgba(239,68,68,0.4)' : 'var(--border)'}`,
+                  background: enCombate ? 'rgba(239,68,68,0.12)' : 'var(--surface-1)',
+                  color: enCombate ? '#f87171' : 'var(--text-subtle)',
+                  fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+                }}
+              >
+                <Sword size={14} />
+                {enCombate ? 'En combate' : 'Fuera de combate'}
+              </button>
+
+              {isCantor && (
+                <button
+                  onClick={() => setPicker('forma')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '10px 16px', borderRadius: 12, cursor: 'pointer',
+                    border: `1px solid ${formaActiva ? `${CANTOR_COLOR}66` : 'var(--border)'}`,
+                    background: formaActiva ? `${CANTOR_COLOR}18` : 'var(--surface-1)',
+                    color: formaActiva ? CANTOR_COLOR : 'var(--text-subtle)',
+                    fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>◈</span>
+                  {formaActiva ?? 'Sin forma'}
+                  {formaActivaData?.esPoder && (
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.15)', borderRadius: 4, padding: '1px 4px' }}>PODER</span>
+                  )}
+                </button>
+              )}
+            </div>
 
             {/* Identity grid — Ascendencia · Camino Heroico · Camino Radiante */}
             {(() => {
@@ -477,33 +535,111 @@ export function CharacterDetailPage() {
 
             {/* Concentración + Investidura + Desvío — one row */}
             {(() => {
+              const conc = f.concentracion ?? { total: 0, lineas: [], situacional: [] }
+              const inv  = f.investidura  ?? { total: 0, lineas: [], situacional: [] }
+              const concFormaBonus = formaBonus.concentracion ?? 0
+              const concTotal = conc.total + concFormaBonus
+              const concDesglose = [
+                ...conc.lineas.map(l => `${l.valor} (${l.concepto})`),
+                ...(concFormaBonus > 0 ? [`${concFormaBonus} (${formaActiva})`] : []),
+              ].join(' + ')
+              const invDesglose  = inv.lineas.map(l => `${l.valor} (${l.concepto})`).join(' + ')
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                  {/* Concentración */}
-                  {[
-                    { maxKey: 'maxConcentration', label: 'Concentración', color: '#fb923c' },
-                    { maxKey: 'maxInvestiture',   label: 'Investidura',   color: '#a78bfa' },
-                  ].map(({ maxKey, label, color }) => (
-                    <div key={maxKey} style={{
-                      background: 'var(--surface-1)', border: '1px solid var(--border)',
-                      borderRadius: 14, padding: '12px 14px',
-                    }}>
-                      <div style={{ marginBottom: 8 }}>
-                        <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>
-                          {label.toUpperCase()}
-                        </span>
-                      </div>
-                      {editing ? (
-                        <Input type="number" min={0} value={(form as any)?.[maxKey] ?? 0}
-                          onChange={set(maxKey as keyof UpdateCharacterRequest)}
-                          style={{ padding: '4px 6px', fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%' }} />
-                      ) : (
-                        <div style={{ fontSize: 20, fontWeight: 800, color, lineHeight: 1 }}>
-                          {(f as any)[maxKey] ?? 0}
-                        </div>
-                      )}
+
+                  {/* Concentración — calculada automáticamente */}
+                  <div style={{
+                    background: 'var(--surface-1)', border: '1px solid var(--border)',
+                    borderRadius: 14, padding: '12px 14px',
+                  }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>
+                        CONCENTRACIÓN
+                      </span>
                     </div>
-                  ))}
+                    {editing ? (() => {
+                      const vol = form?.voluntad ?? 0
+                      const bonus = form?.maxConcentration ?? 0
+                      const preview = 2 + vol + bonus + (formaBonus.concentracion ?? 0)
+                      return (
+                        <>
+                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginBottom: 4 }}>
+                            2 + VOL {vol}{(formaBonus.concentracion ?? 0) > 0 ? ` + Forma ${formaBonus.concentracion}` : ''}
+                          </div>
+                          <Input type="number" min={0}
+                            value={bonus}
+                            onChange={set('maxConcentration')}
+                            style={{ padding: '4px 6px', fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%' }}
+                          />
+                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 3 }}>bonus</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#fb923c', marginTop: 4 }}>= {preview}</div>
+                        </>
+                      )
+                    })() : (
+                      <>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#fb923c', lineHeight: 1 }}>
+                          {concTotal}
+                        </div>
+                        {concDesglose && (
+                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 5, lineHeight: 1.3 }}>
+                            {concDesglose}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Investidura — auto para Radiantes (2 + max(DIS,PRE) + bonus) */}
+                  <div style={{
+                    background: 'var(--surface-1)', border: '1px solid var(--border)',
+                    borderRadius: 14, padding: '12px 14px',
+                  }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>
+                        INVESTIDURA
+                      </span>
+                    </div>
+                    {editing ? (() => {
+                      const esRadiante = !!(form?.caminoRadiante)
+                      if (!esRadiante) {
+                        return (
+                          <div style={{ fontSize: 10, color: 'var(--text-subtle)', lineHeight: 1.4, marginTop: 4 }}>
+                            Solo disponible para Radiantes
+                          </div>
+                        )
+                      }
+                      const dis = form?.discernimiento ?? 0
+                      const pre = form?.presencia ?? 0
+                      const maxAtrib = Math.max(dis, pre)
+                      const atribLabel = dis >= pre ? 'DIS' : 'PRE'
+                      const bonus = form?.maxInvestiture ?? 0
+                      const preview = 2 + maxAtrib + bonus
+                      return (
+                        <>
+                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginBottom: 4 }}>
+                            2 + {atribLabel} {maxAtrib}
+                          </div>
+                          <Input type="number" min={0} value={bonus}
+                            onChange={set('maxInvestiture')}
+                            style={{ padding: '4px 6px', fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%' }}
+                          />
+                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 3 }}>bonus</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', marginTop: 4 }}>= {preview}</div>
+                        </>
+                      )
+                    })() : (
+                      <>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>
+                          {inv.total}
+                        </div>
+                        {invDesglose && (
+                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 5, lineHeight: 1.3 }}>
+                            {invDesglose}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
 
                   {/* Desvío */}
                   <div style={{
@@ -514,8 +650,13 @@ export function CharacterDetailPage() {
                       <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>DESVÍO</span>
                     </div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: '#fbbf24', lineHeight: 1 }}>
-                      {f.desvio ?? 0}
+                      {(f.desvio ?? 0) + (formaBonus.desvio ?? 0)}
                     </div>
+                    {(formaBonus.desvio ?? 0) > 0 && (
+                      <div style={{ fontSize: 9, color: CANTOR_COLOR, marginTop: 4 }}>
+                        +{formaBonus.desvio} {formaActiva}
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -526,31 +667,43 @@ export function CharacterDetailPage() {
               const vel = f.velocidad ?? 0
               const vol = f.voluntad ?? 0
               const dis = f.discernimiento ?? 0
-              const movimiento = vel === 0 ? '6 m' : vel <= 2 ? '7,5 m' : vel <= 4 ? '9 m' : vel <= 6 ? '12 m' : vel <= 8 ? '18 m' : '24 m'
-              const dadoRec    = vol === 0 ? '1d4'  : vol <= 2 ? '1d6'  : vol <= 4 ? '1d8'  : vol <= 6 ? '1d10' : vol <= 8 ? '1d12' : '1d20'
-              const alcance    = dis === 0 ? '1,5 m' : dis <= 2 ? '3 m' : dis <= 4 ? '6 m' : dis <= 6 ? '15 m' : dis <= 8 ? '30 m' : 'Sin límite'
+              // Effective values include forma bonuses (view only)
+              const volEff = vol + (formaBonus.voluntad ?? 0)
+              const disEff = dis + (formaBonus.discernimiento ?? 0)
+              const mov = f.movimiento ?? { total: 0, lineas: [], situacional: [] }
+              const movTotal = mov.total
+              const movStr = movTotal % 1 === 0
+                ? `${movTotal} m`
+                : `${movTotal.toString().replace('.', ',')} m`
+              const dadoRec    = volEff === 0 ? '1d4'  : volEff <= 2 ? '1d6'  : volEff <= 4 ? '1d8'  : volEff <= 6 ? '1d10' : volEff <= 8 ? '1d12' : '1d20'
+              const alcance    = disEff === 0 ? '1,5 m' : disEff <= 2 ? '3 m' : disEff <= 4 ? '6 m' : disEff <= 6 ? '15 m' : disEff <= 8 ? '30 m' : 'Sin límite'
+              const movBonus = mov.lineas.filter(l => l.concepto !== 'Base')
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
                     <div style={{ marginBottom: 6 }}>
                       <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>MOVIMIENTO</span>
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#34d399', lineHeight: 1 }}>{movimiento}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>por acción · VEL {vel}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#34d399', lineHeight: 1 }}>{movStr}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>
+                      {movBonus.length > 0
+                        ? `+${movBonus.reduce((s, l) => s + l.valor, 0)} m bonus · VEL ${vel}`
+                        : `por acción · VEL ${vel}`}
+                    </div>
                   </div>
                   <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
                     <div style={{ marginBottom: 6 }}>
                       <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>DADO DE RECUPERACIÓN</span>
                     </div>
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#c084fc', lineHeight: 1 }}>{dadoRec}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>VOL {vol}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>VOL {volEff}{volEff !== vol ? <span style={{ color: CANTOR_COLOR }}> (+{formaBonus.voluntad})</span> : null}</div>
                   </div>
                   <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
                     <div style={{ marginBottom: 6 }}>
                       <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 700, letterSpacing: '0.06em' }}>ALCANCE SENTIDOS</span>
                     </div>
-                    <div style={{ fontSize: dis >= 9 ? 12 : 18, fontWeight: 800, color: '#38bdf8', lineHeight: 1 }}>{alcance}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>DIS {dis}</div>
+                    <div style={{ fontSize: disEff >= 9 ? 12 : 18, fontWeight: 800, color: '#38bdf8', lineHeight: 1 }}>{alcance}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>DIS {disEff}{disEff !== dis ? <span style={{ color: CANTOR_COLOR }}> (+{formaBonus.discernimiento})</span> : null}</div>
                   </div>
                 </div>
               )
@@ -558,7 +711,8 @@ export function CharacterDetailPage() {
 
             {/* Físico / Cognitivo / Espiritual sections */}
             {SECTIONS.map((section) => {
-              const defValue = section.defense(f)
+              const defStat = (f as any)[section.defKey] as { total: number; lineas: { concepto: string; valor: number }[]; situacional: { concepto: string; valor: number; descripcionCondicion?: string }[] } | undefined
+              const defValue = defStat?.total ?? 0
 
               return (
                 <div key={section.key} style={{
@@ -592,32 +746,42 @@ export function CharacterDetailPage() {
                     gap: 1, borderBottom: `1px solid var(--border)`,
                     background: 'var(--border)',
                   }}>
-                    {section.attrs.map(([k, label]) => (
-                      <div key={k} style={{ background: 'var(--surface-1)', padding: '10px 14px', textAlign: 'center' }}>
-                        {editing ? (
-                          <Input
-                            type="number" min={0} max={5}
-                            value={(form as any)?.[k] ?? 0}
-                            onChange={set(k as keyof UpdateCharacterRequest)}
-                            style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, padding: '4px' }}
-                          />
-                        ) : (
-                          <div style={{ fontSize: 26, fontWeight: 800, color: 'white', lineHeight: 1 }}>
-                            {(f as any)[k] ?? 0}
+                    {section.attrs.map(([k, label]) => {
+                      const attrBase = (f as any)[k] ?? 0
+                      const attrFb = (formaBonus as any)[k] ?? 0
+                      const attrTotal = attrBase + attrFb
+                      return (
+                        <div key={k} style={{ background: 'var(--surface-1)', padding: '10px 14px', textAlign: 'center' }}>
+                          {editing ? (
+                            <Input
+                              type="number" min={0} max={5}
+                              value={(form as any)?.[k] ?? 0}
+                              onChange={set(k as keyof UpdateCharacterRequest)}
+                              style={{ textAlign: 'center', fontSize: 20, fontWeight: 800, padding: '4px' }}
+                            />
+                          ) : (
+                            <div style={{ fontSize: 26, fontWeight: 800, color: 'white', lineHeight: 1 }}>
+                              {attrTotal}
+                              {attrFb > 0 && (
+                                <span style={{ fontSize: 10, fontWeight: 700, color: CANTOR_COLOR, marginLeft: 3, verticalAlign: 'super' }}>+{attrFb}</span>
+                              )}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 9, fontWeight: 700, color: section.color, marginTop: 4, letterSpacing: '0.08em' }}>
+                            {label}
                           </div>
-                        )}
-                        <div style={{ fontSize: 9, fontWeight: 700, color: section.color, marginTop: 4, letterSpacing: '0.08em' }}>
-                          {label}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
 
                   {/* Skills list */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {section.skills.map(([k, label, attrKey2, attrLabel], idx) => {
                       const base = (f as any)[k] ?? 0
-                      const bonus = (f as any)[attrKey2] ?? 0
+                      const attrRaw = (f as any)[attrKey2] ?? 0
+                      const attrFb = (formaBonus as any)[attrKey2] ?? 0
+                      const bonus = attrRaw + attrFb
                       const total = base + bonus
                       const pct = Math.min(100, (base / 5) * 100)
                       return (
@@ -644,7 +808,7 @@ export function CharacterDetailPage() {
                                 onChange={set(k as keyof UpdateCharacterRequest)}
                                 style={{ width: 52, padding: '3px 6px', textAlign: 'center', fontSize: 13 }}
                               />
-                              <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>+{bonus}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>+{attrRaw}</span>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -675,7 +839,10 @@ export function CharacterDetailPage() {
                       const customName = (f as any)[nameKey] as string
                       const customBase = (f as any)[valorKey] as number ?? 0
                       const customAttrCode = ((f as any)[attrKey] as string ?? '').toUpperCase()
-                      const customBonus = customAttrCode && ATTR_MAP[customAttrCode] ? (f as any)[ATTR_MAP[customAttrCode]] ?? 0 : 0
+                      const customAttrKey = customAttrCode && ATTR_MAP[customAttrCode] ? ATTR_MAP[customAttrCode] : null
+                      const customBonus = customAttrKey
+                        ? ((f as any)[customAttrKey] ?? 0) + ((formaBonus as any)[customAttrKey] ?? 0)
+                        : 0
                       const customTotal = customBase + customBonus
                       const isPotencia = !!radiantOrder?.surges.includes(customName)
 
@@ -751,6 +918,30 @@ export function CharacterDetailPage() {
                       )
                     })}
                   </div>
+
+                  {/* Situacional bonuses (talents that conditionally affect this defense) */}
+                  {defStat && defStat.situacional.length > 0 && (
+                    <div style={{
+                      padding: '8px 14px',
+                      borderTop: `1px solid ${section.colorBorder}`,
+                      background: section.colorBg,
+                    }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 5 }}>
+                        BONOS SITUACIONALES
+                      </div>
+                      {defStat.situacional.map((s, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: i > 0 ? 3 : 0 }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>
+                            {s.concepto}
+                            {s.descripcionCondicion && <span style={{ opacity: 0.65 }}> · {s.descripcionCondicion}</span>}
+                          </span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: s.valor >= 0 ? section.color : '#f87171', marginLeft: 8 }}>
+                            {s.valor >= 0 ? '+' : ''}{s.valor}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -832,6 +1023,28 @@ export function CharacterDetailPage() {
             const filtered = current.filter((n) => !oldNames.includes(n))
             const next = newPath ? [newPath.mainTalent, ...filtered.filter((n) => n !== newPath.mainTalent)] : filtered
             setForm((prev) => prev ? { ...prev, caminoHeroico: id, talentos: JSON.stringify(next) } : prev)
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker === 'forma' && isCantor && (
+        <BottomSheetPicker
+          title="Cambiar de forma"
+          value={formaActiva ?? ''}
+          options={formasDisponibles.map((fo) => ({
+            id: fo.nombre,
+            label: fo.nombre,
+            sublabel: fo.esPoder ? `⚡ vacíospren (${fo.spren})` : fo.spren,
+            color: fo.esPoder ? '#f87171' : CANTOR_COLOR,
+            colorBg: fo.esPoder ? 'rgba(239,68,68,0.1)' : `rgba(167,139,250,0.1)`,
+            colorBorder: fo.esPoder ? 'rgba(239,68,68,0.3)' : `rgba(167,139,250,0.3)`,
+            icon: fo.esPoder ? '⚡' : '◈',
+          }))}
+          onChange={(id) => {
+            const next = id
+              ? withFormaActiva(rawTalentos, id)
+              : rawTalentos.filter((t) => !t.startsWith(FORMA_ACTIVA_PREFIX))
+            formaMutation.mutate(next)
           }}
           onClose={() => setPicker(null)}
         />

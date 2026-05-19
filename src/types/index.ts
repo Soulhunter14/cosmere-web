@@ -32,6 +32,20 @@ export interface Member {
   role: 'gm' | 'player'
 }
 
+// Stat breakdown (computed by the rules engine)
+export interface StatLinea {
+  concepto: string
+  valor: number
+  descripcionCondicion?: string
+}
+
+export interface StatDesglose {
+  total: number
+  unidad?: string          // undefined = integer, "m" = meters
+  lineas: StatLinea[]      // active — sum to total
+  situacional: StatLinea[] // visible but NOT counted in total
+}
+
 // Characters
 export interface Character {
   id: number
@@ -51,9 +65,17 @@ export interface Character {
   discernimiento: number
   presencia: number
   maxHealth: number
-  maxConcentration: number
+  maxConcentration: number  // legacy field kept for reference
   maxInvestiture: number
   desvio: number
+  // Computed by the rules engine (read-only)
+  concentracion: StatDesglose
+  defensaFisica: StatDesglose
+  defensaCognitiva: StatDesglose
+  defensaEspiritual: StatDesglose
+  salud: StatDesglose
+  investidura: StatDesglose
+  movimiento: StatDesglose
   marcosInfusas: number
   marcosOpacas: number
   agilidad: number
@@ -109,7 +131,11 @@ export interface Character {
 }
 
 export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante'> & { ownerId?: number }
-export type UpdateCharacterRequest = Omit<Character, 'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas'>
+export type UpdateCharacterRequest = Omit<Character,
+  'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas' |
+  'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |
+  'salud' | 'investidura' | 'movimiento'
+>
 
 // Metas
 export interface Meta {

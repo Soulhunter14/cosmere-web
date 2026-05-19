@@ -96,6 +96,28 @@ const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#4c1d95,#7c3aed)',
 ]
 
+// ── Salud máxima calculada (espejo del backend, para preview en edición) ──────
+function getSaludMaxima(level: number, fuerza: number): number {
+  let flat = 10
+  let fueCount = 1
+  if (level >= 2)  flat += (Math.min(level, 5)  - 1) * 5
+  if (level >= 6)  { flat += (Math.min(level, 10) - 5)  * 4; fueCount++ }
+  if (level >= 11) { flat += (Math.min(level, 15) - 10) * 3; fueCount++ }
+  if (level >= 16) { flat += (Math.min(level, 20) - 15) * 2; fueCount++ }
+  if (level >= 21) flat += level - 20
+  return flat + fueCount * fuerza
+}
+
+// ── Attribute point allowance per level ──────────────────────────────────────
+// Starting pool: 12 points. +1 at levels 3, 6, 9, 12, 15, 18 (table p.29)
+function getPuntosAtributoEsperados(level: number): number {
+  let total = 12
+  for (const hito of [3, 6, 9, 12, 15, 18]) {
+    if (level >= hito) total += 1
+  }
+  return total
+}
+
 const ATTR_MAP: Record<string, string> = {
   VEL: 'velocidad', FUE: 'fuerza', INT: 'intelecto',
   VOL: 'voluntad', PRE: 'presencia', DIS: 'discernimiento',
@@ -163,7 +185,7 @@ const BACKGROUND_FIELDS = [
   ['apariencia', 'Apariencia'], ['notas', 'Notas'],
 ]
 
-type Tab = 'stats' | 'background'
+type Tab = 'caracteristicas' | 'atributos' | 'background'
 
 export function CharacterDetailPage() {
   const { campaignId, characterId } = useParams<{ campaignId: string; characterId: string }>()
@@ -174,7 +196,7 @@ export function CharacterDetailPage() {
   const { user: currentUser } = useAuthStore()
   const [editing, setEditing] = useState(!!(location.state as any)?.editing)
   const [form, setForm] = useState<Character | null>(null)
-  const [tab, setTab] = useState<Tab>('stats')
+  const [tab, setTab] = useState<Tab>('caracteristicas')
   const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | null>(null)
   const [enCombate, setEnCombate] = useState(false)
 
@@ -220,7 +242,8 @@ export function CharacterDetailPage() {
   const radiantOrder = RADIANT_ORDERS.find((o) => o.id === f.caminoRadiante)
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'stats', label: 'Stats' },
+    { key: 'caracteristicas', label: 'Características' },
+    { key: 'atributos', label: 'Atributos' },
     { key: 'background', label: 'Trasfondo' },
   ]
 
@@ -350,27 +373,20 @@ export function CharacterDetailPage() {
           background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: '12px 14px',
           border: '1px solid rgba(255,255,255,0.1)',
         }}>
-          {editing ? (
-            <div style={{ display: 'flex', flex: 1, gap: 10, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 70 }}>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', marginBottom: 4, fontWeight: 600 }}>HP Máx</div>
-                <Input
-                  type="number" min={0}
-                  value={form?.maxHealth ?? 0}
-                  onChange={set('maxHealth')}
-                  style={{ padding: '4px 8px', fontSize: 13, textAlign: 'center' }}
-                />
+          {(() => {
+            // Salud calculada client-side (nivel + fuerza). f.salud?.total es el valor
+            // del servidor — mantenido por ahora pero deprecado; usar getSaludMaxima().
+            const saludTotal = getSaludMaxima(f.level ?? 1, f.fuerza ?? 0)
+            return (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Heart size={14} style={{ color: '#fb7185', flexShrink: 0 }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>SALUD MÁX</span>
+                <span style={{ marginLeft: 'auto', fontSize: 20, fontWeight: 800, color: 'white', fontVariantNumeric: 'tabular-nums' }}>
+                  {saludTotal}
+                </span>
               </div>
-            </div>
-          ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Heart size={14} style={{ color: '#fb7185', flexShrink: 0 }} />
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>SALUD</span>
-              <span style={{ marginLeft: 'auto', fontSize: 20, fontWeight: 800, color: 'white', fontVariantNumeric: 'tabular-nums' }}>
-                {f.salud?.total ?? f.maxHealth}
-              </span>
-            </div>
-          )}
+            )
+          })()}
         </div>
       </div>
 
@@ -402,8 +418,8 @@ export function CharacterDetailPage() {
       {/* ── Tab content ──────────────────────────────── */}
       <div style={{ padding: '20px 16px 48px' }}>
 
-        {/* STATS TAB */}
-        {tab === 'stats' && (
+        {/* CARACTERÍSTICAS TAB */}
+        {tab === 'caracteristicas' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Combat toggle + Forma toggle */}
@@ -704,6 +720,81 @@ export function CharacterDetailPage() {
                     </div>
                     <div style={{ fontSize: disEff >= 9 ? 12 : 18, fontWeight: 800, color: '#38bdf8', lineHeight: 1 }}>{alcance}</div>
                     <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 4 }}>DIS {disEff}{disEff !== dis ? <span style={{ color: CANTOR_COLOR }}> (+{formaBonus.discernimiento})</span> : null}</div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ── Defensas ─────────────────────────────────────────────── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              {SECTIONS.map((section) => {
+                const defStat = (f as any)[section.defKey] as { total: number; lineas: { concepto: string; valor: number }[]; situacional: { concepto: string; valor: number; descripcionCondicion?: string }[] } | undefined
+                const defValue = defStat?.total ?? 0
+                return (
+                  <div key={section.key} style={{
+                    background: 'var(--surface-1)', border: `1px solid ${section.colorBorder}`,
+                    borderRadius: 14, padding: '12px 14px',
+                  }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: section.color, letterSpacing: '0.06em' }}>
+                        DEF. {section.label.toUpperCase()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: section.color, lineHeight: 1 }}>{defValue}</div>
+                    {defStat && defStat.lineas.length > 0 && (
+                      <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 5, lineHeight: 1.3 }}>
+                        {defStat.lineas.map((l) => `${l.valor} (${l.concepto})`).join(' + ')}
+                      </div>
+                    )}
+                    {defStat && defStat.situacional.length > 0 && (
+                      <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px solid ${section.colorBorder}` }}>
+                        {defStat.situacional.map((s, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginTop: i > 0 ? 2 : 0 }}>
+                            <span style={{ fontSize: 9, color: 'var(--text-subtle)' }}>{s.concepto}</span>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: section.color }}>{s.valor >= 0 ? '+' : ''}{s.valor}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+          </div>
+        )}
+
+        {/* ATRIBUTOS TAB */}
+        {tab === 'atributos' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* ── Warning: puntos de atributo ──────────────────────────── */}
+            {(() => {
+              // Sum of raw attribute values (forma bonuses are temporary, excluded)
+              const totalAttr = (f.fuerza ?? 0) + (f.velocidad ?? 0) + (f.intelecto ?? 0)
+                + (f.voluntad ?? 0) + (f.discernimiento ?? 0) + (f.presencia ?? 0)
+              const esperados = getPuntosAtributoEsperados(f.level ?? 1)
+              const diff = totalAttr - esperados
+              if (diff === 0) return null
+
+              const exceso = diff > 0
+              return (
+                <div style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  background: exceso ? 'rgba(251,191,36,0.08)' : 'rgba(96,165,250,0.08)',
+                  border: `1px solid ${exceso ? 'rgba(251,191,36,0.35)' : 'rgba(96,165,250,0.35)'}`,
+                  borderRadius: 12, padding: '10px 14px', marginBottom: 4,
+                }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{exceso ? '⚠️' : 'ℹ️'}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: exceso ? '#fbbf24' : '#60a5fa', marginBottom: 2 }}>
+                      {exceso ? 'Exceso de puntos de atributo' : 'Puntos de atributo por asignar'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>
+                      {exceso
+                        ? `${totalAttr} puntos asignados, pero a nivel ${f.level} corresponden ${esperados}. Retira ${diff} punto${diff > 1 ? 's' : ''}.`
+                        : `${totalAttr} puntos asignados de ${esperados} disponibles a nivel ${f.level}. Quedan ${-diff} punto${-diff > 1 ? 's' : ''} por repartir.`}
+                    </div>
                   </div>
                 </div>
               )

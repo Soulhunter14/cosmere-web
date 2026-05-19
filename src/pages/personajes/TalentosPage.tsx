@@ -9,7 +9,19 @@ import { Spinner } from '../../components/ui'
 import type { Character } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
+import { FORMA_ACTIVA_PREFIX } from '../../data/cantores'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+
+// ── Talent allowance per level ────────────────────────────────────────────────
+function getTalentosPermitidos(level: number, ascendencia: string): number {
+  let total = Math.min(level, 20)
+  if (level > 20) total += level - 20
+  total += ascendencia === 'Oyente' ? 2 : 1
+  for (const hito of [6, 11, 16, 21]) {
+    if (level >= hito) total += 1
+  }
+  return total
+}
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#7c3aed,#6366f1)',
@@ -26,6 +38,16 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
   const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
   const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
   const selected: string[] = (() => { try { return JSON.parse(character.talentos || '[]') } catch { return [] } })()
+
+  // Talent excess
+  const talentosLibres = new Set<string>([
+    ...(path ? [path.mainTalent] : []),
+    ...(order?.talentos.map((t) => t.name) ?? []),
+    ...(order?.surges ?? []),
+  ])
+  const counted = selected.filter((t) => !t.startsWith(FORMA_ACTIVA_PREFIX) && !talentosLibres.has(t))
+  const permitidos = getTalentosPermitidos(character.level, character.ascendencia)
+  const exceso = counted.length - permitidos
 
   return (
     <div
@@ -64,9 +86,23 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
             </span>
           )}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
-          {selected.length} talento{selected.length !== 1 ? 's' : ''}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
+            {selected.length} talento{selected.length !== 1 ? 's' : ''}
+          </span>
+          {exceso > 0 && (
+            <span
+              title={`${counted.length} talentos contabilizados, máximo ${permitidos} a nivel ${character.level}`}
+              style={{
+                fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
+                background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)',
+                color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: 3,
+              }}
+            >
+              ⚠️ +{exceso} talento{exceso > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
       </div>
       <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
     </div>

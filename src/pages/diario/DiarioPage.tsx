@@ -1,10 +1,14 @@
 import { useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { SESSIONS, type Session, type MentionType } from '../../data/sessions'
+import { diaryApi } from '../../api/diary'
+import { Spinner } from '../../components/ui'
+import type { DiaryEntry, DiaryMentionType } from '../../types'
 
 // ── Mention colours ────────────────────────────────────────────────────────
 
-const MENTION_STYLE: Record<MentionType, { color: string; bg: string; border: string }> = {
+const MENTION_STYLE: Record<DiaryMentionType, { color: string; bg: string; border: string }> = {
   pj:      { color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)' },
   npc:     { color: '#fb923c', bg: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.3)'  },
   spren:   { color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)'  },
@@ -15,13 +19,11 @@ const MENTION_STYLE: Record<MentionType, { color: string; bg: string; border: st
 // ── Body renderer ──────────────────────────────────────────────────────────
 
 function renderBody(body: string) {
-  // Split on [[...]] preserving the delimiters
   const parts = body.split(/(\[\[[^\]]+\]\])/g)
 
   return parts.map((part, i) => {
     const match = part.match(/^\[\[([^\]]+)\]\]$/)
     if (!match) {
-      // Plain text — render paragraphs and bullet lists
       return part.split('\n').map((line, j) => {
         if (line.startsWith('- ')) {
           return <li key={`${i}-${j}`} style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginLeft: 4 }}>{line.slice(2)}</li>
@@ -31,10 +33,9 @@ function renderBody(body: string) {
       })
     }
 
-    // Wiki-link
     const raw = match[1].trim()
     const lower = raw.toLowerCase()
-    let type: MentionType = 'unknown'
+    let type: DiaryMentionType = 'unknown'
     let display = raw
 
     if (lower.startsWith('pj -')) { type = 'pj'; display = raw.replace(/^pj\s*-\s*/i, '') }
@@ -59,7 +60,7 @@ function renderBody(body: string) {
 
 // ── Session detail sheet ───────────────────────────────────────────────────
 
-function SessionSheet({ session, onClose }: { session: Session; onClose: () => void }) {
+function SessionSheet({ entry, onClose }: { entry: DiaryEntry; onClose: () => void }) {
   return (
     <>
       <div
@@ -97,22 +98,22 @@ function SessionSheet({ session, onClose }: { session: Session; onClose: () => v
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, fontWeight: 800, color: 'var(--brand-light)', letterSpacing: '-0.02em',
             }}>
-              {String(session.number).padStart(2, '0')}
+              {String(entry.number).padStart(2, '0')}
             </div>
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 3 }}>
-                SESIÓN {session.number}
+                SESIÓN {entry.number}
               </p>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>
-                {session.title}
+                {entry.title}
               </h2>
             </div>
           </div>
 
           {/* Participants */}
-          {session.participants.length > 0 && (
+          {entry.participants.length > 0 && (
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 14 }}>
-              {session.participants.map((p) => (
+              {entry.participants.map((p) => (
                 <span key={p} style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
                   background: MENTION_STYLE.pj.bg, border: `1px solid ${MENTION_STYLE.pj.border}`,
@@ -128,19 +129,19 @@ function SessionSheet({ session, onClose }: { session: Session; onClose: () => v
         {/* Body */}
         <div style={{ padding: '20px 20px 0' }}>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.8 }}>
-            {renderBody(session.body)}
+            {renderBody(entry.body)}
           </p>
         </div>
 
         {/* Mention legend */}
-        {session.mentions.length > 0 && (
+        {entry.mentions.length > 0 && (
           <div style={{ margin: '20px 20px 0', padding: '14px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
               EN ESTA SESIÓN
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(['pj', 'npc', 'spren', 'faction'] as MentionType[]).map((type) => {
-                const items = session.mentions.filter(m => m.type === type)
+              {(['pj', 'npc', 'spren', 'faction'] as DiaryMentionType[]).map((type) => {
+                const items = entry.mentions.filter(m => m.type === type)
                 if (items.length === 0) return null
                 const labels: Record<string, string> = { pj: 'Personajes', npc: 'NPCs', spren: 'Spren', faction: 'Facciones' }
                 const s = MENTION_STYLE[type]
@@ -172,11 +173,10 @@ function SessionSheet({ session, onClose }: { session: Session; onClose: () => v
 
 // ── Session card ───────────────────────────────────────────────────────────
 
-function SessionCard({ session, onClick }: { session: Session; onClick: () => void }) {
+function SessionCard({ entry, onClick }: { entry: DiaryEntry; onClick: () => void }) {
   const [hovered, setHovered] = useState(false)
 
-  // Strip wiki-links from preview for clean display
-  const cleanPreview = session.preview.replace(/\[\[([^\]]+)\]\]/g, (_, raw) => {
+  const cleanPreview = entry.preview.replace(/\[\[([^\]]+)\]\]/g, (_, raw) => {
     return raw.replace(/^(pj|npc|spren|facci[oó]n)\s*-\s*/i, '').trim()
   })
 
@@ -201,18 +201,18 @@ function SessionCard({ session, onClick }: { session: Session; onClick: () => vo
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 12, fontWeight: 800, color: 'var(--brand-light)', letterSpacing: '-0.02em',
       }}>
-        {String(session.number).padStart(2, '0')}
+        {String(entry.number).padStart(2, '0')}
       </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 4 }}>
-          {session.title}
+          {entry.title}
         </div>
 
         {/* Participants */}
-        {session.participants.length > 0 && (
+        {entry.participants.length > 0 && (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
-            {session.participants.slice(0, 5).map((p) => (
+            {entry.participants.slice(0, 5).map((p) => (
               <span key={p} style={{
                 fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20,
                 background: MENTION_STYLE.pj.bg, border: `1px solid ${MENTION_STYLE.pj.border}`,
@@ -221,9 +221,9 @@ function SessionCard({ session, onClick }: { session: Session; onClick: () => vo
                 {p}
               </span>
             ))}
-            {session.participants.length > 5 && (
+            {entry.participants.length > 5 && (
               <span style={{ fontSize: 9, color: 'var(--text-subtle)', alignSelf: 'center' }}>
-                +{session.participants.length - 5}
+                +{entry.participants.length - 5}
               </span>
             )}
           </div>
@@ -246,7 +246,16 @@ function SessionCard({ session, onClick }: { session: Session; onClick: () => vo
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export function DiarioPage() {
-  const [selected, setSelected] = useState<Session | null>(null)
+  const { campaignId } = useParams<{ campaignId: string }>()
+  const cId = Number(campaignId)
+  const [selected, setSelected] = useState<DiaryEntry | null>(null)
+
+  const { data: entries = [], isLoading } = useQuery({
+    queryKey: ['diary', cId],
+    queryFn: () => diaryApi.getAll(cId),
+  })
+
+  if (isLoading) return <Spinner />
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
@@ -254,16 +263,16 @@ export function DiarioPage() {
         Diario de campaña
       </h1>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>
-        {SESSIONS.length} sesiones — Caminapiedras
+        {entries.length} sesión{entries.length !== 1 ? 'es' : ''}
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {SESSIONS.map((s) => (
-          <SessionCard key={s.slug} session={s} onClick={() => setSelected(s)} />
+        {entries.map((e) => (
+          <SessionCard key={e.slug} entry={e} onClick={() => setSelected(e)} />
         ))}
       </div>
 
-      {selected && <SessionSheet session={selected} onClose={() => setSelected(null)} />}
+      {selected && <SessionSheet entry={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

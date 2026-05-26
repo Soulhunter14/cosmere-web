@@ -563,7 +563,7 @@ export function CharacterDetailPage() {
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
 
-                  {/* Concentración — calculada automáticamente */}
+                  {/* Concentración — calculada automáticamente (2 + VOL + talentos) */}
                   <div style={{
                     background: 'var(--surface-1)', border: '1px solid var(--border)',
                     borderRadius: 14, padding: '12px 14px',
@@ -573,39 +573,31 @@ export function CharacterDetailPage() {
                         CONCENTRACIÓN
                       </span>
                     </div>
-                    {editing ? (() => {
-                      const vol = form?.voluntad ?? 0
-                      const bonus = form?.maxConcentration ?? 0
-                      const preview = 2 + vol + bonus + (formaBonus.concentracion ?? 0)
+                    {(() => {
+                      // En edición: preview en tiempo real. En vista: valor del servidor.
+                      // maxConcentration (bonus manual) deprecado — ya no se usa.
+                      const vol = (editing ? form?.voluntad : f.voluntad) ?? 0
+                      const fb  = formaBonus.concentracion ?? 0
+                      const total = editing
+                        ? 2 + vol + fb
+                        : concTotal
+                      const desglose = editing
+                        ? [`2 (Base)`, `${vol} (VOL)`, ...(fb > 0 ? [`${fb} (${formaActiva})`] : [])].join(' + ')
+                        : concDesglose
                       return (
                         <>
-                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginBottom: 4 }}>
-                            2 + VOL {vol}{(formaBonus.concentracion ?? 0) > 0 ? ` + Forma ${formaBonus.concentracion}` : ''}
-                          </div>
-                          <Input type="number" min={0}
-                            value={bonus}
-                            onChange={set('maxConcentration')}
-                            style={{ padding: '4px 6px', fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%' }}
-                          />
-                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 3 }}>bonus</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#fb923c', marginTop: 4 }}>= {preview}</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: '#fb923c', lineHeight: 1 }}>{total}</div>
+                          {desglose && (
+                            <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 5, lineHeight: 1.3 }}>
+                              {desglose}
+                            </div>
+                          )}
                         </>
                       )
-                    })() : (
-                      <>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: '#fb923c', lineHeight: 1 }}>
-                          {concTotal}
-                        </div>
-                        {concDesglose && (
-                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 5, lineHeight: 1.3 }}>
-                            {concDesglose}
-                          </div>
-                        )}
-                      </>
-                    )}
+                    })()}
                   </div>
 
-                  {/* Investidura — auto para Radiantes (2 + max(DIS,PRE) + bonus) */}
+                  {/* Investidura — auto para Radiantes (2 + max(DIS,PRE) + talentos) */}
                   <div style={{
                     background: 'var(--surface-1)', border: '1px solid var(--border)',
                     borderRadius: 14, padding: '12px 14px',
@@ -615,8 +607,9 @@ export function CharacterDetailPage() {
                         INVESTIDURA
                       </span>
                     </div>
-                    {editing ? (() => {
-                      const esRadiante = !!(form?.caminoRadiante)
+                    {(() => {
+                      // maxInvestiture (bonus manual) deprecado — ya no se usa.
+                      const esRadiante = !!((editing ? form?.caminoRadiante : f.caminoRadiante))
                       if (!esRadiante) {
                         return (
                           <div style={{ fontSize: 10, color: 'var(--text-subtle)', lineHeight: 1.4, marginTop: 4 }}>
@@ -624,37 +617,25 @@ export function CharacterDetailPage() {
                           </div>
                         )
                       }
-                      const dis = form?.discernimiento ?? 0
-                      const pre = form?.presencia ?? 0
-                      const maxAtrib = Math.max(dis, pre)
+                      const dis = (editing ? form?.discernimiento : f.discernimiento) ?? 0
+                      const pre = (editing ? form?.presencia      : f.presencia)      ?? 0
+                      const maxAtrib   = Math.max(dis, pre)
                       const atribLabel = dis >= pre ? 'DIS' : 'PRE'
-                      const bonus = form?.maxInvestiture ?? 0
-                      const preview = 2 + maxAtrib + bonus
+                      const total = editing ? 2 + maxAtrib : inv.total
+                      const desglose = editing
+                        ? `2 (Base) + ${maxAtrib} (${atribLabel})`
+                        : invDesglose
                       return (
                         <>
-                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginBottom: 4 }}>
-                            2 + {atribLabel} {maxAtrib}
-                          </div>
-                          <Input type="number" min={0} value={bonus}
-                            onChange={set('maxInvestiture')}
-                            style={{ padding: '4px 6px', fontSize: 14, fontWeight: 700, textAlign: 'center', width: '100%' }}
-                          />
-                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 3 }}>bonus</div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', marginTop: 4 }}>= {preview}</div>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>{total}</div>
+                          {desglose && (
+                            <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 5, lineHeight: 1.3 }}>
+                              {desglose}
+                            </div>
+                          )}
                         </>
                       )
-                    })() : (
-                      <>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>
-                          {inv.total}
-                        </div>
-                        {invDesglose && (
-                          <div style={{ fontSize: 9, color: 'var(--text-subtle)', marginTop: 5, lineHeight: 1.3 }}>
-                            {invDesglose}
-                          </div>
-                        )}
-                      </>
-                    )}
+                    })()}
                   </div>
 
                   {/* Desvío */}

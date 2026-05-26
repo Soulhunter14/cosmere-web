@@ -65,7 +65,9 @@ export interface Character {
   discernimiento: number
   presencia: number
   maxHealth: number
-  maxConcentration: number  // legacy field kept for reference
+  /** @deprecated Bonus manual eliminado. Concentración = 2 + VOL + talentos. */
+  maxConcentration: number
+  /** @deprecated Bonus manual eliminado. Investidura = 2 + max(DIS,PRE) + talentos. */
   maxInvestiture: number
   desvio: number
   // Computed by the rules engine (read-only)
@@ -164,6 +166,29 @@ export interface UpdateMetaRequest {
 export interface ConcludeMetaRequest {
   tipoConclusion: 'exito' | 'crecimiento' | 'fracaso'
   notasConclusion: string
+}
+
+// Diary
+export type DiaryMentionType = 'pj' | 'npc' | 'spren' | 'faction' | 'unknown'
+
+export interface DiaryMention {
+  raw: string
+  display: string
+  type: DiaryMentionType
+}
+
+export interface DiaryEntry {
+  id: number
+  campaignId: number
+  number: number
+  title: string
+  slug: string
+  preview: string
+  body: string
+  participants: string[]
+  mentions: DiaryMention[]
+  createdAt: string
+  updatedAt: string
 }
 
 // NPC Notes (player personal notes about NPCs they encounter)

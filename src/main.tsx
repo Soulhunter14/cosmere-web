@@ -9,11 +9,5 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Register service worker for PWA installability
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // SW registration failed — app still works normally
-    })
-  })
-}
+// Service Worker registrado automáticamente por vite-plugin-pwa (registerType: 'autoUpdate')
+// Al detectar una nueva versión, se activa en cuanto el usuario recarga o reabre la app.

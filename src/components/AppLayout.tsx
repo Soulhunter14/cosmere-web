@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Outlet, useParams } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
+import { DiceRoller } from './DiceRoller'
 import { useCampaignStore } from '../store/campaignStore'
 import { campaignsApi } from '../api/campaigns'
 
@@ -26,6 +27,7 @@ export function AppLayout() {
       <main className="app-main flex-1 overflow-auto min-w-0">
         <Outlet />
       </main>
+      <DiceRoller />
     </div>
   )
 }

@@ -1,915 +1,341 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
-import { useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Check, Lock, Plus, Zap, Music, ChevronRight, TriangleAlert, CircleX, Sparkles } from 'lucide-react'
+/**
+ * Talentos de un personaje (routes personajes/talentos/:characterId and gm/talentos/:characterId).
+ *
+ * One page, two modes in a sticky bar: ÁRBOL (plan with a global view of every tree: heroic path(s),
+ * radiant order, singer, plus the other heroic paths to explore) and MIS TALENTOS (reread what you have).
+ * Rules live in lib/talentGraph.ts; the map geometry in components/talentos/talentMap.ts.
+ * Stored format is unchanged: Character.talentos = JSON array of names (+ the ~forma~ marker).
+ * The planning goal, open láminas, the mode and the DJ confirmations are local (localStorage).
+ */
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown, ChevronRight, Compass, Info, Music, Sparkles, Target, TriangleAlert, X } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { Button, ConfirmDialog, EmptyState, SectionTitle, Sheet, Spinner, TabPanel, Tabs, type TabItem } from '../../components/ui'
+import { Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, IconButton, Segmented, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
-import type { HeroicPathTalento } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { POTENCIAS } from '../../data/potencias'
-import type { Talento } from '../../data/potencias'
-import {
-  ARBOL_CANTOR, CANTOR_COLOR, CAMBIAR_DE_FORMA, FORMA_ACTIVA_PREFIX,
-  getFormaActiva, withFormaActiva, getFormasDisponibles,
-} from '../../data/cantores'
-import type { FormaCantor } from '../../data/cantores'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { TalentActivation } from '../../components/TalentActivation'
-import type { ActivationType } from '../../components/TalentActivation'
+import { CANTOR_COLOR, getFormasDisponibles, withFormaActiva } from '../../data/cantores'
 import { CharacterHero } from '../../components/CharacterHero'
-import { HeroicPathIcon, SurgeIcon } from '../../components/GameIcons'
+import { HeroicPathIcon } from '../../components/GameIcons'
+import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { TalentActivation, type ActivationType } from '../../components/TalentActivation'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
-import { c, eyebrow, font, fs, ink, pill, radius, shadow, tint, titleText, tone } from '../../theme'
+import { useAuthStore } from '../../store/authStore'
+import { useCampaignStore } from '../../store/campaignStore'
+import { c, eyebrow, font, fs, radius, titleText, tone } from '../../theme'
+import {
+  buildTalentGraph, cascadeRemove, cheapestRoute, evaluate, graphOptionsFromCharacter, parseStoredTalentos,
+  splitStoredTalentos, talentBudget, talentStateFromCharacter, withTalent,
+  type CascadeResult, type Gate, type TalentEvaluation, type TalentGraph,
+} from '../../lib/talentGraph'
+import { PathAtlas } from '../../components/talentos/PathAtlas'
+import { TalentSheet } from '../../components/talentos/TalentSheet'
+import { FormaPickerSheet } from '../../components/talentos/FormaPicker'
+import { MyTalents } from '../../components/talentos/MyTalents'
+import { BudgetSheet } from '../../components/talentos/BudgetSheet'
+import { CellMarkView, IdealGlyph } from '../../components/talentos/MapPieces'
+import { WIDE_MIN, buildPathModels, cellDomId, plural, type EdgeStatusFn } from '../../components/talentos/talentMap'
+import { accentOf, readStore, useContentWidth, usePrefersReducedMotion, writeStore } from '../../components/talentos/talentStyle'
 
-// ── Skill map ─────────────────────────────────────────────────────────────
+type Mode = 'arbol' | 'releer'
+interface Goal { nodeId: string; choices: Record<string, string> }
 
-const SKILL_NAME_MAP: Record<string, string> = {
-  'Agilidad': 'agilidad', 'Armas Ligeras': 'armasLigeras', 'Armas Pesadas': 'armasPesadas',
-  'Atletismo': 'atletismo', 'Hurto': 'hurto', 'Sigilo': 'sigilo',
-  'Deducción': 'deduccion', 'Disciplina': 'disciplina', 'Intimidación': 'intimidacion',
-  'Manufactura': 'manufactura', 'Medicina': 'medicina', 'Conocimiento': 'conocimiento',
-  'Saber': 'conocimiento', 'Engaño': 'engano', 'Liderazgo': 'liderazgo',
-  'Percepción': 'percepcion', 'Perspicacia': 'perspicacia',
-  'Persuasión': 'persuasion', 'Supervivencia': 'supervivencia',
-}
+const isMode = (v: unknown): v is Mode => v === 'arbol' || v === 'releer'
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string')
+const isGoal = (v: unknown): v is Goal =>
+  !!v && typeof v === 'object' && typeof (v as Goal).nodeId === 'string' &&
+  !!(v as Goal).choices && typeof (v as Goal).choices === 'object'
 
-// ── checkPrereq ───────────────────────────────────────────────────────────
-
-function checkPrereq(
-  prereq: string | undefined,
-  char: Character,
-  selected: string[],
-  heroicMainTalent: string | undefined,
-  radiantMainTalent: string | undefined,
-): { met: boolean; missing: string[] } {
-  if (!prereq) return { met: true, missing: [] }
-  // Dynamic field access (skills and habilidadPersonalizada1..6) by name
-  const fields = char as unknown as Record<string, unknown>
-  const missing: string[] = []
-  const andClauses = prereq.split(/[,;]/).map((s) => s.trim()).filter(Boolean)
-  for (const clause of andClauses) {
-    const masked = clause.replace(/(\d+) o más/g, '$1__GTE__')
-    const orParts = masked.split(/ [ou] /).map((s) => s.trim().replace(/__GTE__/g, ' o más'))
-    const clauseMet = orParts.some((part) => {
-      if (part.startsWith('tener ')) return true
-      const mainMatch = part.match(/^talento principal (.+)$/)
-      if (mainMatch) {
-        const n = mainMatch[1]
-        return heroicMainTalent === n || radiantMainTalent === n || selected.includes(n)
-      }
-      const talentMatch = part.match(/^talento (.+)$/)
-      if (talentMatch) return selected.includes(talentMatch[1])
-      const skillMatch = part.match(/^(.+?) (\d+) o más$/)
-      if (skillMatch) {
-        const skillName = skillMatch[1]
-        const minVal = parseInt(skillMatch[2])
-        if (skillName === 'nivel') return (char.level ?? 0) >= minVal
-        const key = SKILL_NAME_MAP[skillName]
-        if (key) return Number(fields[key] ?? 0) >= minVal
-        for (let i = 1; i <= 6; i++) {
-          if (fields[`habilidadPersonalizada${i}`] === skillName)
-            return Number(fields[`habilidadPersonalizada${i}Valor`] ?? 0) >= minVal
-        }
-        return false
-      }
-      return selected.includes(part)
-    })
-    if (!clauseMet) missing.push(clause)
-  }
-  return { met: missing.length === 0, missing }
-}
-
-// ── Node types ────────────────────────────────────────────────────────────
-
-interface TNode {
-  name: string
-  activation: ActivationType | null
-  description: string
-  prereq?: string
-  source: string
-  children: TNode[]
-}
-
-type DrawerNode = TNode & {
-  state: 'selected' | 'available' | 'locked'
-  missing: string[]
-  color: string
-  isAutoAdded: boolean
-  cantorFormas?: FormaCantor[]   // formas que desbloquea este talento de cantor
-  isFormaPicker?: boolean        // modo especial: picker de forma activa
-}
-
-// ── Tree builders ─────────────────────────────────────────────────────────
-
-/**
- * Finds the best single parent for a node via longest-match on the prereq string.
- *
- * For OR-prereqs like "talento A o talento B" we still pick the longest-matching
- * talent name (A in this case) and let the card's prereq text communicate the
- * alternative path. This keeps OR-prereq nodes at the correct depth in the tree
- * rather than floating them up to root level.
- */
-function resolveParent(prereq: string | undefined, fallback: string, names: string[]): string {
-  if (!prereq) return fallback
-  let best = ''
-  for (const n of names) {
-    if (prereq.includes(n) && n.length > best.length) best = n
-  }
-  return best || fallback
-}
-
-function buildSpecialtyNodes(
-  talentos: readonly HeroicPathTalento[],
-  mainTalentName: string,
-  source: string,
-): TNode[] {
-  const names = talentos.map((t) => t.name)
-  const nodeMap = new Map<string, TNode>()
-  for (const t of talentos)
-    nodeMap.set(t.name, { name: t.name, activation: t.activation, description: t.description, prereq: t.prerequisites, source, children: [] })
-  const roots: TNode[] = []
-  for (const t of talentos) {
-    const parentName = resolveParent(t.prerequisites, mainTalentName, names)
-    const node = nodeMap.get(t.name)!
-    if (parentName === mainTalentName || !nodeMap.has(parentName)) roots.push(node)
-    else nodeMap.get(parentName)!.children.push(node)
-  }
-  return roots
-}
-
-function buildOrderNodes(talentos: readonly Talento[], source: string): TNode[] {
-  if (!talentos.length) return []
-  const names = talentos.map((t) => t.name)
-  const nodeMap = new Map<string, TNode>()
-  for (const t of talentos)
-    nodeMap.set(t.name, { name: t.name, activation: t.cost, description: t.description, prereq: t.prereq, source, children: [] })
-  const root = nodeMap.get(talentos[0].name)!
-  for (const t of talentos.slice(1)) {
-    const parentName = resolveParent(t.prereq, talentos[0].name, names)
-    const parentNode = nodeMap.get(parentName) ?? root
-    parentNode.children.push(nodeMap.get(t.name)!)
-  }
-  return [root]
-}
-
-function buildPotenciaChildren(talentos: readonly Talento[], potenciaName: string, source: string): TNode[] {
-  if (!talentos.length) return []
-  const names = talentos.map((t) => t.name)
-  const nodeMap = new Map<string, TNode>()
-  for (const t of talentos)
-    nodeMap.set(t.name, { name: t.name, activation: t.cost, description: t.description, prereq: t.prereq, source, children: [] })
-  const roots: TNode[] = []
-  for (const t of talentos) {
-    const parentName = resolveParent(t.prereq, potenciaName, names)
-    const node = nodeMap.get(t.name)!
-    if (parentName === potenciaName || !nodeMap.has(parentName)) roots.push(node)
-    else nodeMap.get(parentName)!.children.push(node)
-  }
-  return roots
-}
-
-// ── Cantor tree builder ───────────────────────────────────────────────────
-//
-// Árbol fijo (no auto-generado) porque la topología está bien definida:
-//
-//              Cambiar de forma
-//    ┌──────────────┼───────────────┐
-// delicadeza   determinación   sabiduría
-//                   │
-//           Mente ambiciosa
-//        ┌──────────┼──────────┐
-//    destrucción  expansión  misterio
-
-function buildCantorTNodes(): TNode[] {
-  const byName = new Map(ARBOL_CANTOR.map((t) => [t.nombre, t]))
-
-  const makeNode = (nombre: string, children: TNode[] = []): TNode => {
-    const t = byName.get(nombre)!
-    return {
-      name: t.nombre,
-      activation: t.activacion ? (t.activacion as ActivationType) : null,
-      description: t.descripcion,
-      prereq: t.prereq,
-      source: 'Cantor',
-      children,
-    }
-  }
-
-  const poderNodes = ['Formas de destrucción', 'Formas de expansión', 'Formas de misterio'].map((n) => makeNode(n))
-  const menteAmbiciosa = makeNode('Mente ambiciosa', poderNodes)
-  const formasDet = makeNode('Formas de determinación', [menteAmbiciosa])
-
-  return [
-    makeNode(CAMBIAR_DE_FORMA, [
-      makeNode('Formas de delicadeza'),
-      formasDet,
-      makeNode('Formas de sabiduría'),
-    ]),
-  ]
-}
-
-// ── Talentos permitidos por nivel (Manual del Jugador, Cap. 1) ───────────
-//
-// Tabla Progreso de los personajes:
-//   • 1 talento de camino por nivel (niveles 1–20)
-//   • Ascendencia inicial: Oyente = 2 (Cambiar de forma + forma inicial), Humano = 1 extra
-//   • Talentos de ascendencia extra en niveles 6, 11, 16 y 21
-//
-function getTalentosPermitidos(level: number, ascendencia: string): number {
-  let total = Math.min(level, 20) // 1 talento de camino por nivel hasta 20
-  if (level > 20) total += level - 20 // nivel 21+ también da talentos (simplificación conservadora)
-  // Ascendencia inicial
-  total += ascendencia === 'Oyente' ? 2 : 1
-  // Bonus de ascendencia en hitos de rango
-  for (const hito of [6, 11, 16, 21]) {
-    if (level >= hito) total += 1
-  }
-  return total
-}
-
-// ── Theme-aware accent from a data colour (heroic path, radiant order, cantor) ──
-// ink() clamps the data colour to a readable lightness per theme; every tint derives from it,
-// so borders and washes stay visible on paper and on ink.
-
-interface Accent {
-  /** text / icon colour: ink() nudged towards --text so it stays AA even on its own tinted wash */
-  fg: string
-  /** the clamped data colour itself (base for tints) */
-  ink: string
-  /** solid wash of the accent over a surface */
-  wash: (pct: number, base?: string) => string
-  /** tree connector lines */
-  line: string
-  /** outline of a learnable node / tinted card */
-  border: string
-  /** outline of a learned node */
-  borderStrong: string
-}
-
-function accentOf(color: string): Accent {
-  const base = ink(color)
-  return {
-    fg: `color-mix(in oklab, ${base} 78%, var(--text))`,
-    ink: base,
-    wash: (pct, surface = c.s1) => `color-mix(in srgb, ${base} ${pct}%, ${surface})`,
-    line: tint(base, 38),
-    border: tint(base, 48),
-    borderStrong: tint(base, 62),
-  }
-}
-
-/** Pill in an accent colour (text AA on its own tint) */
-const accentPill = (a: Accent): CSSProperties => ({
-  ...pill({ fg: a.fg, bg: tint(a.ink, 10), border: tint(a.ink, 32) }),
-  fontSize: fs.eyebrow,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-})
-
-type SectionKey = 'heroico' | 'radiante' | 'cantor'
-const TAB_PREFIX = 'talentos'
-
-/* Text on the CharacterHero gradient (see components/CharacterHero.tsx: ≥ 7:1 on every palette) */
-const HERO_TEXT = onGem
-const HERO_TEXT_SOFT = onGemSoft
 /** 0 below 640px, `px` from 640px (inline styles cannot use media queries) */
 const fromTablet = (px: number) => `clamp(0px, calc((100vw - 640px) * 999), ${px}px)`
-
-// ── Local presentational pieces ───────────────────────────────────────────
-
-/** Horizontal scroller for a talent tree: bleeds to the page gutter so wide trees scroll edge to edge.
- *  position:relative makes it the containing block of the absolutely positioned .sr-only labels inside the
- *  cards; without it they escape the clip and widen the whole page on phones.
- *  `center`: single-root pyramids start scrolled to the middle so the root card is fully visible.
- *  The edges fade out only on the side where more of the tree is hidden, as a scroll hint
- *  (the mask uses an opaque token: only its alpha matters). */
-const FADE = 28
-function TreeScroll({ children, center = false }: { children: ReactNode; center?: boolean }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [edges, setEdges] = useState({ left: false, right: false })
-  const measure = useCallback(() => {
-    const el = ref.current
-    if (!el) return
-    const left = el.scrollLeft > 2
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
-    setEdges((p) => (p.left === left && p.right === right ? p : { left, right }))
-  }, [])
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (center && el && el.scrollWidth > el.clientWidth) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2
-    measure()
-  }, [center, measure])
-  useEffect(() => {
-    const el = ref.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [measure])
-  const mask = edges.left || edges.right
-    ? `linear-gradient(90deg, ${edges.left ? 'transparent' : 'var(--text)'} 0, var(--text) ${edges.left ? FADE : 0}px, var(--text) calc(100% - ${edges.right ? FADE : 0}px), ${edges.right ? 'transparent' : 'var(--text)'} 100%)`
-    : undefined
-  return (
-    <div
-      ref={ref}
-      onScroll={measure}
-      style={{
-        position: 'relative', overflowX: 'auto', WebkitOverflowScrolling: 'touch',
-        margin: '0 -16px', padding: '4px 16px 12px',
-        WebkitMaskImage: mask, maskImage: mask,
-      }}
-    >
-      <div style={{ minWidth: 'max-content' }}>{children}</div>
-    </div>
-  )
-}
-
-/** "Forma de poder" marker (vacíospren): icon + text for assistive tech when no visible note explains it */
-function PoderMark({ size = 14, announce }: { size?: number; announce: boolean }) {
-  return (
-    <span title="Forma de poder" style={{ display: 'inline-flex', color: tone.heliodoro.fg, flexShrink: 0 }}>
-      <Zap size={size} aria-hidden />
-      {announce && <span className="sr-only">Forma de poder</span>}
-    </span>
-  )
-}
-
-/** Singer form card used in the picker and in the talent drawer */
-function FormaCard({
-  forma,
-  isActive,
-  accent,
-  onActivate,
-  showPoderNote,
-  showAcciones,
-}: {
-  forma: FormaCantor
-  isActive: boolean
-  accent: Accent
-  onActivate?: () => void
-  showPoderNote: boolean
-  showAcciones: boolean
-}) {
-  return (
-    <li
-      style={{
-        listStyle: 'none',
-        borderRadius: radius.md,
-        border: isActive ? `1.5px solid ${accent.borderStrong}` : `1px solid ${c.border}`,
-        background: isActive ? accent.wash(8, c.s2) : c.s2,
-        padding: '12px 16px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-          {forma.esPoder && <PoderMark announce={!showPoderNote} />}
-          <span style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 650, lineHeight: 1.2, color: isActive ? accent.fg : c.text }}>
-            {forma.nombre}
-          </span>
-          {isActive && (
-            <span style={{ ...eyebrow, color: accent.fg, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <Check size={13} aria-hidden strokeWidth={2.5} />
-              Activa
-            </span>
-          )}
-        </div>
-        {onActivate && (
-          <Button variant="secondary" size="md" onClick={onActivate} aria-label={`Activar forma ${forma.nombre}`} style={{ flexShrink: 0 }}>
-            Activar
-          </Button>
-        )}
-      </div>
-      <p style={{ fontSize: fs.sm, color: accent.fg, marginTop: 4 }}>{forma.spren}</p>
-      <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 4, lineHeight: 1.5 }}>{forma.bonos}</p>
-      {showPoderNote && forma.esPoder && (
-        <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.sm, color: tone.heliodoro.fg, marginTop: 6, fontStyle: 'italic' }}>
-          <TriangleAlert size={14} aria-hidden style={{ marginTop: 2 }} />
-          Vacíospren — influencia de Odium
-        </p>
-      )}
-      {showAcciones && forma.accionesEspeciales?.map((a) => (
-        <p key={a} style={{ fontSize: fs.sm, color: tone.heliodoro.fg, marginTop: 4, lineHeight: 1.45 }}>{a}</p>
-      ))}
-    </li>
-  )
-}
-
-// ── Component ─────────────────────────────────────────────────────────────
 
 export function TalentosDetailPage() {
   const { campaignId, characterId } = useParams<{ campaignId: string; characterId: string }>()
   const cId = Number(campaignId)
   const charId = Number(characterId)
-  const qc = useQueryClient()
-  const [drawerNode, setDrawerNode] = useState<DrawerNode | null>(null)
-  const [activeTab, setActiveTab] = useState<SectionKey>('heroico')
-  // "Olvidar" asks for confirmation first: it can also remove the talents that depend on this one
-  const [forgetConfirm, setForgetConfirm] = useState<{ name: string; afterRemove: string[]; alsoRemoved: string[] } | null>(null)
-
-  const { data: character, isLoading } = useQuery<Character>({
+  const { data: character, isLoading, isError } = useQuery<Character>({
     queryKey: ['character', cId, charId],
     queryFn: () => charactersApi.getById(cId, charId),
   })
-
-  const talentosMutation = useMutation({
-    mutationFn: (names: string[]) =>
-      charactersApi.update(cId, charId, { ...(character as UpdateCharacterRequest), talentos: JSON.stringify(names) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, charId] }),
-  })
-
   // Loading keeps a (visually hidden) h1 so the page is never headless, as in CharacterDetailPage
-  if (isLoading || !character) return <><h1 className="sr-only">Talentos</h1><Spinner /></>
-
-  const heroicPath = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const radiantOrder = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-  const isCantor = character.ascendencia === 'Oyente'
-
-  // Para cantores, "Cambiar de forma" se adquiere automáticamente por ascendencia.
-  // Lo inyectamos localmente si aún no está guardado (se guardará al adquirir otro talento).
-  const rawTalentos: string[] = (() => {
-    try { return JSON.parse(character.talentos || '[]') } catch { return [] }
-  })()
-  const selectedTalentos: string[] =
-    isCantor && !rawTalentos.includes(CAMBIAR_DE_FORMA)
-      ? [CAMBIAR_DE_FORMA, ...rawTalentos]
-      : rawTalentos
-
-  const autoAdded = new Set<string>([
-    ...(heroicPath ? [heroicPath.mainTalent] : []),
-    ...(radiantOrder ? [radiantOrder.talentos[0]?.name] : []),
-    ...(radiantOrder?.surges ?? []),
-    ...(isCantor ? [CAMBIAR_DE_FORMA] : []),
-  ])
-
-  const heroicMainTalent = heroicPath?.mainTalent
-  const radiantMainTalent = radiantOrder?.talentos[0]?.name
-
-  const allPrereqs = new Map<string, string | undefined>()
-  if (heroicPath)
-    for (const spec of heroicPath.specialties)
-      for (const t of spec.talentos)
-        allPrereqs.set(t.name, t.prerequisites)
-  if (radiantOrder) {
-    for (const t of radiantOrder.talentos) allPrereqs.set(t.name, t.prereq)
-    for (const surge of radiantOrder.surges) {
-      const pot = POTENCIAS.find((p) => p.name === surge)
-      if (pot) for (const t of pot.talentos) allPrereqs.set(t.name, t.prereq)
-    }
-  }
-  if (isCantor)
-    for (const t of ARBOL_CANTOR) allPrereqs.set(t.nombre, t.prereq)
-
-  function computeCascadeRemove(name: string): string[] {
-    let result = selectedTalentos.filter((n) => n !== name)
-    let changed = true
-    while (changed) {
-      changed = false
-      const next = result.filter((n) => {
-        if (autoAdded.has(n)) return true
-        const prereq = allPrereqs.get(n)
-        if (!prereq) return true
-        const { met } = checkPrereq(prereq, character!, result, heroicMainTalent, radiantMainTalent)
-        return met
-      })
-      if (next.length !== result.length) { result = next; changed = true }
-    }
-    return result
-  }
-
-  function toDrawerNode(node: TNode, color: string): DrawerNode {
-    const isSelected = selectedTalentos.includes(node.name)
-    const { met, missing } = isSelected
-      ? { met: true, missing: [] }
-      : checkPrereq(node.prereq, character!, selectedTalentos, heroicMainTalent, radiantMainTalent)
-    const state: 'selected' | 'available' | 'locked' = isSelected ? 'selected' : met ? 'available' : 'locked'
-    const cantorTalento = ARBOL_CANTOR.find((t) => t.nombre === node.name)
-    const cantorFormas = cantorTalento?.formas.length ? cantorTalento.formas : undefined
-    return { ...node, state, missing, color, isAutoAdded: autoAdded.has(node.name), cantorFormas }
-  }
-
-  // ── Sections and tabs ───────────────────────────────────────────────────
-  // The visible section falls back to the first available one, so a character without a heroic
-  // path (radiant + cantor) never lands on an empty panel with no selected tab.
-
-  const sections: TabItem<SectionKey>[] = [
-    ...(heroicPath ? [{
-      id: 'heroico' as const,
-      label: <><span className="hide-mobile" style={{ lineHeight: 0 }}><HeroicPathIcon id={heroicPath.id} size={16} /></span>{heroicPath.name}</>,
-    }] : []),
-    ...(radiantOrder ? [{
-      id: 'radiante' as const,
-      label: <><span className="hide-mobile" style={{ lineHeight: 0 }}><RadiantOrderIcon orderId={radiantOrder.id} size={18} decorative /></span>{radiantOrder.name}</>,
-    }] : []),
-    ...(isCantor ? [{
-      id: 'cantor' as const,
-      label: <><span className="hide-mobile" style={{ lineHeight: 0 }}><Music size={15} aria-hidden /></span>Cantor</>,
-    }] : []),
-  ]
-  const showTabs = sections.length >= 2
-  const currentTab: SectionKey | undefined = sections.some((s) => s.id === activeTab) ? activeTab : sections[0]?.id
-
-  const panel = (id: SectionKey, content: ReactNode) =>
-    showTabs ? <TabPanel key={id} idPrefix={TAB_PREFIX} id={id}>{content}</TabPanel> : <div key={id}>{content}</div>
-
-  // ── Section header (book style: small caps + gold rule) ─────────────────
-
-  function renderSectionHeader(label: ReactNode, icon?: ReactNode, topSpacing = 32) {
+  if (isLoading || !character) {
     return (
-      <SectionTitle style={{ marginTop: topSpacing, marginBottom: 12 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          {icon}
-          {label}
-        </span>
-      </SectionTitle>
-    )
-  }
-
-  /** Staggered entrance for each section block */
-  const rise = (i: number) => ({ className: 'rise', style: { '--i': i } as CSSProperties })
-
-  // ── Pyramid tree renderer ───────────────────────────────────────────────
-  //
-  // True top-down org-chart layout. Each node:
-  //   1. Renders its compact card, centered within its allocated column.
-  //   2. Draws a short vertical stem downward.
-  //   3. Spreads children in a horizontal flex row, each child getting flex:1.
-  //
-  // The horizontal bar is drawn using the "half-border" trick — no pseudo-
-  // elements needed, works with inline styles:
-  //
-  //   Each child column renders:
-  //     • left half  of the bar (position:absolute left:0  width:50%)  — unless first child
-  //     • right half of the bar (position:absolute right:0 width:50%) — unless last child
-  //   Adjacent halves from neighbouring children join to form a solid bar that
-  //   goes exactly from center-of-first-child to center-of-last-child.
-  //
-  //          [Parent]
-  //              │           ← vertical stem
-  //      ┌───────┼───────┐   ← left half + right half meeting at each center
-  //      │       │       │   ← vertical drops
-  //  [Child A] [Child B] [Child C]
-  //
-  // OR-prereq nodes (multi-parent) are placed at root level by resolveParent
-  // so their full prereq text is always visible (no false parent implied).
-
-  function renderNode(node: TNode, color: string): ReactElement {
-    const dn = toDrawerNode(node, color)
-    const { state } = dn
-    const a = accentOf(color)
-    const lineColor = a.line
-
-    // State is carried by shape + icon + text, not by colour alone:
-    // learned = solid tinted card + check · learnable = dashed outline · locked = recessed + lock + "Bloqueado"
-    const cardState: CSSProperties =
-      state === 'selected' ? { border: `1.5px solid ${a.borderStrong}`, background: a.wash(12), boxShadow: shadow[1] }
-      : state === 'available' ? { border: `1.5px dashed ${a.border}`, background: c.s1, boxShadow: shadow[1] }
-      : { border: `1px solid ${c.border}`, background: c.s2 }
-
-    const nameColor =
-      state === 'selected' ? a.fg
-      : state === 'available' ? c.text
-      : c.muted
-
-    return (
-      <div key={node.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-
-        {/* ── Compact card ────────────────────────────────────────────── */}
-        <button
-          type="button"
-          aria-haspopup="dialog"
-          onClick={() => setDrawerNode(dn)}
-          className="ui-btn"
-          style={{
-            display: 'inline-flex', flexDirection: 'column', gap: 6,
-            padding: '10px 12px', borderRadius: radius.sm,
-            ...cardState,
-            cursor: 'pointer', textAlign: 'left', color: c.text,
-            minWidth: 100, maxWidth: 185, minHeight: 44,
-          }}
-        >
-          {/* Activation icon + name */}
-          <span style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-            {node.activation && (
-              <span style={{ flexShrink: 0, marginTop: 1 }}>
-                <TalentActivation type={node.activation} compact />
-              </span>
-            )}
-            {state === 'selected' && (
-              <Check size={15} aria-hidden strokeWidth={2.75} style={{ color: a.fg, flexShrink: 0, marginTop: 3 }} />
-            )}
-            <span style={{ fontFamily: font.display, fontSize: fs.md, fontWeight: 650, color: nameColor, lineHeight: 1.2 }}>
-              {node.name}
-              {state === 'selected' && <span className="sr-only">, aprendido</span>}
-              {state === 'available' && <span className="sr-only">, disponible</span>}
-            </span>
-          </span>
-
-          {/* Prereq text — only when NOT acquired */}
-          {state !== 'selected' && node.prereq && (
-            <span style={{ fontSize: fs.xs, fontStyle: 'italic', lineHeight: 1.35, color: state === 'locked' ? c.subtle : c.muted }}>
-              {node.prereq}
-            </span>
-          )}
-
-          {/* Lock chip */}
-          {state === 'locked' && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: c.subtle }}>
-              <Lock size={12} aria-hidden />
-              <span style={{ fontSize: fs.xs, fontWeight: 600 }}>Bloqueado</span>
-            </span>
-          )}
-        </button>
-
-        {/* ── Children connector ──────────────────────────────────────── */}
-        {node.children.length > 0 && (
-          <>
-            {/* Vertical stem from card down to children bar */}
-            <div aria-hidden style={{ width: 2, height: 16, background: lineColor, flexShrink: 0 }} />
-
-            {/* Children row — each child gets flex:1 (equal horizontal space).
-                Gap of 10px between columns; bars extend 5px into the gap on each
-                side so the horizontal connector remains continuous box-to-box.    */}
-            <div style={{ display: 'flex', width: '100%', gap: 10 }}>
-              {node.children.map((child, i) => {
-                const isFirst = i === 0
-                const isLast = i === node.children.length - 1
-
-                return (
-                  <div
-                    key={child.name}
-                    style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-                  >
-                    {/* Left half — extends 5 px into the gap to meet the neighbour's right half */}
-                    {!isFirst && (
-                      <div aria-hidden style={{ position: 'absolute', top: 0, left: -5, width: 'calc(50% + 5px)', height: 2, background: lineColor }} />
-                    )}
-
-                    {/* Right half — extends 5 px into the gap */}
-                    {!isLast && (
-                      <div aria-hidden style={{ position: 'absolute', top: 0, right: -5, width: 'calc(50% + 5px)', height: 2, background: lineColor }} />
-                    )}
-
-                    {/* Vertical drop from bar top down to child card */}
-                    <div aria-hidden style={{ width: 2, height: 14, background: lineColor, flexShrink: 0 }} />
-
-                    {renderNode(child, color)}
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        )}
-      </div>
-    )
-  }
-
-  // ── Helper: render a forest of roots as equally-spaced columns ──────────
-  // Each root gets equal horizontal space (flex: 1) so the half-border trick
-  // works correctly. The container is centered; on wide viewports the tree
-  // sits in the middle rather than stretching wall-to-wall.
-
-  function renderForest(roots: TNode[], color: string) {
-    // Give each subtree a sensible base width so cards aren't too thin
-    const minColW = 160
-    const totalW = roots.length * minColW
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <div style={{ display: 'flex', minWidth: totalW, width: '100%', maxWidth: 700 }}>
-          {roots.map((node) => (
-            <div key={node.name} style={{ flex: 1 }}>
-              {renderNode(node, color)}
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  // ── Talent excess (talentos que no consumen slot no cuentan) ────────────
-  //   • Talento principal del camino heroico
-  //   • Todos los ideales Radiantes (Primer → Cuarto Ideal)
-  //   • Nombres de potencias / surges (se añaden automáticamente al elegir la Orden)
-  const talentosLibres = new Set<string>([
-    ...(heroicPath ? [heroicPath.mainTalent] : []),
-    ...(radiantOrder?.talentos.map((t) => t.name) ?? []),
-    ...(radiantOrder?.surges ?? []),
-  ])
-  const counted = selectedTalentos.filter(
-    (t) => !t.startsWith(FORMA_ACTIVA_PREFIX) && !talentosLibres.has(t),
-  )
-  const permitidos = getTalentosPermitidos(character.level, character.ascendencia)
-  const exceso = counted.length - permitidos
-
-  // ── Drawer (talent detail / singer form picker) ─────────────────────────
-
-  function renderDrawer(dn: DrawerNode) {
-    const a = accentOf(dn.color)
-    const close = () => setDrawerNode(null)
-
-    // Forget plan: the talent plus every dependent that would lose its prerequisites
-    const forgetPlan = !dn.isFormaPicker && !dn.isAutoAdded && dn.state === 'selected'
-      ? (() => {
-          const afterRemove = computeCascadeRemove(dn.name)
-          const alsoRemoved = selectedTalentos
-            .filter((n) => !n.startsWith(FORMA_ACTIVA_PREFIX))
-            .filter((n) => n !== dn.name && !afterRemove.includes(n))
-          return { afterRemove, alsoRemoved }
-        })()
-      : null
-
-    let action: ReactNode = null
-    if (!dn.isFormaPicker && !dn.isAutoAdded) {
-      if (forgetPlan) {
-        action = (
-          <Button
-            variant="danger"
-            size="lg"
-            icon={<X size={16} aria-hidden />}
-            onClick={() => setForgetConfirm({ name: dn.name, ...forgetPlan })}
-            aria-haspopup="dialog"
-            style={{ flex: 1 }}
-          >
-            {forgetPlan.alsoRemoved.length > 0 ? `Olvidar ${1 + forgetPlan.alsoRemoved.length} talentos` : 'Olvidar talento'}
-          </Button>
-        )
-      } else if (dn.state === 'available') {
-        action = (
-          <Button
-            variant="primary"
-            size="lg"
-            icon={<Plus size={16} aria-hidden />}
-            onClick={() => { talentosMutation.mutate([...selectedTalentos, dn.name]); setDrawerNode(null) }}
-            style={{ flex: 1 }}
-          >
-            Aprender talento
-          </Button>
-        )
-      } else {
-        action = (
-          <div
-            style={{
-              flex: 1, minHeight: 50, padding: '8px 14px', borderRadius: radius.md,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: c.s2, border: `1px dashed ${c.borderBright}`,
-              color: c.muted, fontSize: fs.sm, fontWeight: 600, textAlign: 'center',
-            }}
-          >
-            <Lock size={16} aria-hidden style={{ flexShrink: 0 }} />
-            Prerrequisitos no cumplidos
-          </div>
-        )
-      }
-    }
-
-    const footer = (
       <>
-        <Button variant="secondary" size="lg" onClick={close} data-autofocus style={{ flex: action ? '0 0 auto' : 1 }}>
-          Cerrar
-        </Button>
-        {action}
+        <h1 className="sr-only">Talentos</h1>
+        {isError ? <div style={{ maxWidth: 680, margin: '0 auto', padding: 16 }}><ErrorMessage message="No se pudo cargar el personaje." /></div> : <Spinner />}
       </>
     )
+  }
+  return <TalentosView key={charId} character={character} cId={cId} />
+}
 
-    // ── Modo picker de forma activa ──────────────────────────────────────
-    if (dn.isFormaPicker) {
-      return (
-        <Sheet
-          open
-          onClose={close}
-          title="Seleccionar forma activa"
-          description="Solo puedes estar en una forma a la vez. El cambio ocurre durante una alta tormenta."
-          footer={footer}
-        >
-          <ul style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {dn.cantorFormas?.map((forma) => {
-              const isActive = getFormaActiva(selectedTalentos) === forma.nombre
-              return (
-                <FormaCard
-                  key={forma.nombre}
-                  forma={forma}
-                  isActive={isActive}
-                  accent={a}
-                  showPoderNote
-                  showAcciones={false}
-                  onActivate={!isActive ? () => { talentosMutation.mutate(withFormaActiva(selectedTalentos, forma.nombre)); setDrawerNode(null) } : undefined}
-                />
-              )
-            })}
-          </ul>
-        </Sheet>
-      )
-    }
+function TalentosView({ character, cId }: { character: Character; cId: number }) {
+  const charId = character.id
+  const qc = useQueryClient()
+  const qKey = useMemo(() => ['character', cId, charId] as const, [cId, charId])
+  const user = useAuthStore((s) => s.user)
+  const isGm = useCampaignStore((s) => s.isGm)
+  const canEditIdeals = isGm || (!!user && character.ownerId === user.id)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const contentW = useContentWidth()
+  const reducedMotion = usePrefersReducedMotion()
+  const wide = contentW >= WIDE_MIN
 
-    // ── Modo normal del drawer ───────────────────────────────────────────
-    return (
-      <Sheet
-        open
-        onClose={close}
-        title={<span style={{ fontFamily: font.display, color: dn.state === 'selected' ? a.fg : c.text }}>{dn.name}</span>}
-        footer={footer}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {(dn.activation || dn.source) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {dn.activation && <TalentActivation type={dn.activation} />}
-              {dn.source && (
-                <span style={accentPill(a)}>
-                  {dn.source}
-                </span>
-              )}
-            </div>
-          )}
+  // ── local, per-device preferences ────────────────────────────────────────
+  const vistaKey = `cosmere-talentos-vista:${user?.id ?? 'anon'}`
+  const goalKey = `cosmere-talentos-objetivo:${charId}`
+  const lamKey = `cosmere-talentos-laminas:${charId}`
+  const djKey = `cosmere-talentos-dj:${charId}`
+  const [mode, setModeState] = useState<Mode>(() => {
+    const q = searchParams.get('vista')
+    return isMode(q) ? q : readStore<Mode>(vistaKey, 'arbol', isMode)
+  })
+  const [goal, setGoalState] = useState<Goal | null>(() => readStore<Goal | null>(goalKey, null, (v): v is Goal | null => v === null || isGoal(v)))
+  const [openLaminas, setOpenLaminas] = useState<Set<string>>(() => new Set(readStore<string[]>(lamKey, [], isStringArray)))
+  const [confirmedStory, setConfirmedStory] = useState<string[]>(() => readStore<string[]>(djKey, [], isStringArray))
 
-          {dn.prereq && (
-            <div style={{ padding: '12px 16px', borderRadius: radius.sm, background: c.s2, border: `1px solid ${c.border}` }}>
-              <p style={eyebrow}>Prerrequisito</p>
-              <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 4, lineHeight: 1.45 }}>
-                {dn.prereq}
-                {dn.state === 'selected' && (
-                  <span style={{ display: 'inline-flex', verticalAlign: 'middle', color: a.fg, marginLeft: 6 }}>
-                    <Check size={14} aria-hidden strokeWidth={2.75} />
-                    <span className="sr-only">(cumplido)</span>
-                  </span>
-                )}
-              </p>
-              {dn.state === 'locked' && dn.missing.length > 0 && (
-                <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.sm, fontWeight: 600, color: tone.topacio.fg, marginTop: 6, lineHeight: 1.45 }}>
-                  <CircleX size={14} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
-                  <span>Falta: {dn.missing.join(', ')}</span>
-                </p>
-              )}
-            </div>
-          )}
+  // ── UI state ─────────────────────────────────────────────────────────────
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [sheetId, setSheetId] = useState<string | null>(null)
+  const [budgetOpen, setBudgetOpen] = useState(false)
+  const [formaOpen, setFormaOpen] = useState(false)
+  const [showOthers, setShowOthers] = useState(false)
+  const [djConfirm, setDjConfirm] = useState<{ name: string; conditions: string[]; keys: string[] } | null>(null)
+  const [forgetConfirm, setForgetConfirm] = useState<(CascadeResult & { name: string }) | null>(null)
+  const [goalConfirm, setGoalConfirm] = useState<{ kind: 'remove' } | { kind: 'replace'; goal: Goal } | null>(null)
+  const [liveMsg, setLiveMsg] = useState('')
+  const pendingScroll = useRef<string | null>(null)
 
-          <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: c.text, lineHeight: 1.55, whiteSpace: 'pre-line' }}>
-            {dn.description}
-          </p>
+  // ── engine ───────────────────────────────────────────────────────────────
+  const { caminoHeroico, caminoRadiante, ascendencia } = character
+  const stored = useMemo(() => parseStoredTalentos(character.talentos), [character.talentos])
+  const extraKey = useMemo(() => {
+    const names = new Set(splitStoredTalentos(stored).names)
+    return HEROIC_PATHS.filter((p) => p.id !== caminoHeroico && names.has(p.mainTalent)).map((p) => p.id).join(',')
+  }, [stored, caminoHeroico])
+  const extraPaths = useMemo(() => (extraKey ? extraKey.split(',') : []), [extraKey])
+  const graph = useMemo(
+    () => buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, extraPaths)),
+    [caminoHeroico, caminoRadiante, ascendencia, extraPaths],
+  )
+  const tState = useMemo(() => talentStateFromCharacter(character, { confirmedStory }), [character, confirmedStory])
+  const evaluation = useMemo(() => evaluate(graph, tState), [graph, tState])
+  const budget = useMemo(() => talentBudget(character, graph), [character, graph])
+  const models = useMemo(() => buildPathModels(graph), [graph])
 
-          {/* Formas que desbloquea este talento de cantor */}
-          {dn.cantorFormas && dn.cantorFormas.length > 0 && (
-            <div>
-              <h3 style={{ ...eyebrow, fontFamily: font.ui, marginBottom: 8 }}>
-                Formas {dn.state === 'selected' ? 'desbloqueadas' : 'que obtendrás'}
-              </h3>
-              <ul style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {dn.cantorFormas.map((forma) => {
-                  const isActive = getFormaActiva(selectedTalentos) === forma.nombre
-                  return (
-                    <FormaCard
-                      key={forma.nombre}
-                      forma={forma}
-                      isActive={isActive}
-                      accent={a}
-                      showPoderNote={false}
-                      showAcciones
-                      onActivate={dn.state === 'selected' && !isActive
-                        ? () => { talentosMutation.mutate(withFormaActiva(selectedTalentos, forma.nombre)); setDrawerNode(null) }
-                        : undefined}
-                    />
-                  )
-                })}
-              </ul>
-            </div>
-          )}
-
-          {forgetPlan && forgetPlan.alsoRemoved.length > 0 && (
-            <div style={{ padding: '12px 16px', borderRadius: radius.sm, background: tone.rubi.bg, border: `1px solid ${tone.rubi.border}` }}>
-              <p style={{ ...eyebrow, color: tone.rubi.fg }}>También se olvidarán</p>
-              <ul style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {forgetPlan.alsoRemoved.map((n) => (
-                  <li key={n} style={{ listStyle: 'none', display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.sm, color: c.text, lineHeight: 1.35 }}>
-                    <span aria-hidden style={{ width: 5, height: 5, borderRadius: '50%', background: tone.rubi.fg, flexShrink: 0 }} />
-                    {n}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </Sheet>
-    )
+  // other heroic paths (explore): built only when needed
+  const otherPathIds = useMemo(
+    () => HEROIC_PATHS.map((p) => p.id).filter((id) => id !== caminoHeroico && !extraPaths.includes(id)),
+    [caminoHeroico, extraPaths],
+  )
+  const needExplore = showOthers || [goal?.nodeId, sheetId, selectedId].some((id) => !!id && !graph.byId.has(id))
+  const exploreGraph = useMemo(
+    () => (needExplore && otherPathIds.length
+      ? buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, [...extraPaths, ...otherPathIds]))
+      : null),
+    [needExplore, otherPathIds, extraPaths, caminoHeroico, caminoRadiante, ascendencia],
+  )
+  const exploreEval = useMemo(() => (exploreGraph ? evaluate(exploreGraph, tState) : null), [exploreGraph, tState])
+  const exploreModels = useMemo(
+    () => (exploreGraph ? buildPathModels(exploreGraph).filter((m) => m.kind === 'heroico' && otherPathIds.includes(m.pathId)) : []),
+    [exploreGraph, otherPathIds],
+  )
+  const ctxFor = (id: string | null | undefined): { graph: TalentGraph; evaluation: TalentEvaluation } | null => {
+    if (!id) return null
+    if (graph.byId.has(id)) return { graph, evaluation }
+    if (exploreGraph && exploreEval && exploreGraph.byId.has(id)) return { graph: exploreGraph, evaluation: exploreEval }
+    return null
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── goal route ───────────────────────────────────────────────────────────
+  const goalGraph = goal ? (graph.byId.has(goal.nodeId) ? graph : exploreGraph?.byId.has(goal.nodeId) ? exploreGraph : null) : null
+  const route = useMemo(
+    () => (goal && goalGraph ? cheapestRoute(goalGraph, tState, goal.nodeId, { choices: goal.choices }) : null),
+    [goal, goalGraph, tState],
+  )
+  const goalNode = goal && goalGraph ? goalGraph.byId.get(goal.nodeId) ?? null : null
+  const activeRoute = route && route.reachable && !route.owned ? route : null
+  const stepOf = useMemo(() => new Map(activeRoute?.steps.map((s, i) => [s.nodeId, i + 1]) ?? []), [activeRoute])
+  const targetId = activeRoute?.targetId ?? null
+  const learnedSet = evaluation.learned
+  const edgeStatus = useMemo<EdgeStatusFn>(() => {
+    const names = new Set(activeRoute?.steps.map((s) => s.name) ?? [])
+    const alts = new Map(activeRoute?.alternatives.map((a) => [a.key, a.chosen]) ?? [])
+    return (parentName, _parentId, childId, clauseIndex) => {
+      if (stepOf.has(childId)) {
+        const chosen = alts.get(`${childId}#${clauseIndex}`)
+        if ((!chosen || chosen === parentName) && (names.has(parentName) || learnedSet.has(parentName))) return 'route'
+      }
+      return learnedSet.has(parentName) ? 'met' : 'pending'
+    }
+  }, [activeRoute, stepOf, learnedSet])
 
-  const forgetCount = forgetConfirm ? 1 + forgetConfirm.alsoRemoved.length : 0
+  // ── mutations (optimistic, built from the latest cached character) ───────
+  const talentosMutation = useMutation({
+    mutationFn: (names: string[]) => {
+      const cur = qc.getQueryData<Character>(qKey) ?? character
+      return charactersApi.update(cId, charId, { ...(cur as UpdateCharacterRequest), talentos: JSON.stringify(names) })
+    },
+    onMutate: async (names: string[]) => {
+      await qc.cancelQueries({ queryKey: qKey })
+      const prev = qc.getQueryData<Character>(qKey)
+      if (prev) qc.setQueryData<Character>(qKey, { ...prev, talentos: JSON.stringify(names) })
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(qKey, ctx.prev)
+      setLiveMsg('No se pudo guardar el cambio de talentos.')
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: qKey })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+  const idealesMutation = useMutation({
+    mutationFn: (value: number) => {
+      const cur = qc.getQueryData<Character>(qKey) ?? character
+      return charactersApi.update(cId, charId, { ...(cur as UpdateCharacterRequest), idealesJurados: value })
+    },
+    onMutate: async (value: number) => {
+      await qc.cancelQueries({ queryKey: qKey })
+      const prev = qc.getQueryData<Character>(qKey)
+      if (prev) qc.setQueryData<Character>(qKey, { ...prev, idealesJurados: value })
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(qKey, ctx.prev) },
+    onSettled: () => qc.invalidateQueries({ queryKey: qKey }),
+  })
+  const busy = talentosMutation.isPending
+
+  // scroll to a talent after switching to the map (ref written in handlers, read after render)
+  useEffect(() => {
+    const id = pendingScroll.current
+    if (!id) return
+    const el = document.getElementById(cellDomId(id))
+    if (!el) return
+    pendingScroll.current = null
+    el.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' })
+    el.focus({ preventScroll: true })
+  })
+
+  // ── actions ──────────────────────────────────────────────────────────────
+  const setMode = (m: Mode) => {
+    setModeState(m)
+    writeStore(vistaKey, m)
+    setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set('vista', m); return n }, { replace: true })
+  }
+  const saveGoal = (g: Goal | null) => { setGoalState(g); writeStore(goalKey, g) }
+  const budgetTail = (names: string[]) => {
+    const b = talentBudget({ level: character.level, ascendencia, talentos: names }, graph)
+    const parts = [
+      b.excess > 0 ? `Tienes ${b.excess} ${plural(b.excess, 'talento', 'talentos')} de más.`
+        : b.remaining > 0 ? (b.remaining === 1 ? 'Te queda 1 elección.' : `Te quedan ${b.remaining} elecciones.`)
+        : 'No te quedan elecciones.',
+    ]
+    if (b.missing.length) parts.push(`Falta una elección obligatoria: ${b.missing.map((r) => r.label).join(', ')}.`)
+    return parts.join(' ')
+  }
+  const learnName = (name: string) => {
+    const next = withTalent(stored, name)
+    const reached = !!goalNode && goalNode.name === name
+    talentosMutation.mutate(next, {
+      onSuccess: () => setLiveMsg(`Aprendido: ${name}.${reached ? ' Objetivo conseguido.' : ''} ${budgetTail(next)}`),
+    })
+    if (reached) saveGoal(null)
+  }
+  const requestLearn = (nodeId: string) => {
+    const ctx = ctxFor(nodeId)
+    const node = ctx?.graph.byId.get(nodeId)
+    const ev = ctx?.evaluation.nodes.get(nodeId)
+    if (!node || !ev || ev.state !== 'available') return
+    const story = ev.gates.filter((g): g is Extract<Gate, { kind: 'story' }> => g.kind === 'story' && g.status === 'confirm')
+    if (story.length) setDjConfirm({ name: node.name, conditions: story.map((g) => g.condition), keys: story.map((g) => g.key) })
+    else learnName(node.name)
+  }
+  const requestForget = (nodeId: string) => {
+    const node = graph.byId.get(nodeId)
+    if (!node) return
+    const res = cascadeRemove(graph, tState, node.name)
+    if (!res.blocked) setForgetConfirm({ ...res, name: node.name })
+  }
+  const requestSetGoal = (nodeId: string, choices: Record<string, string> = {}) => {
+    const next = { nodeId, choices }
+    if (goal && goal.nodeId !== nodeId) { setGoalConfirm({ kind: 'replace', goal: next }); return }
+    saveGoal(next)
+    const name = ctxFor(nodeId)?.graph.byId.get(nodeId)?.name
+    setLiveMsg(`Objetivo fijado: ${name ?? 'talento'}. Su ruta aparece numerada en el árbol.`)
+  }
+  const activateForma = (nombre: string) => {
+    talentosMutation.mutate(withFormaActiva(stored, nombre), { onSuccess: () => setLiveMsg(`Forma activa: ${nombre}.`) })
+    setFormaOpen(false)
+  }
+  const toggleLamina = (treeId: string) => {
+    const n = new Set(openLaminas)
+    if (n.has(treeId)) n.delete(treeId)
+    else n.add(treeId)
+    setOpenLaminas(n)
+    writeStore(lamKey, [...n])
+  }
+  const closeLaminas = (treeIds: string[]) => {
+    const n = new Set([...openLaminas].filter((t) => !treeIds.includes(t)))
+    setOpenLaminas(n)
+    writeStore(lamKey, [...n])
+  }
+  const showInTree = (nodeId: string) => {
+    if (!graph.byId.has(nodeId)) setShowOthers(true)
+    setMode('arbol')
+    setSelectedId(nodeId)
+    pendingScroll.current = nodeId
+  }
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id)
+    el?.scrollIntoView({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' })
+  }
+
+  // ── derived bits for the bars ────────────────────────────────────────────
+  const heroicPath = HEROIC_PATHS.find((p) => p.id === caminoHeroico)
+  const radiantOrder = RADIANT_ORDERS.find((o) => o.id === caminoRadiante)
+  const hasAnything = models.length > 0
+  const myCount = [...evaluation.learned].filter((n) => graph.byName.has(n)).length
+  const formasMissing = budget.missing.some((r) => r.accepts.includes('formas'))
+  const otherMissing = budget.missing.filter((r) => !r.accepts.includes('formas'))
+  const surgeRank = (surge: string) => {
+    for (let i = 1; i <= 6; i++) {
+      const k = `habilidadPersonalizada${i}` as `habilidadPersonalizada${1 | 2 | 3 | 4 | 5 | 6}`
+      if (character[k] === surge) return Number(character[`${k}Valor`] ?? 0) || 0
+    }
+    return 0
+  }
+  const cantorAccent = accentOf(CANTOR_COLOR)
+  const formasDisponibles = useMemo(() => getFormasDisponibles([...evaluation.learned]), [evaluation.learned])
+  const formaData = formasDisponibles.find((f) => f.nombre === evaluation.formaActiva)
+  const ideales = character.idealesJurados ?? 0
+
+  const sheetCtx = ctxFor(sheetId)
+
+  const atlasCommon = {
+    level: character.level, contentW, edgeStatus, stepOf, targetId, selectedId,
+    onSelect: setSelectedId, openLaminas, onToggleLamina: toggleLamina, onCloseLaminas: closeLaminas,
+    onOpenSheet: setSheetId, onLearn: requestLearn, onSetGoal: (id: string) => requestSetGoal(id),
+    onRemoveGoal: () => setGoalConfirm({ kind: 'remove' }), busy, surgeRank,
+  }
+
+  const forgetCount = forgetConfirm ? forgetConfirm.removed.length || 1 : 0
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto' }}>
-
-      {/* ── Hero header — scrolls with the page ──────────────────────────── */}
-      {/* Same framing as the ficha and metas heroes: full-bleed on phones, a rounded card from 640px */}
+      {/* ── Hero header — scrolls with the page ─────────────────────────── */}
       <CharacterHero
         characterId={character.id}
         style={{ borderRadius: fromTablet(radius.lg), marginTop: fromTablet(16), borderBottom: 'none' }}
       >
-        <p style={{ ...eyebrow, color: HERO_TEXT_SOFT, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <p style={{ ...eyebrow, color: onGemSoft, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
           <Sparkles size={14} aria-hidden />
           Talentos
         </p>
-        <h1 style={{ ...titleText, fontSize: fs['2xl'], color: HERO_TEXT, marginBottom: 14, overflowWrap: 'anywhere' }}>
+        <h1 style={{ ...titleText, fontSize: fs['2xl'], color: onGem, marginBottom: 14, overflowWrap: 'anywhere' }}>
           {character.name}
         </h1>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -920,6 +346,10 @@ export function TalentosDetailPage() {
               {heroicPath.name}
             </span>
           )}
+          {extraPaths.map((pid) => {
+            const p = HEROIC_PATHS.find((x) => x.id === pid)
+            return p ? <span key={pid} style={heroPill}><HeroicPathIcon id={p.id} size={13} />{p.name}</span> : null
+          })}
           {radiantOrder && (
             <span style={{ ...heroPill, paddingLeft: 4 }}>
               <RadiantOrderIcon orderId={radiantOrder.id} size={16} decorative />
@@ -929,29 +359,88 @@ export function TalentosDetailPage() {
         </div>
       </CharacterHero>
 
-      {/* ── Tab bar — sticky under the mobile top bar; only with 2+ sections ── */}
-      {showTabs && currentTab && (
-        <div className="sticky-under-topbar glass" style={{ padding: '8px 16px', borderBottom: `1px solid ${c.border}` }}>
-          <Tabs<SectionKey>
-            tabs={sections}
-            value={currentTab}
-            onChange={setActiveTab}
-            ariaLabel="Árboles de talentos"
-            idPrefix={TAB_PREFIX}
-            stretch
-          />
+      {/* ── Sticky bar: mode + budget chip, goal strip ──────────────────── */}
+      {hasAnything && (
+        // translateZ(0) forces its own compositor layer: some WebKit builds otherwise fail to render
+        // backdrop-filter on a translucent `position: sticky` bar, leaving the page's own scrolled
+        // content legible (not blurred) through it right under the fixed top bar — this is the one
+        // sticky layer under the top bar; the lámina header below is a plain, solid, non-sticky card.
+        <div className="sticky-under-topbar glass" style={{ padding: '6px 16px', borderBottom: `1px solid ${c.border}`, transform: 'translateZ(0)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Segmented<Mode>
+              ariaLabel="Vista de talentos"
+              value={mode}
+              onChange={setMode}
+              style={{ flex: '1 1 auto', minWidth: 0 }}
+              options={[
+                { value: 'arbol', label: 'Árbol', ariaLabel: 'Árbol: planificar' },
+                {
+                  value: 'releer',
+                  ariaLabel: `Mis talentos, ${myCount}`,
+                  label: (
+                    <>
+                      Mis talentos
+                      <span aria-hidden style={{ fontSize: fs.xs, fontWeight: 700, color: c.muted, background: c.s3, borderRadius: radius.full, padding: '0 7px', lineHeight: '18px', fontVariantNumeric: 'tabular-nums' }}>{myCount}</span>
+                    </>
+                  ),
+                },
+              ]}
+            />
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              onClick={() => setBudgetOpen(true)}
+              aria-label={`Presupuesto: ${budget.used} de ${budget.allowed} talentos${budget.excess > 0 ? `, ${budget.excess} de más` : budget.remaining > 0 ? `, falta ${budget.remaining}` : ''}. Ver desglose`}
+              className="ui-btn ui-btn--secondary"
+              style={{
+                flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 44, padding: '0 10px',
+                borderRadius: radius.md, border: `1px solid ${c.border}`, background: c.s1, color: c.muted, fontSize: fs.sm, cursor: 'pointer',
+              }}
+            >
+              <span className="hide-mobile">Talentos</span>
+              <strong style={{ color: c.text, fontVariantNumeric: 'tabular-nums' }}>{budget.used}/{budget.allowed}</strong>
+              {budget.excess > 0 ? (
+                <span style={{ fontSize: fs.eyebrow, fontWeight: 750, color: tone.topacio.fg, background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`, borderRadius: radius.full, padding: '0 6px', lineHeight: '17px' }}>+{budget.excess}</span>
+              ) : budget.remaining > 0 ? (
+                <span style={{ fontSize: fs.eyebrow, fontWeight: 750, color: tone.zafiro.fg, background: tone.zafiro.bg, border: `1px solid ${tone.zafiro.border}`, borderRadius: radius.full, padding: '0 6px', lineHeight: '17px', whiteSpace: 'nowrap' }}>falta {budget.remaining}</span>
+              ) : null}
+            </button>
+          </div>
+          {goal && goalNode && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                onClick={() => setSheetId(goal.nodeId)}
+                className="ui-btn"
+                style={{
+                  flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 10px',
+                  borderRadius: radius.sm, background: tone.brand.bg, border: `1px solid ${tone.brand.border}`, color: c.text,
+                  fontSize: fs.sm, cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <Target size={16} aria-hidden style={{ color: c.brand, flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                  <span className="sr-only">Objetivo: </span>
+                  <strong style={{ color: c.brandLight }}>{goalNode.name}</strong>
+                  <span style={{ color: c.muted, fontSize: fs.xs + 0.5 }}>
+                    {activeRoute
+                      ? ` · ${activeRoute.talents} ${plural(activeRoute.talents, 'talento', 'talentos')} · ${wide ? 'desde ' : ''}Nv ${activeRoute.earliestLevel}`
+                      : route?.owned ? ' · conseguido' : ' · sin ruta con tus caminos'}
+                  </span>
+                </span>
+                {wide && <ChevronRight size={16} aria-hidden style={{ marginLeft: 'auto', flexShrink: 0, color: c.muted }} />}
+              </button>
+              <IconButton label="Quitar objetivo" size={40} onClick={() => setGoalConfirm({ kind: 'remove' })} aria-haspopup="dialog">
+                <X size={18} aria-hidden />
+              </IconButton>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Tree content ─────────────────────────────────────────────────
-          Padding and static cards (main talent, section headers) live in
-          normal block flow — no overflow context that could clip them.
-          Only the individual tree diagrams get their own overflowX:auto
-          wrapper so they can scroll horizontally on narrow screens without
-          affecting anything above or below them.                          */}
-      <div style={{ padding: '20px 16px 56px' }}>
-
-        {!heroicPath && !radiantOrder && !isCantor && (
+      <div style={{ padding: '16px 16px 64px' }}>
+        {!hasAnything && (
           <EmptyState
             icon={<Sparkles size={24} aria-hidden />}
             title="Sin camino asignado"
@@ -959,226 +448,355 @@ export function TalentosDetailPage() {
           />
         )}
 
-        {/* ── Warning exceso de talentos ──────────────────────────────── */}
-        {exceso > 0 && (
-          <div
-            role="status"
-            style={{
-              display: 'flex', alignItems: 'flex-start', gap: 12,
-              background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`,
-              borderRadius: radius.md, padding: '12px 16px', marginBottom: 20,
-            }}
-          >
+        {/* ── Warnings: mandatory choice missing, excess (same text as always) ── */}
+        {hasAnything && formasMissing && (
+          <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: tone.zafiro.bg, border: `1px solid ${tone.zafiro.border}`, borderRadius: radius.md, padding: '12px 14px', marginBottom: 12 }}>
+            <Info size={18} aria-hidden style={{ color: tone.zafiro.fg, flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: fs.sm + 1, fontWeight: 700, color: tone.zafiro.fg }}>Te falta 1 talento de Formas</p>
+              <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>Obligatorio por ascendencia cantora (nivel 1).</p>
+            </div>
+            {mode === 'arbol' && (
+              <Button variant="ghost" size="sm" onClick={() => scrollToSection('atlas-cantor-section')} style={{ color: tone.zafiro.fg, flexShrink: 0 }}>Ver cantor</Button>
+            )}
+          </div>
+        )}
+        {hasAnything && otherMissing.length > 0 && (
+          <p role="status" style={{ fontSize: fs.sm, color: tone.zafiro.fg, background: tone.zafiro.bg, border: `1px solid ${tone.zafiro.border}`, borderRadius: radius.md, padding: '10px 14px', marginBottom: 12 }}>
+            Falta una elección obligatoria: {otherMissing.map((r) => r.label).join(' · ')}
+          </p>
+        )}
+        {budget.excessText && (
+          <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: 12, background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`, borderRadius: radius.md, padding: '12px 16px', marginBottom: 16 }}>
             <TriangleAlert size={20} aria-hidden style={{ color: tone.topacio.fg, flexShrink: 0, marginTop: 1 }} />
             <div>
-              <p style={{ fontSize: fs.sm + 1, fontWeight: 700, color: tone.topacio.fg, marginBottom: 2 }}>
-                Exceso de talentos
-              </p>
-              <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>
-                {counted.length} talentos seleccionados, pero a nivel {character.level} solo corresponden {permitidos}.
-                {' '}Retira {exceso} talento{exceso > 1 ? 's' : ''} para estar dentro del límite.
-              </p>
+              <p style={{ fontSize: fs.sm + 1, fontWeight: 700, color: tone.topacio.fg, marginBottom: 2 }}>Exceso de talentos</p>
+              <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>{budget.excessText}</p>
             </div>
           </div>
         )}
+        {talentosMutation.isError && <ErrorMessage message="No se pudo guardar el último cambio de talentos. Inténtalo de nuevo." style={{ marginBottom: 12 }} />}
 
-        {/* ── Camino Heroico ──────────────────────────────────────────── */}
-        {heroicPath && currentTab === 'heroico' && (() => {
-          const color = heroicPath.color
-          const a = accentOf(color)
-          return panel('heroico', (
-            <>
-              {/* Main talent — highlighted card (not clickable: it is granted by the path) */}
-              <section
-                aria-labelledby="talento-principal"
-                className="rise"
-                style={{
-                  '--i': 0,
-                  background: a.wash(8), border: `1px solid ${a.border}`,
-                  borderRadius: radius.lg, padding: '16px 20px', boxShadow: shadow[1],
-                } as CSSProperties}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-                  <span style={accentPill(a)}>
-                    <HeroicPathIcon id={heroicPath.id} size={13} />
-                    {heroicPath.name}
-                  </span>
-                  <span style={eyebrow}>Talento principal</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <Check size={18} aria-hidden strokeWidth={2.75} style={{ color: a.fg, flexShrink: 0 }} />
-                  <h2 id="talento-principal" style={{ fontFamily: font.display, fontSize: fs.xl - 2, fontWeight: 650, color: a.fg, lineHeight: 1.2 }}>
-                    {heroicPath.mainTalent}
-                  </h2>
-                  {heroicPath.mainTalentActivation && <TalentActivation type={heroicPath.mainTalentActivation} compact />}
-                </div>
-                <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6 }}>
-                  {heroicPath.mainTalentEffect}
-                </p>
-              </section>
+        {/* ── MIS TALENTOS (reread) ─────────────────────────────────────── */}
+        {hasAnything && mode === 'releer' && (
+          <MyTalents
+            character={character}
+            graph={graph}
+            evaluation={evaluation}
+            onOpenTalent={setSheetId}
+            onShowInTree={showInTree}
+            onChangeForma={graph.isCantor ? () => setFormaOpen(true) : undefined}
+          />
+        )}
 
-              {/* Specialty trees — each scrolls horizontally on its own */}
-              {heroicPath.specialties.map((spec, i) => {
-                const roots = buildSpecialtyNodes(spec.talentos, heroicPath.mainTalent, spec.name)
+        {/* ── ÁRBOL (plan) ──────────────────────────────────────────────── */}
+        {hasAnything && mode === 'arbol' && (
+          <>
+            <StateLegend />
+            {models.map((m) => {
+              if (m.kind === 'radiante') {
                 return (
-                  <section key={spec.name} {...rise(i + 1)}>
-                    {renderSectionHeader(spec.name)}
-                    <TreeScroll center={roots.length === 1}>
-                      {renderForest(roots, color)}
-                    </TreeScroll>
-                  </section>
+                  <PathAtlas
+                    key={m.id}
+                    model={m}
+                    graph={graph}
+                    evaluation={evaluation}
+                    {...atlasCommon}
+                    keyOwnedNote={ideales > 0 ? `${ideales} ${plural(ideales, 'Ideal jurado', 'Ideales jurados')}` : 'cuenta como jurado'}
+                    outro={!m.noJugable && (
+                      <IdealesControl value={ideales} canEdit={canEditIdeals} onChange={(v) => idealesMutation.mutate(v)} saving={idealesMutation.isPending} />
+                    )}
+                  />
                 )
-              })}
-            </>
-          ))
-        })()}
-
-        {/* ── Orden Radiante ──────────────────────────────────────────── */}
-        {radiantOrder && currentTab === 'radiante' && (() => {
-          const color = radiantOrder.color
-          const a = accentOf(color)
-          return panel('radiante', (
-            <>
-              <section {...rise(0)}>
-                {renderSectionHeader(radiantOrder.name, <RadiantOrderIcon orderId={radiantOrder.id} size={28} decorative />, 4)}
-                <TreeScroll center>
-                  {renderForest(buildOrderNodes(radiantOrder.talentos, radiantOrder.name), color)}
-                </TreeScroll>
-              </section>
-
-              {radiantOrder.surges.map((surgeName, i) => {
-                const potencia = POTENCIAS.find((p) => p.name === surgeName)
-                if (!potencia) return null
-                const potNode: TNode = {
-                  name: potencia.name,
-                  activation: potencia.costoBase,
-                  description: potencia.descripcion,
-                  source: radiantOrder.name,
-                  children: buildPotenciaChildren(potencia.talentos, potencia.name, potencia.name),
-                }
+              }
+              if (m.kind === 'cantor') {
                 return (
-                  <section key={surgeName} {...rise(i + 1)}>
-                    {renderSectionHeader(surgeName, <SurgeIcon surge={surgeName} size={22} style={{ color: a.fg }} />)}
-                    <TreeScroll center>
-                      {renderForest([potNode], color)}
-                    </TreeScroll>
-                  </section>
-                )
-              })}
-            </>
-          ))
-        })()}
-
-        {/* ── Cantor / Oyente ─────────────────────────────────────────── */}
-        {isCantor && currentTab === 'cantor' && (() => {
-          const color = CANTOR_COLOR
-          const a = accentOf(color)
-          const formaActiva = getFormaActiva(selectedTalentos)
-          const formasDisponibles = getFormasDisponibles(selectedTalentos)
-          const formaActivaData = formasDisponibles.find((f) => f.nombre === formaActiva)
-
-          const openFormaPicker = () => {
-            setDrawerNode({
-              name: 'Cambiar forma activa',
-              activation: null,
-              description: 'Elige la forma de cantor que adoptarás en la próxima alta tormenta.',
-              source: 'Cantor',
-              prereq: undefined,
-              children: [],
-              state: 'available',
-              missing: [],
-              color,
-              isAutoAdded: false,
-              isFormaPicker: true,
-              cantorFormas: formasDisponibles,
-            })
-          }
-
-          return panel('cantor', (
-            <>
-              {/* Forma activa card */}
-              <section
-                aria-labelledby="forma-activa"
-                className="rise"
-                style={{
-                  '--i': 0,
-                  background: a.wash(8), border: `1px solid ${a.border}`,
-                  borderRadius: radius.lg, padding: '16px 20px', boxShadow: shadow[1],
-                } as CSSProperties}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                  <h2 id="forma-activa" style={{ ...eyebrow, fontFamily: font.ui, color: a.fg, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Music size={14} aria-hidden />
-                    Forma activa
-                  </h2>
-                  <Button variant="secondary" size="md" onClick={openFormaPicker} aria-label="Cambiar forma activa" aria-haspopup="dialog">
-                    Cambiar
-                    <ChevronRight size={16} aria-hidden style={{ marginRight: -4 }} />
-                  </Button>
-                </div>
-                {formaActiva ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {formaActivaData?.esPoder && <PoderMark size={16} announce={false} />}
-                      <p style={{ fontFamily: font.display, fontSize: fs.xl - 2, fontWeight: 650, lineHeight: 1.2, color: a.fg }}>{formaActiva}</p>
-                    </div>
-                    {formaActivaData && (
+                  <PathAtlas
+                    key={m.id}
+                    model={m}
+                    graph={graph}
+                    evaluation={evaluation}
+                    {...atlasCommon}
+                    keyExtra={
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: c.muted, fontWeight: 600 }}>
+                          <Music size={13} aria-hidden />
+                          Forma: <strong style={{ color: c.text }}>{evaluation.formaActiva ?? 'ninguna'}</strong>
+                        </span>
+                        <Button variant="secondary" size="sm" onClick={() => setFormaOpen(true)} aria-haspopup="dialog" aria-label="Cambiar forma activa">Cambiar</Button>
+                      </span>
+                    }
+                    intro={
                       <>
-                        <p style={{ fontSize: fs.sm, color: a.fg, marginTop: 4 }}>
-                          {formaActivaData.spren}
-                        </p>
-                        <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 6, lineHeight: 1.5 }}>
-                          {formaActivaData.bonos}
-                        </p>
-                        {formaActivaData.esPoder && (
-                          <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.sm, color: tone.heliodoro.fg, marginTop: 8, fontStyle: 'italic' }}>
+                        {formaData?.esPoder && (
+                          <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.sm, color: tone.heliodoro.fg, fontStyle: 'italic', marginBottom: 8 }}>
                             <TriangleAlert size={14} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
                             Forma de poder — riesgo de influencia de Odium
                           </p>
                         )}
+                        {!evaluation.formaActivaValida && evaluation.formaActiva && (
+                          <p role="status" style={{ fontSize: fs.sm, color: tone.topacio.fg, marginBottom: 8 }}>
+                            La forma activa «{evaluation.formaActiva}» ya no está desbloqueada por tus talentos.
+                          </p>
+                        )}
                       </>
+                    }
+                    plateNote={formasMissing && (
+                      <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: fs.xs + 0.5, fontWeight: 650, color: tone.zafiro.fg, margin: '2px 0 6px' }}>
+                        <Info size={14} aria-hidden />
+                        Elige 1 talento de Formas (obligatorio)
+                      </p>
                     )}
-                  </>
-                ) : (
-                  <p style={{ fontSize: fs.sm, color: c.muted, fontStyle: 'italic' }}>
-                    Sin forma activa. Toca "Cambiar" para seleccionar una.
-                  </p>
+                  />
+                )
+              }
+              return <PathAtlas key={m.id} model={m} graph={graph} evaluation={evaluation} {...atlasCommon} />
+            })}
+
+            {/* ── Other heroic paths (explore; their key talent costs 1 talent) ── */}
+            {otherPathIds.length > 0 && (
+              <section aria-labelledby="otros-caminos-t" style={{ marginTop: 32 }}>
+                <h2 id="otros-caminos-t" style={{ margin: 0 }}>
+                  <button
+                    type="button"
+                    aria-expanded={showOthers}
+                    aria-controls="otros-caminos"
+                    onClick={() => setShowOthers((v) => !v)}
+                    className="ui-row"
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 12, minHeight: 56, padding: '10px 14px', textAlign: 'left',
+                      background: c.s1, border: `1px solid ${c.border}`, borderRadius: radius.lg, cursor: 'pointer', color: c.text,
+                    }}
+                  >
+                    <Compass size={20} aria-hidden style={{ color: c.gold, flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, lineHeight: 1.2 }}>Otros caminos heroicos</span>
+                      <span style={{ display: 'block', fontFamily: font.ui, fontSize: fs.sm, fontWeight: 500, color: c.muted, marginTop: 2 }}>
+                        Entras en uno aprendiendo su talento principal (cuesta 1 talento)
+                      </span>
+                    </span>
+                    <ChevronDown size={18} aria-hidden style={{ color: c.subtle, transform: showOthers ? 'rotate(180deg)' : undefined, transition: 'transform var(--dur-2)' }} />
+                  </button>
+                </h2>
+                {showOthers && (
+                  <div id="otros-caminos">
+                    {exploreGraph && exploreEval && exploreModels.map((m) => (
+                      <PathAtlas key={m.id} model={m} graph={exploreGraph} evaluation={exploreEval} explore headingLevel={3} {...atlasCommon} />
+                    ))}
+                  </div>
                 )}
               </section>
+            )}
 
-              {/* Árbol de talentos de cantor */}
-              <section {...rise(1)}>
-                {renderSectionHeader('Talentos de cantor')}
-                <TreeScroll center>
-                  {renderForest(buildCantorTNodes(), color)}
-                </TreeScroll>
-              </section>
-            </>
-          ))
-        })()}
+            <BookLegend defaultOpen={wide} />
+          </>
+        )}
+      </div>
 
-      </div>{/* end tree content */}
+      {/* live region: learn / forget / goal */}
+      <p role="status" className="sr-only">{liveMsg}</p>
 
-      {/* ── Talent drawer ──────────────────────────────────────────────── */}
-      {drawerNode && renderDrawer(drawerNode)}
+      {/* ── Sheets and dialogs ───────────────────────────────────────────── */}
+      {sheetId && sheetCtx && (
+        <TalentSheet
+          key={sheetId}
+          nodeId={sheetId}
+          graph={sheetCtx.graph}
+          evaluation={sheetCtx.evaluation}
+          state={tState}
+          level={character.level}
+          isGoal={goal?.nodeId === sheetId}
+          initialChoices={goal?.nodeId === sheetId ? goal.choices : {}}
+          busy={busy}
+          onClose={() => setSheetId(null)}
+          onOpenNode={setSheetId}
+          onLearn={requestLearn}
+          onForget={requestForget}
+          onSetGoal={requestSetGoal}
+          onRemoveGoal={() => setGoalConfirm({ kind: 'remove' })}
+          onChoicesChange={(choices) => { if (goal?.nodeId === sheetId) saveGoal({ nodeId: sheetId, choices }) }}
+          onActivateForma={activateForma}
+        />
+      )}
 
-      {/* ── Confirm: forget talent (and cascaded dependents) ───────────── */}
+      <BudgetSheet open={budgetOpen} onClose={() => setBudgetOpen(false)} budget={budget} route={route} level={character.level} />
+
+      <FormaPickerSheet
+        open={formaOpen}
+        onClose={() => setFormaOpen(false)}
+        formas={formasDisponibles}
+        activa={evaluation.formaActiva}
+        accent={cantorAccent}
+        onActivate={activateForma}
+      />
+
+      <ConfirmDialog
+        open={!!djConfirm}
+        tone="brand"
+        icon="warning"
+        title="¿Lo confirma tu DJ?"
+        message={djConfirm && (
+          <>
+            «{djConfirm.name}» exige una condición de historia: <strong style={{ color: c.text }}>{djConfirm.conditions.join('; ')}</strong>.
+            {' '}Apréndelo solo si tu DJ confirma que tu personaje la cumple. Quedará anotado en este dispositivo.
+          </>
+        )}
+        confirmLabel="Sí, lo confirma"
+        onConfirm={() => {
+          if (djConfirm) {
+            const keys = [...new Set([...confirmedStory, ...djConfirm.keys])]
+            setConfirmedStory(keys)
+            writeStore(djKey, keys)
+            learnName(djConfirm.name)
+          }
+          setDjConfirm(null)
+        }}
+        onCancel={() => setDjConfirm(null)}
+      />
+
       <ConfirmDialog
         open={!!forgetConfirm}
         title={forgetCount > 1 ? `¿Olvidar ${forgetCount} talentos?` : '¿Olvidar este talento?'}
-        message={forgetConfirm
-          ? forgetCount > 1
-            ? `Se olvidará «${forgetConfirm.name}» y también ${forgetCount - 1} talento${forgetCount - 1 > 1 ? 's que dependen' : ' que depende'} de él: ${forgetConfirm.alsoRemoved.join(', ')}.`
-            : `Se olvidará «${forgetConfirm.name}».`
-          : undefined}
+        message={forgetConfirm && (
+          <>
+            {forgetCount > 1
+              ? `Se olvidará «${forgetConfirm.name}» y también ${forgetCount - 1} ${forgetCount - 1 > 1 ? 'talentos que dependen' : 'talento que depende'} de él: ${forgetConfirm.alsoRemoved.join(', ')}.`
+              : `Se olvidará «${forgetConfirm.name}».`}
+            {forgetConfirm.formaInvalidada && ` Además se desactivará la forma activa «${forgetConfirm.formaInvalidada}».`}
+          </>
+        )}
         confirmLabel={forgetCount > 1 ? `Olvidar ${forgetCount} talentos` : 'Olvidar talento'}
         onConfirm={() => {
-          if (forgetConfirm) talentosMutation.mutate(forgetConfirm.afterRemove)
+          if (forgetConfirm) {
+            const res = forgetConfirm
+            talentosMutation.mutate(res.talentos, {
+              onSuccess: () => setLiveMsg(`${plural(res.removed.length, 'Olvidado', 'Olvidados')}: ${res.removed.join(', ')}. ${budgetTail(res.talentos)}`),
+            })
+          }
           setForgetConfirm(null)
-          setDrawerNode(null)
+          setSheetId(null)
         }}
         onCancel={() => setForgetConfirm(null)}
       />
+
+      <ConfirmDialog
+        open={!!goalConfirm}
+        tone={goalConfirm?.kind === 'replace' ? 'brand' : 'danger'}
+        icon={goalConfirm?.kind === 'replace' ? 'warning' : undefined}
+        title={goalConfirm?.kind === 'replace' ? '¿Cambiar de objetivo?' : '¿Quitar el objetivo?'}
+        message={goalConfirm?.kind === 'replace'
+          ? `«${ctxFor(goalConfirm.goal.nodeId)?.graph.byId.get(goalConfirm.goal.nodeId)?.name ?? 'El talento'}» sustituirá a «${goalNode?.name ?? 'tu objetivo'}».`
+          : `Dejarás de ver la ruta hacia «${goalNode?.name ?? 'tu objetivo'}». Tus talentos no cambian.`}
+        confirmLabel={goalConfirm?.kind === 'replace' ? 'Cambiar objetivo' : 'Quitar objetivo'}
+        onConfirm={() => {
+          if (goalConfirm?.kind === 'replace') {
+            saveGoal(goalConfirm.goal)
+            setLiveMsg('Objetivo cambiado. Su ruta aparece numerada en el árbol.')
+          } else {
+            saveGoal(null)
+            setLiveMsg('Objetivo quitado.')
+          }
+          setGoalConfirm(null)
+        }}
+        onCancel={() => setGoalConfirm(null)}
+      />
     </div>
+  )
+}
+
+// ── Ideales jurados (GM or owner) ──────────────────────────────────────────
+
+function IdealesControl({ value, canEdit, onChange, saving }: { value: number; canEdit: boolean; onChange: (v: number) => void; saving: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px 8px 12px', border: `1px solid ${c.border}`, borderRadius: radius.md, background: c.s1, marginTop: 14 }}>
+      <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm + 1, fontWeight: 650, color: c.text }}>
+          <IdealGlyph size={14} />
+          Ideales jurados
+          {saving && <span style={{ fontSize: fs.xs, color: c.subtle, fontWeight: 500 }}>· guardando…</span>}
+        </p>
+        <p style={{ fontSize: fs.xs + 0.5, color: c.muted, lineHeight: 1.45, marginTop: 2 }}>
+          {value === 0
+            ? '0 = sin marcar: un Ideal aprendido cuenta como jurado.'
+            : 'Los Ideales aprendidos por encima de este número no están jurados (meta con la DJ).'}
+        </p>
+      </div>
+      {canEdit ? (
+        <Stepper label="Ideales jurados" value={value} min={0} max={5} onChange={onChange} size="sm" />
+      ) : (
+        <span style={{ fontSize: fs.lg, fontWeight: 700, color: c.text, fontVariantNumeric: 'tabular-nums' }} aria-label={`Ideales jurados: ${value}`}>{value}</span>
+      )}
+    </div>
+  )
+}
+
+// ── Legends ────────────────────────────────────────────────────────────────
+
+const ACCENT_NEUTRAL = accentOf('#60a5fa')
+
+function StateLegend() {
+  const item: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.muted }
+  const box = (look: CSSProperties, child: ReactNode) => (
+    <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 30, height: 20, padding: '0 4px', borderRadius: 5, ...look }}>{child}</span>
+  )
+  const a = ACCENT_NEUTRAL
+  return (
+    <div style={{ background: c.s1, border: `1px solid ${c.border}`, borderRadius: radius.md, padding: '10px 12px', marginBottom: 4 }}>
+      <p className="sr-only">Leyenda de estados de las casillas</p>
+      <ul style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+        <li style={item}>{box({ background: a.wash(15), border: `1.5px solid ${a.borderStrong}` }, <CellMarkView mark={{ kind: 'learned', granted: false }} accent={a} compact={false} />)}aprendido</li>
+        <li style={item}>{box({ background: a.wash(6), border: `1.5px dotted ${a.borderStrong}` }, <CellMarkView mark={{ kind: 'elsewhere' }} accent={a} compact={false} />)}en otra rama</li>
+        <li style={item}>{box({ background: c.s1, border: `1.5px dashed ${a.border}` }, <CellMarkView mark={{ kind: 'available', dj: false }} accent={a} compact={false} />)}disponible</li>
+        <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: null, minLevel: 1 }} accent={a} compact={false} />)}a 2 talentos</li>
+        <li style={item}>{box({ background: c.s3, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: 'nivel', minLevel: 6 }} accent={a} compact={false} />)}nivel 6 como pronto</li>
+        <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <span style={{ fontSize: fs.eyebrow, fontWeight: 750, color: c.muted }}>DJ</span>)}lo decide la DJ</li>
+        <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <IdealGlyph size={12} />)}jurar un Ideal</li>
+        <li style={item}>
+          <span aria-hidden style={{ width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${c.subtle}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: fs.eyebrow, fontWeight: 750, color: c.muted, lineHeight: 1 }}>o</span>
+          basta uno
+        </li>
+      </ul>
+      <p style={{ fontSize: fs.xs, color: c.subtle, fontStyle: 'italic', marginTop: 6 }}>
+        Línea = requisito · la posición no implica requisito · toca una casilla para ver qué falta
+      </p>
+    </div>
+  )
+}
+
+const LEGEND: { type: ActivationType; text: string }[] = [
+  { type: 'action1', text: 'Cuesta 1 acción en tu turno.' },
+  { type: 'action2', text: 'Cuesta 2 acciones en tu turno.' },
+  { type: 'action3', text: 'Cuesta 3 acciones: todo tu turno.' },
+  { type: 'free', text: 'No gasta acciones.' },
+  { type: 'reaction', text: 'Se usa fuera de tu turno, como respuesta a algo.' },
+  { type: 'special', text: 'Se activa como indica su texto.' },
+  { type: 'passive', text: 'Efecto permanente, sin activación.' },
+]
+
+function BookLegend({ defaultOpen }: { defaultOpen: boolean }) {
+  return (
+    <Disclosure title="Leyenda del libro · iconos de activación" defaultOpen={defaultOpen} style={{ marginTop: 32 }} headingLevel={2}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: fs.sm }}>
+        <caption className="sr-only">Iconos de activación de los talentos</caption>
+        <thead>
+          <tr>
+            <th scope="col" style={{ ...eyebrow, textAlign: 'left', padding: '0 8px 6px 0' }}>Icono</th>
+            <th scope="col" style={{ ...eyebrow, textAlign: 'left', padding: '0 0 6px' }}>Significado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {LEGEND.map((l) => (
+            <tr key={l.type} style={{ borderTop: `1px solid ${c.border}` }}>
+              <td style={{ padding: '8px 8px 8px 0', whiteSpace: 'nowrap' }}><TalentActivation type={l.type} /></td>
+              <td style={{ padding: '8px 0', color: c.muted, lineHeight: 1.4 }}>{l.text}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p style={{ fontSize: fs.xs + 0.5, color: c.muted, marginTop: 10, lineHeight: 1.5 }}>
+        Como en el libro, cada línea une un talento con su requisito. Un círculo «o» significa que basta con uno de los requisitos;
+        dos líneas sin «o» significan que hacen falta los dos. Que una casilla esté debajo de otra no implica que dependa de ella.
+      </p>
+    </Disclosure>
   )
 }

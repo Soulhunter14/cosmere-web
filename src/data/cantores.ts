@@ -15,7 +15,7 @@ export interface FormaCantor {
 
 export interface TalentoCantor {
   nombre: string
-  activacion: string | null // '3' = 3 acciones, null = siempre activo / pasivo
+  activacion: string | null // 'action3' = 3 acciones, 'passive' = siempre activo (∞ en el libro), null = sin icono (no usado hoy)
   prereq?: string
   descripcion: string
   formas: FormaCantor[]
@@ -69,7 +69,7 @@ export const ARBOL_CANTOR: TalentoCantor[] = [
   // ── Nivel 1: tres ramas de formas básicas ────────────────────────────────
   {
     nombre: 'Formas de delicadeza',
-    activacion: null,
+    activacion: 'passive',
     prereq: 'Cambiar de forma',
     descripcion:
       'Obtienes dos nuevas formas de cantor (forma artística y forma diestra) en las que ' +
@@ -106,7 +106,7 @@ export const ARBOL_CANTOR: TalentoCantor[] = [
   },
   {
     nombre: 'Formas de determinación',
-    activacion: null,
+    activacion: 'passive',
     prereq: 'Cambiar de forma',
     descripcion:
       'Obtienes dos nuevas formas de cantor (forma de guerra y forma de trabajo) en las que ' +
@@ -143,7 +143,7 @@ export const ARBOL_CANTOR: TalentoCantor[] = [
   },
   {
     nombre: 'Formas de sabiduría',
-    activacion: null,
+    activacion: 'passive',
     prereq: 'Cambiar de forma',
     descripcion:
       'Obtienes dos nuevas formas de cantor (forma de mediación y forma sabia) en las que ' +
@@ -181,7 +181,7 @@ export const ARBOL_CANTOR: TalentoCantor[] = [
   // ── Puerta a las formas de poder ────────────────────────────────────────
   {
     nombre: 'Mente ambiciosa',
-    activacion: null,
+    activacion: 'passive',
     prereq: 'Disciplina 3 o más, Formas de delicadeza o Formas de determinación o Formas de sabiduría',
     descripcion:
       'Tu creciente sed de poder te predispone a la influencia de Odium. Aunque todavía no te has ' +
@@ -198,7 +198,7 @@ export const ARBOL_CANTOR: TalentoCantor[] = [
   // ── Nivel 2: formas de poder (vacíospren) ────────────────────────────────
   {
     nombre: 'Formas de destrucción',
-    activacion: null,
+    activacion: 'passive',
     prereq: 'Mente ambiciosa',
     descripcion:
       'Obtienes dos nuevas formas de poder de cantor (forma funesta y forma tormenta) en las que ' +
@@ -242,7 +242,7 @@ export const ARBOL_CANTOR: TalentoCantor[] = [
   },
   {
     nombre: 'Formas de expansión',
-    activacion: null,
+    activacion: 'passive',
     prereq: 'Mente ambiciosa',
     descripcion:
       'Obtienes dos nuevas formas de poder de cantor (forma emisaria y forma comunicadora) en las que ' +
@@ -279,7 +279,7 @@ export const ARBOL_CANTOR: TalentoCantor[] = [
   },
   {
     nombre: 'Formas de misterio',
-    activacion: null,
+    activacion: 'passive',
     prereq: 'Mente ambiciosa',
     descripcion:
       'Obtienes dos nuevas formas de poder de cantor (forma pútrida y forma nocturna) en las que ' +

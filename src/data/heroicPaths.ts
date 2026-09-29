@@ -6,6 +6,8 @@ export interface HeroicPathTalento {
   activation: ActivationType
   rolDescription: string
   description: string
+  /** Nota sobre una errata del libro (discrepancia entre el diagrama y el texto): explica qué dice cada fuente, sin cambiar `prerequisites`. */
+  notaLibro?: string
 }
 
 export interface HeroicPathSpecialty {
@@ -184,6 +186,7 @@ export const HEROIC_PATHS: HeroicPath[] = [
             activation: 'special',
             rolDescription: 'Sabes que el riesgo y la recompensa son compañeros de viaje inseparables, y te encanta ver hasta dónde te lleva esta pareja.',
             description: 'Antes de realizar una prueba, puedes gastar 1 punto de concentración para subir la apuesta.',
+            notaLibro: 'El libro se contradice: el diagrama del árbol añade "Perspicacia 2 o más", pero el texto completo del talento solo pide el talento principal Oportunista.',
           },
           {
             name: 'Golpe bajo',
@@ -740,68 +743,6 @@ export const HEROIC_PATHS: HeroicPath[] = [
         ],
       },
       {
-        name: 'Cirujano',
-        description: 'Los Cirujanos cualificados aplican sus conocimientos y su empatía para curar a los enfermos y salvar vidas. Aplican la ciencia médica combinada con una comprensión profunda del cuerpo humano.',
-        talentos: [
-          {
-            name: 'Medicina de campo',
-            prerequisites: 'Medicina 1 o más, talento principal Ilustración',
-            activation: 'action1',
-            rolDescription: 'Tratas una herida menor vendando un corte, aplicando ungüentos o restableciendo una articulación dislocada.',
-            description: 'Gasta 1 punto de concentración para realizar una prueba de Medicina CD 15 sobre un personaje consciente, dispuesto y en tu cercanía. Tira su dado de recuperación. Si superas, recupera salud = dado de recuperación + grados en Medicina. Si fallas, recupera solo el dado de recuperación. Sufres desventaja si te tratas a ti mismo.',
-          },
-          {
-            name: 'Inteligencia emocional',
-            prerequisites: 'talento principal Ilustración',
-            activation: 'passive',
-            rolDescription: 'Perfeccionas tu intuición y comprensión de los demás, lo que te permite detectar señales de síntomas ocultos y sentimientos complicados fáciles de pasar por alto.',
-            description: 'Tu talento Ilustración te otorga una habilidad adicional y puedes usar Ilustración para elegir habilidades espirituales. Obtienes pericia en Diagnóstico.',
-          },
-          {
-            name: 'Conocimientos de anatomía',
-            prerequisites: 'talento Medicina de campo',
-            activation: 'special',
-            rolDescription: 'Tus conocimientos de anatomía te ayudan a atacar puntos vitales para incapacitar a los enemigos a la vez que minimizas el daño permanente.',
-            description: 'Cuando impactas a un objetivo de tu tamaño o menor con un ataque sin armas, puedes gastar 1 punto de concentración u Oportunidad para aplicar el estado Agotado. La penalización aplicada equivale a la mitad de tus grados en Medicina.',
-          },
-          {
-            name: 'Serenidad',
-            prerequisites: 'talento Inteligencia emocional',
-            activation: 'passive',
-            rolDescription: 'Mantienes la atención puesta en tus objetivos inmediatos sin perder de vista tus valores más profundos, lo que te mantiene en equilibrio en medio del caos.',
-            description: 'Tus Defensas cognitiva y espiritual aumentan en 2.',
-          },
-          {
-            name: 'Sanación ágil',
-            prerequisites: 'Medicina 2 o más, talento Medicina de campo',
-            activation: 'free',
-            rolDescription: 'Tus manos expertas curan rápidamente las heridas, incluso mientras el fragor de la batalla se desarrolla a tu alrededor.',
-            description: 'Puedes usar Medicina de campo como acción gratuita. Cuando usas una habilidad que restaura salud a otro personaje, este recupera salud adicional igual a tus grados en Medicina.',
-          },
-          {
-            name: 'Medicina aplicada',
-            prerequisites: 'Saber 2 o más, talento Serenidad',
-            activation: 'passive',
-            rolDescription: 'Has estudiado química, anatomía, comportamiento social y mucho más. Gracias a esta amplia base, practicas el complejo arte de la sanación con flexibilidad y confianza.',
-            description: 'Cuando haces que un personaje recupere salud, recupera salud adicional equivalente a tus grados en Saber.',
-          },
-          {
-            name: 'Cuidados continuos',
-            prerequisites: 'Saber 3 o más, talento Sanación ágil',
-            activation: 'special',
-            rolDescription: 'La atención médica puede ser un proceso arduo que requiere paciencia y reevaluación periódica. Has estudiado la conexión entre la salud física y mental.',
-            description: 'Puedes renunciar a los beneficios de un descanso para tratar a un aliado cercano. Haz prueba de Medicina CD 10 (dificultad +5 por lesión adicional más allá de la primera). Si superas, eliminas un estado causado por una de sus lesiones. No puede aplicarse más de una vez cada 24 horas. Obtienes pericia en Cuidados en salud mental.',
-          },
-          {
-            name: 'Resucitación',
-            prerequisites: 'Medicina 3 o más, talento Sanación ágil',
-            activation: 'special',
-            rolDescription: 'Tratas de manera rápida y eficiente a una criatura herida de muerte, intentando alejarla del abismo aplicando un torniquete, administrando un antídoto o incluso volviendo a hacer funcionar órganos dañados.',
-            description: 'Puedes usar Medicina de campo (gastando 3 concentración en lugar de 1) para resucitar a un personaje Inconsciente o muerto recientemente (máximo rondas = tus grados en Medicina). CD aumenta en 5 por cada lesión más allá de la primera. Si tienes éxito, el objetivo recupera salud normalmente y, si estaba muerto, vuelve a la vida.',
-          },
-        ],
-      },
-      {
         name: 'Estratega',
         description: 'Los Estrategas siempre van tres pasos por delante. Saben que el tiempo lo es todo y lo hacen correr a su favor, planificando minuciosamente cada movimiento.',
         talentos: [
@@ -860,6 +801,68 @@ export const HEROIC_PATHS: HeroicPath[] = [
             activation: 'action2',
             rolDescription: 'Las batallas suelen girar en torno a un único momento crucial. Al estudiar la historia de la guerra, aprendes a identificar esas oportunidades y a sacar ventaja.',
             description: 'Una vez por escena, gasta 2 concentración para encontrar una debilidad en la estrategia del grupo enemigo. Haz prueba de Deducción contra la Defensa cognitiva del líder enemigo (ventaja si estás en turno lento). Si tienes éxito, tú y tus aliados obtenéis 1 acción adicional en vuestros próximos turnos.',
+          },
+        ],
+      },
+      {
+        name: 'Cirujano',
+        description: 'Los Cirujanos cualificados aplican sus conocimientos y su empatía para curar a los enfermos y salvar vidas. Aplican la ciencia médica combinada con una comprensión profunda del cuerpo humano.',
+        talentos: [
+          {
+            name: 'Medicina de campo',
+            prerequisites: 'Medicina 1 o más, talento principal Ilustración',
+            activation: 'action1',
+            rolDescription: 'Tratas una herida menor vendando un corte, aplicando ungüentos o restableciendo una articulación dislocada.',
+            description: 'Gasta 1 punto de concentración para realizar una prueba de Medicina CD 15 sobre un personaje consciente, dispuesto y en tu cercanía. Tira su dado de recuperación. Si superas, recupera salud = dado de recuperación + grados en Medicina. Si fallas, recupera solo el dado de recuperación. Sufres desventaja si te tratas a ti mismo.',
+          },
+          {
+            name: 'Inteligencia emocional',
+            prerequisites: 'talento principal Ilustración',
+            activation: 'passive',
+            rolDescription: 'Perfeccionas tu intuición y comprensión de los demás, lo que te permite detectar señales de síntomas ocultos y sentimientos complicados fáciles de pasar por alto.',
+            description: 'Tu talento Ilustración te otorga una habilidad adicional y puedes usar Ilustración para elegir habilidades espirituales. Obtienes pericia en Diagnóstico.',
+          },
+          {
+            name: 'Conocimientos de anatomía',
+            prerequisites: 'talento Medicina de campo',
+            activation: 'special',
+            rolDescription: 'Tus conocimientos de anatomía te ayudan a atacar puntos vitales para incapacitar a los enemigos a la vez que minimizas el daño permanente.',
+            description: 'Cuando impactas a un objetivo de tu tamaño o menor con un ataque sin armas, puedes gastar 1 punto de concentración u Oportunidad para aplicar el estado Agotado. La penalización aplicada equivale a la mitad de tus grados en Medicina.',
+          },
+          {
+            name: 'Serenidad',
+            prerequisites: 'talento Inteligencia emocional',
+            activation: 'passive',
+            rolDescription: 'Mantienes la atención puesta en tus objetivos inmediatos sin perder de vista tus valores más profundos, lo que te mantiene en equilibrio en medio del caos.',
+            description: 'Tus Defensas cognitiva y espiritual aumentan en 2.',
+          },
+          {
+            name: 'Sanación ágil',
+            prerequisites: 'Medicina 2 o más, talento Medicina de campo',
+            activation: 'free',
+            rolDescription: 'Tus manos expertas curan rápidamente las heridas, incluso mientras el fragor de la batalla se desarrolla a tu alrededor.',
+            description: 'Puedes usar Medicina de campo como acción gratuita. Cuando usas una habilidad que restaura salud a otro personaje, este recupera salud adicional igual a tus grados en Medicina.',
+          },
+          {
+            name: 'Medicina aplicada',
+            prerequisites: 'Saber 2 o más, talento Serenidad',
+            activation: 'passive',
+            rolDescription: 'Has estudiado química, anatomía, comportamiento social y mucho más. Gracias a esta amplia base, practicas el complejo arte de la sanación con flexibilidad y confianza.',
+            description: 'Cuando haces que un personaje recupere salud, recupera salud adicional equivalente a tus grados en Saber.',
+          },
+          {
+            name: 'Cuidados continuos',
+            prerequisites: 'Saber 3 o más, talento Sanación ágil',
+            activation: 'special',
+            rolDescription: 'La atención médica puede ser un proceso arduo que requiere paciencia y reevaluación periódica. Has estudiado la conexión entre la salud física y mental.',
+            description: 'Puedes renunciar a los beneficios de un descanso para tratar a un aliado cercano. Haz prueba de Medicina CD 10 (dificultad +5 por lesión adicional más allá de la primera). Si superas, eliminas un estado causado por una de sus lesiones. No puede aplicarse más de una vez cada 24 horas. Obtienes pericia en Cuidados en salud mental.',
+          },
+          {
+            name: 'Resucitación',
+            prerequisites: 'Medicina 3 o más, talento Sanación ágil',
+            activation: 'special',
+            rolDescription: 'Tratas de manera rápida y eficiente a una criatura herida de muerte, intentando alejarla del abismo aplicando un torniquete, administrando un antídoto o incluso volviendo a hacer funcionar órganos dañados.',
+            description: 'Puedes usar Medicina de campo (gastando 3 concentración en lugar de 1) para resucitar a un personaje Inconsciente o muerto recientemente (máximo rondas = tus grados en Medicina). CD aumenta en 5 por cada lesión más allá de la primera. Si tienes éxito, el objetivo recupera salud normalmente y, si estaba muerto, vuelve a la vida.',
           },
         ],
       },
@@ -993,6 +996,7 @@ export const HEROIC_PATHS: HeroicPath[] = [
             activation: 'action1',
             rolDescription: 'Adoptas una posición imprudente y violenta que intercambia defensa por poder letal.',
             description: 'Posición de la sangre: el rango de Oportunidad para ataques y pruebas físicas se amplía en 2, pero tus Defensas cognitiva, espiritual y física disminuyen en 2.',
+            notaLibro: 'El libro se contradice: el diagrama del árbol pide "Percepción 2 o más", pero el texto completo del talento pide "Atletismo 2 o más".',
           },
           {
             name: 'Parada precisa',
@@ -1034,6 +1038,7 @@ export const HEROIC_PATHS: HeroicPath[] = [
             activation: 'passive',
             rolDescription: 'Has aprendido a saber cuándo retirarte y cuándo comprometerte en una posición, manteniéndola con firmeza.',
             description: 'La acción Prepararse añade dos desventajas a los ataques contra ti (en lugar de una). Mientras usas un escudo para Prevenirte, los aliados a 1,5 metros o menos pueden usar Prevenirse como si tuvieran cobertura o escudo.',
+            notaLibro: 'El libro se contradice: el texto completo del talento no imprime ningún prerrequisito; este valor viene del diagrama del árbol, que lo conecta con Entrenamiento de combate y añade "Atletismo 2 o más".',
           },
           {
             name: 'Golpe devastador',

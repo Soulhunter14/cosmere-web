@@ -17,6 +17,8 @@ export interface RadiantOrder {
   colorBg: string
   colorBorder: string
   talentos: Talento[]
+  /** false = no jugable por personajes (p. ej. Forjadores de Vínculos, reservados a la DJ). Por defecto true. */
+  jugable?: boolean
 }
 
 export interface RadiantRegla {
@@ -147,6 +149,7 @@ const TALENTOS_COMUNES = {
   primerIdeal: (surges: string): Talento => ({
     name: 'Primer Ideal',
     cost: 'special',
+    prereq: 'nivel 2 o más',
     description: `Pronuncias el primer ideal universal y estableces el vínculo Nahel. Obtienes Investidura y acceso a las acciones Absorber luz tormentosa, Aumentar y Revitalizar. Al completar la meta "Pronunciar el Primer Ideal", obtienes las potencias de ${surges}.`,
   }),
   segundoIdeal: (desc: string): Talento => ({
@@ -221,10 +224,10 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
         prereq: 'Primer Ideal',
         description: 'Infunde a un objetivo con un Enlace inverso usando Adhesión. Elige un tipo de objeto; el objetivo infuso atrae ese tipo de objetos desde una distancia igual a tu valor de gravitación.',
       },
-      TALENTOS_COMUNES.investido(),
+      TALENTOS_COMUNES.investido('Enlace inverso'),
       TALENTOS_COMUNES.vinculoEstrechado(),
       TALENTOS_COMUNES.adoptarEscudero('tantos escuderos como el doble de tu nivel actual'),
-      TALENTOS_COMUNES.regeneracionHeridas(),
+      TALENTOS_COMUNES.regeneracionHeridas('Investido'),
     ],
   },
   {
@@ -287,10 +290,10 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
         prereq: 'Primer Ideal',
         description: 'Gastas Investidura para levantar una oscura nube de polvo a medida que usas Moverse. Los enemigos en el interior de esta nube sufren una cantidad de daño adicional igual a tus grados en Disciplina.',
       },
-      TALENTOS_COMUNES.investido(),
+      TALENTOS_COMUNES.investido('Tormenta de polvo abrasadora'),
       TALENTOS_COMUNES.vinculoEstrechado(),
       TALENTOS_COMUNES.adoptarEscudero('tantos escuderos como tu número de Ideal actual'),
-      TALENTOS_COMUNES.regeneracionHeridas(),
+      TALENTOS_COMUNES.regeneracionHeridas('Investido'),
     ],
   },
   {
@@ -320,10 +323,10 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
         prereq: 'Abrasión 2 o más; Progresión 2 o más; Primer Ideal',
         description: 'Mientras tengas Investidura, obtienes una reacción adicional que solo puedes usar para Evitar peligro o Esquivar, sin gastar concentración.',
       },
-      TALENTOS_COMUNES.investido(),
+      TALENTOS_COMUNES.investido('Gracia del Danzante del Filo'),
       TALENTOS_COMUNES.vinculoEstrechado(),
       TALENTOS_COMUNES.adoptarEscudero('tantos escuderos como tu número de Ideal actual'),
-      TALENTOS_COMUNES.regeneracionHeridas(),
+      TALENTOS_COMUNES.regeneracionHeridas('Investido'),
     ],
   },
   {
@@ -352,11 +355,18 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
         cost: 'special',
         prereq: 'Iluminación 2 o más; Progresión 2 o más; Primer Ideal',
         description: 'En lugar de curarte a ti mismo o a un aliado con Revitalizar, gasta 2 puntos de Investidura para que el objetivo recupere la mitad de concentración de los puntos de salud que habría recuperado.',
+        notaLibro: 'El libro se contradice: el texto del talento pide "nivel 4 o más; pronunciar el Primer Ideal", pero el diagrama del árbol pide "Iluminación 2 o más; Progresión 2 o más; pronunciar el Primer Ideal". Se mantiene el valor del diagrama.',
       },
-      TALENTOS_COMUNES.investido(),
+      TALENTOS_COMUNES.investido('Sanación espiritual'),
       TALENTOS_COMUNES.vinculoEstrechado(),
       TALENTOS_COMUNES.adoptarEscudero('tantos escuderos como tu número de Ideal actual'),
-      TALENTOS_COMUNES.regeneracionHeridas(),
+      TALENTOS_COMUNES.regeneracionHeridas('Investido'),
+      {
+        name: 'Visión del futuro',
+        cost: 'special',
+        prereq: 'vínculo con un brumaspren iluminado',
+        description: 'Talento principal del árbol de Iluminado, exclusivo de quienes se vinculan con un brumaspren iluminado; se obtiene gratis, no cuesta un talento. Tras un descanso o al inicio de una escena, pídele a la DJ una visión del futuro; si requiere interpretarse, haz una prueba de Deducción (una Complicación puede hacerla poco fiable). Al completar la meta "Pronunciar el Primer Ideal" se desbloquea el resto del árbol Visión del futuro.',
+      },
     ],
   },
   {
@@ -383,13 +393,13 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
       {
         name: 'Ilusión física',
         cost: 'action2',
-        prereq: 'Cuarto Ideal',
+        prereq: 'Cuarto Ideal, Regeneración de heridas',
         description: 'Gastas Investidura para crear una ilusión física con defensas y vida propia. La controlas mediante 1 acción; puede realizar pruebas y atacar usando tu valor de Iluminación.',
       },
-      TALENTOS_COMUNES.investido(),
+      TALENTOS_COMUNES.investido('Primer Ideal'),
       TALENTOS_COMUNES.vinculoEstrechado(),
       TALENTOS_COMUNES.adoptarEscudero('tantos escuderos como tu número de Ideal actual'),
-      TALENTOS_COMUNES.regeneracionHeridas(),
+      TALENTOS_COMUNES.regeneracionHeridas('Investido'),
     ],
   },
   {
@@ -422,7 +432,7 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
       TALENTOS_COMUNES.investido('Sagacidad del Nominador de lo Otro'),
       TALENTOS_COMUNES.vinculoEstrechado(),
       TALENTOS_COMUNES.adoptarEscudero('tantos escuderos como tu número de Ideal actual'),
-      TALENTOS_COMUNES.regeneracionHeridas(),
+      TALENTOS_COMUNES.regeneracionHeridas('Investido'),
     ],
   },
   {
@@ -485,10 +495,10 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
         prereq: 'Cohesión 2 o más; Tensión 2 o más; Primer Ideal',
         description: 'Al Obtener ventaja mientras te queda Investidura, la siguiente prueba que un aliado haga contra ese objetivo obtiene también ventaja. Además, nada puede obligarte a moverte ni a quedar Tumbado.',
       },
-      TALENTOS_COMUNES.investido(),
+      TALENTOS_COMUNES.investido('Trabajo en equipo cohesivo'),
       TALENTOS_COMUNES.vinculoEstrechado(),
       TALENTOS_COMUNES.adoptarEscudero('tantos escuderos como tu nivel actual'),
-      TALENTOS_COMUNES.regeneracionHeridas(),
+      TALENTOS_COMUNES.regeneracionHeridas('Investido'),
     ],
   },
   {
@@ -508,5 +518,6 @@ export const RADIANT_ORDERS: RadiantOrder[] = [
     colorBg: 'rgba(226,232,240,0.08)',
     colorBorder: 'rgba(226,232,240,0.25)',
     talentos: [],
+    jugable: false,
   },
 ]

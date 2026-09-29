@@ -1214,7 +1214,7 @@ export function CharacterDetailPage() {
       <OptionPicker
         open={picker === 'heroico'}
         title="Camino Heroico"
-        description="Al guardar, los talentos del camino anterior se sustituyen por los del nuevo."
+        description="Puedes tener varios caminos heroicos: se conservan los talentos del anterior y se añade el talento principal del nuevo."
         value={form?.caminoHeroico ?? ''}
         options={HEROIC_PATHS.map((p) => ({
           id: p.id, label: p.name, tone: toneFrom(p.color), icon: <HeroicPathIcon id={p.id} size={22} />,
@@ -1223,9 +1223,12 @@ export function CharacterDetailPage() {
           const oldPath = HEROIC_PATHS.find((p) => p.id === (form?.caminoHeroico ?? char.caminoHeroico))
           const newPath = HEROIC_PATHS.find((p) => p.id === id)
           const current: string[] = (() => { try { return JSON.parse((form?.talentos ?? char.talentos) || '[]') } catch { return [] } })()
-          const oldNames = oldPath ? [oldPath.mainTalent, ...oldPath.specialties.flatMap((s) => s.talentos.map((kt) => kt.name))] : []
-          const filtered = current.filter((n) => !oldNames.includes(n))
-          const next = newPath ? [newPath.mainTalent, ...filtered.filter((n) => n !== newPath.mainTalent)] : filtered
+          // Several heroic paths are allowed now: never remove the previous path's talents.
+          // The old starting path's main talent was auto-granted (never stored) — store it explicitly
+          // so it survives now that it stops being the auto-granted one. Then add the new path's main talent.
+          let next = current
+          if (oldPath && !next.includes(oldPath.mainTalent)) next = [oldPath.mainTalent, ...next]
+          if (newPath && !next.includes(newPath.mainTalent)) next = [newPath.mainTalent, ...next]
           setForm((prev) => prev ? { ...prev, caminoHeroico: id, talentos: JSON.stringify(next) } : prev)
         }}
         onClose={() => setPicker(null)}

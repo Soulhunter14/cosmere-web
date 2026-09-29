@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import type { CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { Sparkles, ChevronRight, TriangleAlert } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
@@ -9,7 +9,7 @@ import { EmptyState, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { FORMA_ACTIVA_PREFIX } from '../../data/cantores'
+import { buildTalentGraph, graphOptionsFromCharacter, talentBudget } from '../../lib/talentGraph'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
 import { HeroicPathIcon } from '../../components/GameIcons'
 import { characterGradient } from '../../lib/avatar'
@@ -19,32 +19,15 @@ import { onGem } from '../../lib/hero'
 /* White initial on the deep character gradient (lib/avatar: >= 10:1 on every palette), as in MetasPage/BolsaPage. */
 const ON_GEM = onGem
 
-// ── Talent allowance per level ────────────────────────────────────────────────
-function getTalentosPermitidos(level: number, ascendencia: string): number {
-  let total = Math.min(level, 20)
-  if (level > 20) total += level - 20
-  total += ascendencia === 'Oyente' ? 2 : 1
-  for (const hito of [6, 11, 16, 21]) {
-    if (level >= hito) total += 1
-  }
-  return total
-}
-
 function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
   const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
   const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-  const selected: string[] = (() => { try { return JSON.parse(character.talentos || '[]') } catch { return [] } })()
 
-  // Talent excess
-  const talentosLibres = new Set<string>([
-    ...(path ? [path.mainTalent] : []),
-    ...(order?.talentos.map((t) => t.name) ?? []),
-    ...(order?.surges ?? []),
-  ])
-  const counted = selected.filter((t) => !t.startsWith(FORMA_ACTIVA_PREFIX) && !talentosLibres.has(t))
-  const permitidos = getTalentosPermitidos(character.level, character.ascendencia)
-  const exceso = counted.length - permitidos
-  const excesoDetalle = `${counted.length} talentos contabilizados, máximo ${permitidos} a nivel ${character.level}`
+  // Book budget (shared engine, see lib/talentGraph.ts): allowed / used / excess / falta.
+  const budget = useMemo(() => {
+    const graph = buildTalentGraph(graphOptionsFromCharacter(character))
+    return talentBudget(character, graph)
+  }, [character])
 
   return (
     <button
@@ -110,15 +93,20 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
           <span style={{ fontSize: fs.sm, color: c.muted, fontVariantNumeric: 'tabular-nums' }}>
             Nv. {character.level}
             <span aria-hidden style={{ margin: '0 6px', color: c.subtle }}>·</span>
-            {selected.length} talento{selected.length !== 1 ? 's' : ''}
+            {budget.used}/{budget.allowed} talentos
           </span>
-          {exceso > 0 && (
-            <span title={excesoDetalle} style={pill(tone.topacio)}>
+          {budget.excess > 0 ? (
+            <span title={budget.excessDetail} style={pill(tone.topacio)}>
               <TriangleAlert size={13} aria-hidden />
-              +{exceso} talento{exceso > 1 ? 's' : ''}
-              <span className="sr-only"> de más: {excesoDetalle}</span>
+              +{budget.excess} talento{budget.excess > 1 ? 's' : ''}
+              <span className="sr-only"> de más: {budget.excessDetail}</span>
             </span>
-          )}
+          ) : budget.remaining > 0 ? (
+            <span title={budget.excessDetail} style={pill(tone.zafiro)}>
+              falta {budget.remaining}
+              <span className="sr-only">: {budget.excessDetail}</span>
+            </span>
+          ) : null}
         </span>
       </span>
 

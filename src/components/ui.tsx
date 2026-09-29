@@ -750,6 +750,9 @@ export function Segmented<T extends string | number>({
               fontWeight: on ? 700 : 550,
               cursor: o.disabled ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
           >

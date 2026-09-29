@@ -5,6 +5,8 @@ export interface Talento {
   cost: ActivationType
   prereq?: string
   description: string
+  /** Nota sobre una errata del libro (discrepancia entre el diagrama y el texto): explica qué dice cada fuente, sin cambiar `prereq`. */
+  notaLibro?: string
 }
 
 export interface Potencia {
@@ -242,10 +244,28 @@ export const POTENCIAS: Potencia[] = [
       { name: 'Moldeado de almas viviente', cost: 'action2', prereq: 'Primer Ideal', description: 'Gasta 1 Investidura y haz un ataque cuerpo a cuerpo de Transformación contra la Defensa espiritual de un organismo vivo. Tira 3d4 de daño espiritual (escala con grados). Si reduce la salud a 0, el objetivo muere.' },
       { name: 'Parada moldeadora de almas', cost: 'passive', prereq: 'Defensa moldeadora de almas', description: 'Puedes usar Defensa moldeadora de almas también contra ataques cuerpo a cuerpo, no solo contra proyectiles.' },
       { name: 'Moldeado de sangre', cost: 'action2', prereq: 'Moldeado de almas viviente', description: 'Gasta 1 Investidura y haz una prueba de Transformación CD 15 para limpiar todo el veneno del objetivo y reducir el tiempo de recuperación de una de sus lesiones en 5 días.' },
-      { name: 'Potenciación distante', cost: 'passive', prereq: 'Parada moldeadora de almas o Moldeado de sangre', description: 'Puedes usar tus potencias y sus talentos como si tu cercanía fuera de 6 metros.' },
-      { name: 'Moldeado de llamas', cost: 'passive', prereq: 'Potenciación distante', description: 'Obtienes Llama como sexta categoría de material. Cuando moldeas llamas, atacas a los personajes a 1,5 m usando Transformación contra Física, tirando 2d4 de daño por energía (escala con grados).' },
-      { name: 'Transformación persistente', cost: 'passive', prereq: 'Transformación 2 o más', description: 'Al moldear objetos inanimados, la CD máxima es 15. Además, si fallas, puedes reintentar el moldeado pagando 1 punto de Investidura adicional por cada fracaso reciente al moldear ese mismo objeto.' },
-      { name: 'Transmutación expansiva', cost: 'passive', prereq: 'Transformación persistente', description: 'Transformar materiales no orgánicos cuesta 2 puntos menos de Investidura.' },
+      { name: 'Potenciación distante', cost: 'passive', prereq: 'Parada moldeadora de almas', description: 'Puedes usar tus potencias y sus talentos como si tu cercanía fuera de 6 metros.' },
+      { name: 'Moldeado de llamas', cost: 'passive', prereq: 'Parada moldeadora de almas', description: 'Obtienes Llama como sexta categoría de material. Cuando moldeas llamas, atacas a los personajes a 1,5 m usando Transformación contra Física, tirando 2d4 de daño por energía (escala con grados).' },
+      { name: 'Transformación persistente', cost: 'passive', prereq: 'Transformación 2 o más; Potenciación distante', description: 'Al moldear objetos inanimados, la CD máxima es 15. Además, si fallas, puedes reintentar el moldeado pagando 1 punto de Investidura adicional por cada fracaso reciente al moldear ese mismo objeto.' },
+      { name: 'Transmutación expansiva', cost: 'passive', prereq: 'Moldeado de llamas', description: 'Transformar materiales no orgánicos cuesta 2 puntos menos de Investidura.' },
+    ],
+  },
+  {
+    id: 'transportacion',
+    name: 'Transportación',
+    atributo: 'Intelecto',
+    ordenes: ['Escultor de Voluntad', 'Nominador de lo Otro'],
+    costoBase: 'action1',
+    descripcion: 'Te permite trasladarte a ti mismo y a los demás entre reinos. Al principio solo puedes asomarte al Reino Cognitivo (Shadesmar): gasta 1 o más puntos de Investidura para, dentro del alcance de tu vínculo spren, averiguar emociones y motivaciones, localizar personajes o sentir la Investidura de objetos y personas.',
+    talentos: [
+      { name: 'Previsión cognitiva', cost: 'passive', prereq: 'Primer Ideal', description: 'Cuando te asomas al Reino Cognitivo con Transportación, puedes ver cosas a una distancia igual al triple del alcance de tu vínculo spren. Además, mientras tengas 1 o más puntos de Investidura, siempre sabes qué dirección es el norte y hacia dónde viajar para llegar al asentamiento o grupo de personas más cercano.' },
+      { name: 'Visión cognitiva', cost: 'passive', prereq: 'Previsión cognitiva', description: 'Cuando te asomas al Reino Cognitivo, puedes hacer una prueba de Transportación contra la Defensa cognitiva de un enemigo para conocer su intención (desventaja en su próxima prueba contra ti o un aliado), y examinar el océano de cuentas para ubicar objetos u otra información de tu entorno.' },
+      { name: 'Evasión entre reinos', cost: 'reaction', prereq: 'Segundo Ideal', description: 'Antes de sufrir el impacto de un ataque, gasta 1 punto de Investidura para hacer una prueba de Transportación (CD igual al resultado del ataque). Si fallas, el ataque hace un rasguño. Si la superas, el ataque falla.' },
+      { name: 'Paso entre reinos', cost: 'action1', prereq: 'Evasión entre reinos', description: 'Haz una prueba de Transportación CD 15 y gasta 2 puntos de Investidura para transportarte hacia Shadesmar y reaparecer en un espacio desocupado dentro del alcance de tu vínculo spren, sin activar Acometidas reactivas. Sobre una gran masa de agua, o encima de ella, solo cuesta 1 punto de Investidura.' },
+      { name: 'Nominar lo otro', cost: 'action2', prereq: 'Tercer Ideal; Paso entre reinos', description: 'Si estás en el Reino Físico, gasta 1 punto de Investidura para transportarte al Reino Cognitivo sin necesidad de prueba. Si estás en el Reino Cognitivo, haz una prueba de Transportación CD 20 y gasta 2 puntos de Investidura para transportarte al Reino Físico.' },
+      { name: 'Transportación compartida', cost: 'special', prereq: 'Transportación 4 o más; Nominar lo otro', description: 'Cuando te mueves hacia Shadesmar con Nominar lo otro o Paso entre reinos, puedes gastar 1 punto de Investidura adicional por cada personaje dispuesto en tu cercanía para transportarlo también, junto con todo lo que lleve puesto o transporte.' },
+      { name: 'Puerta de lo otro', cost: 'special', prereq: 'Cuarto Ideal; Transportación compartida', description: 'Tras un descanso largo, puedes transportarte al instante junto a hasta diez personajes dispuestos a una plataforma de Puerta Jurada o una perpendicularidad permanente que hayas visitado antes, gastando esferas infusas por un valor en marcos igual al doble del número de personajes transportados.' },
+      { name: 'Caminarreinos', cost: 'passive', prereq: 'Nominar lo otro', description: 'Pasas del Reino Físico al Cognitivo, y viceversa, sin esfuerzo. Cuando haces una prueba de Transportación para usar uno de sus talentos, la superas automáticamente.' },
     ],
   },
 ]

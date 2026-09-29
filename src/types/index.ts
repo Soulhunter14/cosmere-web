@@ -58,6 +58,7 @@ export interface Character {
   caminoHeroico: string
   caminoRadiante: string
   ascendencia: string
+  idealesJurados: number
   fuerza: number
   velocidad: number
   intelecto: number

@@ -1,24 +1,20 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, LogIn, Trash2, ArrowRight, LogOut, CalendarDays } from 'lucide-react'
+import { Plus, LogIn, Trash2, ArrowRight, LogOut, CalendarDays, X } from 'lucide-react'
 import { campaignsApi } from '../../api/campaigns'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Input, Spinner, ErrorMessage, ConfirmDialog } from '../../components/ui'
-
-// ─── Palette ───────────────────────────────────────────────────────────────────
-const PALETTES = [
-  { bg: 'linear-gradient(145deg,#5b21b6 0%,#1e40af 100%)', glow: 'rgba(91,33,182,0.45)' },
-  { bg: 'linear-gradient(145deg,#1e40af 0%,#0e7490 100%)', glow: 'rgba(30,64,175,0.45)' },
-  { bg: 'linear-gradient(145deg,#9d174d 0%,#6d28d9 100%)', glow: 'rgba(157,23,77,0.45)'  },
-  { bg: 'linear-gradient(145deg,#92400e 0%,#991b1b 100%)', glow: 'rgba(146,64,14,0.45)'  },
-  { bg: 'linear-gradient(145deg,#064e3b 0%,#1e3a8a 100%)', glow: 'rgba(6,78,59,0.45)'    },
-  { bg: 'linear-gradient(145deg,#4c1d95 0%,#be185d 100%)', glow: 'rgba(76,29,149,0.45)'  },
-]
+import { Button, ConfirmDialog, ErrorMessage, IconButton, Input, PageHeader, Spinner } from '../../components/ui'
+import { BrandGlyph, BrandMark } from '../../components/BrandMark'
+import { characterHeroBackground, characterPalette } from '../../lib/avatar'
+import { heroPill, onGem } from '../../lib/hero'
+import bandaUrl from '../../assets/cosmere/ornamento-banda.svg?url'
+import { buttonReset, c, card, font, fs, radius, shadow, tint, titleText, tone } from '../../theme'
 
 // ─── Inline form component ────────────────────────────────────────────────────
 function InlineForm({
+  id,
   title,
   placeholder,
   value,
@@ -28,7 +24,9 @@ function InlineForm({
   submitLabel,
   isPending,
   error,
+  mono = false,
 }: {
+  id: string
   title: string
   placeholder: string
   value: string
@@ -38,78 +36,78 @@ function InlineForm({
   submitLabel: string
   isPending: boolean
   error: boolean
+  /** Monospaced, tracked input (invite codes) */
+  mono?: boolean
 }) {
+  const titleId = `${id}-title`
+  const inputId = `${id}-input`
+  const canSubmit = !!value.trim() && !isPending
   return (
-    <div
-      style={{
-        background: 'var(--surface-1)',
-        border: '1px solid var(--border-bright)',
-        borderRadius: 18,
-        padding: '20px 24px 24px',
-        marginBottom: 28,
-      }}
+    <section
+      id={id}
+      aria-labelledby={titleId}
+      className="pop-in"
+      style={{ ...card, borderColor: 'var(--border-bright)', boxShadow: shadow[2], padding: '14px 16px 18px', marginBottom: 24 }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '-0.01em' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+        <h2 id={titleId} style={{ fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, color: c.text, lineHeight: 1.25 }}>
           {title}
-        </span>
-        <button
-          onClick={onClose}
-          style={{
-            color: 'var(--text-subtle)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 4,
-            borderRadius: 6,
-            display: 'flex',
-            alignItems: 'center',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        </h2>
+        <IconButton label="Cerrar" size={40} onClick={onClose} style={{ marginRight: -8 }}>
+          <X size={18} aria-hidden />
+        </IconButton>
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (canSubmit) onSubmit()
+        }}
+        style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+      >
+        <label htmlFor={inputId} className="sr-only">{title}</label>
         <Input
+          id={inputId}
           placeholder={placeholder}
           value={value}
           autoFocus
+          autoComplete="off"
+          spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && value.trim() && onSubmit()}
-          style={{ flex: 1 }}
-        />
-        <button
-          onClick={onSubmit}
-          disabled={!value.trim() || isPending}
           style={{
-            background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-            color: 'white',
-            border: 'none',
-            borderRadius: 12,
-            padding: '0 20px',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            opacity: !value.trim() || isPending ? 0.45 : 1,
-            transition: 'opacity 0.15s, transform 0.1s',
-            whiteSpace: 'nowrap',
-            boxShadow: '0 4px 14px rgba(139,92,246,0.3)',
+            flex: '1 1 220px',
+            minWidth: 0,
+            ...(mono ? { fontFamily: font.mono, letterSpacing: '0.12em' } : null),
           }}
-          onMouseEnter={(e) => { if (value.trim() && !isPending) e.currentTarget.style.transform = 'scale(1.02)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = '' }}
-        >
+        />
+        <Button type="submit" disabled={!canSubmit} style={{ flex: '0 0 auto', minWidth: 96 }}>
           {isPending ? '...' : submitLabel}
-        </button>
-      </div>
+        </Button>
+      </form>
 
-      {error && <ErrorMessage message="Algo salió mal. Inténtalo de nuevo." className="mt-3" />}
-    </div>
+      {error && <ErrorMessage message="Algo salió mal. Inténtalo de nuevo." style={{ marginTop: 12 }} />}
+    </section>
   )
+}
+
+// ─── Official chapter frieze (ornamento-banda, tiled) ─────────────────────────
+/* Mask layers only use alpha: the gradient fades both ends of the frieze */
+const fadeEdges = 'linear-gradient(90deg, transparent, var(--text) 18%, var(--text) 82%, transparent)'
+const bandMask: CSSProperties = {
+  height: 18,
+  /* Official gold on ink; leaning to antique gold on paper so the frieze stays visible there */
+  backgroundColor: 'color-mix(in srgb, var(--gold-ornament) 55%, var(--gold))',
+  opacity: 0.5,
+  WebkitMaskImage: `url(${bandaUrl}), ${fadeEdges}`,
+  maskImage: `url(${bandaUrl}), ${fadeEdges}`,
+  WebkitMaskRepeat: 'repeat-x, no-repeat',
+  maskRepeat: 'repeat-x, no-repeat',
+  WebkitMaskSize: 'auto 100%, 100% 100%',
+  maskSize: 'auto 100%, 100% 100%',
+  WebkitMaskPosition: 'center',
+  maskPosition: 'center',
+  WebkitMaskComposite: 'source-in',
+  maskComposite: 'intersect',
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -123,6 +121,7 @@ export function CampaignListPage() {
   const [joinCode, setJoinCode] = useState('')
   const [mode, setMode] = useState<'create' | 'join' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
+  const [openingId, setOpeningId] = useState<number | null>(null)
 
   const { data: campaigns, isLoading, error } = useQuery({
     queryKey: ['campaigns'],
@@ -153,225 +152,174 @@ export function CampaignListPage() {
   })
 
   const openCampaign = async (id: number) => {
-    const detail = await campaignsApi.getById(id)
-    setCurrentCampaign(detail)
-    navigate(`/campaigns/${id}/home`)
+    setOpeningId(id)
+    try {
+      const detail = await campaignsApi.getById(id)
+      setCurrentCampaign(detail)
+      navigate(`/campaigns/${id}/home`)
+    } finally {
+      setOpeningId(null)
+    }
   }
 
+  const subtitle = isLoading
+    ? 'Cargando...'
+    : campaigns?.length
+    ? `${campaigns.length} campaña${campaigns.length !== 1 ? 's' : ''} · selecciona para continuar`
+    : 'Crea tu primera campaña para empezar'
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Subtle ambient top glow */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0, height: 400,
-        background: 'radial-gradient(ellipse 80% 300px at 50% -60px, rgba(139,92,246,0.07), transparent)',
-        pointerEvents: 'none', zIndex: 0,
-      }} />
+    <div style={{ minHeight: '100dvh' }}>
+      <div
+        style={{
+          maxWidth: 960,
+          margin: '0 auto',
+          padding:
+            'calc(clamp(12px, 3vw, 32px) + var(--sat)) calc(clamp(16px, 3vw, 32px) + var(--sar)) calc(56px + var(--sab)) calc(clamp(16px, 3vw, 32px) + var(--sal))',
+        }}
+      >
+        {/* ── Top bar ──────────────────────────────────── */}
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 48 }}>
+          <BrandMark size={24} subtitle="RPG" />
+          <IconButton label="Cerrar sesión" variant="danger" size={44} onClick={() => { logout(); navigate('/login') }}>
+            <LogOut size={19} aria-hidden />
+          </IconButton>
+        </header>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: 'calc(40px + var(--sat)) calc(28px + var(--sar)) calc(80px + var(--sab)) calc(28px + var(--sal))', position: 'relative', zIndex: 1 }}>
+        <div aria-hidden style={{ ...bandMask, margin: '14px 0 28px' }} />
 
-        {/* ── Nav bar ──────────────────────────────────── */}
-        <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 56 }}>
-          {/* Wordmark */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-            <span style={{
-              fontSize: 17, fontWeight: 800, letterSpacing: '-0.04em',
-              background: 'linear-gradient(135deg,#c4b5fd,#8b5cf6)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            }}>
-              Cosmere
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--text-subtle)', fontWeight: 500, letterSpacing: '0.01em' }}>
-              RPG
-            </span>
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button
-              onClick={() => setMode(mode === 'join' ? null : 'join')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: mode === 'join' ? 'var(--surface-2)' : 'transparent',
-                border: '1px solid var(--border-bright)',
-                color: 'var(--text-subtle)',
-                borderRadius: 8, padding: '5px 12px',
-                fontSize: 12, fontWeight: 500,
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'var(--surface-1)' }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-subtle)'
-                e.currentTarget.style.background = mode === 'join' ? 'var(--surface-2)' : 'transparent'
-              }}
-            >
-              <LogIn size={11} />
-              Unirse
-            </button>
-
-            <button
-              onClick={() => setMode(mode === 'create' ? null : 'create')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-                color: 'white', border: 'none',
-                borderRadius: 8, padding: '5px 14px',
-                fontSize: 12, fontWeight: 600,
-                cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s',
-                boxShadow: '0 2px 10px rgba(139,92,246,0.35)',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(139,92,246,0.45)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 2px 10px rgba(139,92,246,0.35)' }}
-            >
-              <Plus size={11} />
-              Nueva campaña
-            </button>
-
-            <button
-              onClick={() => { logout(); navigate('/login') }}
-              title="Cerrar sesión"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'transparent', border: '1px solid var(--border-bright)',
-                color: 'var(--text-subtle)', borderRadius: 8,
-                padding: '5px 8px', cursor: 'pointer', transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-            >
-              <LogOut size={13} />
-            </button>
-          </div>
-        </nav>
-
-        {/* ── Page heading ─────────────────────────────── */}
-        <div style={{ marginBottom: 32 }}>
-          <h1 style={{
-            fontSize: 34, fontWeight: 800, letterSpacing: '-0.04em',
-            color: 'var(--text)', marginBottom: 6, lineHeight: 1.15,
-          }}>
-            Mis campañas
-          </h1>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-            {isLoading
-              ? 'Cargando...'
-              : campaigns?.length
-              ? `${campaigns.length} campaña${campaigns.length !== 1 ? 's' : ''} · selecciona para continuar`
-              : 'Crea tu primera campaña para empezar'}
-          </p>
-        </div>
-
-        {/* ── Inline forms ─────────────────────────────── */}
-        {mode === 'create' && (
-          <InlineForm
-            title="Nueva campaña"
-            placeholder="El nombre de tu campaña..."
-            value={newName}
-            onChange={setNewName}
-            onSubmit={() => createMutation.mutate()}
-            onClose={() => { setMode(null); setNewName('') }}
-            submitLabel="Crear"
-            isPending={createMutation.isPending}
-            error={!!createMutation.error}
+        <main id="main">
+          {/* ── Page heading ─────────────────────────────── */}
+          <PageHeader
+            title="Mis campañas"
+            subtitle={subtitle}
+            actions={
+              <>
+                <Button
+                  variant="secondary"
+                  icon={<LogIn size={16} aria-hidden />}
+                  aria-expanded={mode === 'join'}
+                  aria-controls={mode === 'join' ? 'campaign-join-form' : undefined}
+                  onClick={() => setMode(mode === 'join' ? null : 'join')}
+                  /* Full `border` shorthand: overriding only borderColor would wipe the variant's colour when it is removed */
+                  style={mode === 'join' ? { background: 'var(--brand-bg)', border: '1px solid var(--brand-border)', color: c.brandLight } : undefined}
+                >
+                  Unirse
+                </Button>
+                <Button
+                  icon={<Plus size={16} aria-hidden />}
+                  aria-expanded={mode === 'create'}
+                  aria-controls={mode === 'create' ? 'campaign-create-form' : undefined}
+                  onClick={() => setMode(mode === 'create' ? null : 'create')}
+                >
+                  Nueva campaña
+                </Button>
+              </>
+            }
           />
-        )}
-        {mode === 'join' && (
-          <InlineForm
-            title="Unirse con código de invitación"
-            placeholder="Código (ej: XK9P2M)"
-            value={joinCode}
-            onChange={(v) => setJoinCode(v.toUpperCase())}
-            onSubmit={() => joinMutation.mutate()}
-            onClose={() => { setMode(null); setJoinCode('') }}
-            submitLabel="Unirse"
-            isPending={joinMutation.isPending}
-            error={!!joinMutation.error}
-          />
-        )}
 
-        {error && <ErrorMessage message="Error al cargar las campañas." className="mb-6" />}
+          {/* ── Inline forms ─────────────────────────────── */}
+          {mode === 'create' && (
+            <InlineForm
+              id="campaign-create-form"
+              title="Nueva campaña"
+              placeholder="El nombre de tu campaña..."
+              value={newName}
+              onChange={setNewName}
+              onSubmit={() => createMutation.mutate()}
+              onClose={() => { setMode(null); setNewName('') }}
+              submitLabel="Crear"
+              isPending={createMutation.isPending}
+              error={!!createMutation.error}
+            />
+          )}
+          {mode === 'join' && (
+            <InlineForm
+              id="campaign-join-form"
+              title="Unirse con código de invitación"
+              placeholder="Código (ej: XK9P2M)"
+              value={joinCode}
+              onChange={(v) => setJoinCode(v.toUpperCase())}
+              onSubmit={() => joinMutation.mutate()}
+              onClose={() => { setMode(null); setJoinCode('') }}
+              submitLabel="Unirse"
+              isPending={joinMutation.isPending}
+              error={!!joinMutation.error}
+              mono
+            />
+          )}
 
-        {/* ── Content ──────────────────────────────────── */}
-        {isLoading ? (
-          <Spinner />
-        ) : campaigns?.length === 0 ? (
-          // Empty state
-          <div style={{
-            border: '1.5px dashed var(--border-bright)',
-            borderRadius: 24,
-            padding: '64px 32px',
-            textAlign: 'center',
-            background: 'var(--surface-1)',
-          }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: 16, margin: '0 auto 20px',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border-bright)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-subtle)' }}>
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            </div>
-            <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
-              Sin campañas todavía
-            </h3>
-            <p style={{ fontSize: 14, color: 'var(--text-subtle)', marginBottom: 28, maxWidth: 320, margin: '0 auto 28px' }}>
-              Crea tu primera campaña o únete a una existente con un código de invitación.
-            </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button
-                onClick={() => setMode('join')}
+          {error && <ErrorMessage message="Error al cargar las campañas." style={{ marginBottom: 24 }} />}
+
+          {/* ── Content ──────────────────────────────────── */}
+          {isLoading ? (
+            <Spinner />
+          ) : campaigns?.length === 0 ? (
+            <section
+              aria-labelledby="campaigns-empty-title"
+              className="rise"
+              style={{
+                border: `1px dashed ${c.borderBright}`,
+                borderRadius: radius.xl,
+                padding: '48px 24px',
+                textAlign: 'center',
+                background: 'color-mix(in srgb, var(--surface-1) 70%, transparent)',
+              }}
+            >
+              <div
+                aria-hidden
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'var(--surface-2)', border: '1px solid var(--border-bright)',
-                  color: 'var(--text-muted)', borderRadius: 12, padding: '9px 18px',
-                  fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'color 0.15s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-              >
-                <LogIn size={13} /> Unirse con código
-              </button>
-              <button
-                onClick={() => setMode('create')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-                  color: 'white', border: 'none', borderRadius: 12, padding: '9px 20px',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(139,92,246,0.3)',
+                  width: 64, height: 64, margin: '0 auto 16px', borderRadius: radius.md,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'var(--brand-bg)', border: '1px solid var(--brand-border)',
                 }}
               >
-                <Plus size={13} /> Nueva campaña
-              </button>
-            </div>
-          </div>
-        ) : (
-          // Campaign grid
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: 18,
-          }}>
-            {(campaigns ?? []).map((c) => {
-              const pal = PALETTES[c.id % PALETTES.length]
-              return (
+                <BrandGlyph size={34} glow={false} />
+              </div>
+              <h2 id="campaigns-empty-title" style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, color: c.text }}>
+                Sin campañas todavía
+              </h2>
+              <p style={{ fontSize: fs.sm + 1, color: c.muted, maxWidth: 340, margin: '8px auto 24px' }}>
+                Crea tu primera campaña o únete a una existente con un código de invitación.
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Button variant="secondary" icon={<LogIn size={16} aria-hidden />} onClick={() => setMode('join')}>
+                  Unirse con código
+                </Button>
+                <Button icon={<Plus size={16} aria-hidden />} onClick={() => setMode('create')}>
+                  Nueva campaña
+                </Button>
+              </div>
+            </section>
+          ) : (
+            <ul
+              role="list"
+              aria-label="Campañas"
+              style={{
+                listStyle: 'none',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
+                gap: 16,
+              }}
+            >
+              {(campaigns ?? []).map((cmp, i) => (
                 <CampaignCard
-                  key={c.id}
-                  name={c.name}
-                  role={c.role}
-                  createdAt={c.createdAt}
-                  gradient={pal.bg}
-                  glow={pal.glow}
-                  nextSessionDate={c.nextSessionDate}
-                  nextSessionTitle={c.nextSessionTitle}
-                  onOpen={() => openCampaign(c.id)}
-                  onDelete={c.role === 'gm' ? () => setConfirmDelete({ open: true, id: c.id, name: c.name }) : undefined}
+                  key={cmp.id}
+                  id={cmp.id}
+                  index={i}
+                  name={cmp.name}
+                  role={cmp.role}
+                  createdAt={cmp.createdAt}
+                  nextSessionDate={cmp.nextSessionDate}
+                  nextSessionTitle={cmp.nextSessionTitle}
+                  opening={openingId === cmp.id}
+                  onOpen={() => openCampaign(cmp.id)}
+                  onDelete={cmp.role === 'gm' ? () => setConfirmDelete({ open: true, id: cmp.id, name: cmp.name }) : undefined}
                 />
-              )
-            })}
-          </div>
-        )}
+              ))}
+            </ul>
+          )}
+        </main>
       </div>
 
       <ConfirmDialog
@@ -386,174 +334,164 @@ export function CampaignListPage() {
 }
 
 // ─── Campaign card ────────────────────────────────────────────────────────────
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
+
+/* Role dot on the (always deep) cover gradient: the role tone, lifted to a fixed lightness so it glows in both themes */
+const roleDot = (token: string) => `oklch(from var(${token}) 0.8 c h)`
+
 function CampaignCard({
+  id,
+  index,
   name,
   role,
   createdAt,
-  gradient,
-  glow,
   nextSessionDate,
   nextSessionTitle,
+  opening,
   onOpen,
   onDelete,
 }: {
+  id: number
+  index: number
   name: string
   role: string
   createdAt: string
-  gradient: string
-  glow: string
   nextSessionDate?: string
   nextSessionTitle?: string
+  opening: boolean
   onOpen: () => void
   onDelete?: () => void
 }) {
   const [hovered, setHovered] = useState(false)
   const isGm = role === 'gm'
+  const titleId = `campaign-${id}-title`
+  const roleId = `campaign-${id}-role`
+  const metaId = `campaign-${id}-meta`
+  const accent = characterPalette(id).accent
+  const dot = roleDot(isGm ? '--rubi' : '--brand')
 
   return (
-    <div
-      onClick={onOpen}
+    <li
+      className="rise"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        borderRadius: 20,
+        '--i': index,
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRadius: radius.lg + 2,
         overflow: 'hidden',
-        border: '1px solid var(--border)',
-        cursor: 'pointer',
-        background: 'var(--surface-1)',
-        transition: 'transform 0.2s cubic-bezier(.22,.68,0,1.2), box-shadow 0.2s ease, border-color 0.2s ease',
-        transform: hovered ? 'translateY(-5px) scale(1.01)' : 'translateY(0) scale(1)',
-        boxShadow: hovered ? `0 24px 56px -8px ${glow}, 0 0 0 1px var(--border-bright)` : 'none',
-        borderColor: hovered ? 'var(--border-bright)' : 'var(--border)',
-      }}
+        background: c.s1,
+        border: `1px solid ${hovered ? c.borderStrong : c.border}`,
+        boxShadow: hovered ? `0 22px 44px -20px ${tint(accent, 60)}, ${shadow[2]}` : shadow[1],
+        transform: hovered ? 'translateY(-3px)' : 'none',
+        transition: 'transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2), border-color var(--dur-2)',
+      } as CSSProperties}
     >
-      {/* ── Cover art ──────────────────────────────────── */}
-      <div style={{ position: 'relative', height: 188, background: gradient, overflow: 'hidden' }}>
+      {/* ── Cover art (deep gemstone gradient: white text is ≥ 10:1 on it) ── */}
+      <div style={{ position: 'relative', height: 168, background: characterHeroBackground(id), color: onGem, overflow: 'hidden' }}>
+        <div aria-hidden style={{ position: 'absolute', inset: 0, opacity: 0.12, mixBlendMode: 'overlay', backgroundImage: GRAIN }} />
 
-        {/* Noise texture overlay */}
-        <div style={{
-          position: 'absolute', inset: 0, opacity: 0.15, mixBlendMode: 'overlay',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
-          backgroundSize: '200px',
-        }} />
+        {/* Watermark initial */}
+        <span
+          aria-hidden
+          style={{
+            ...titleText,
+            position: 'absolute', right: 14, top: -6,
+            fontSize: 136, lineHeight: 1, opacity: 0.1,
+            userSelect: 'none', pointerEvents: 'none',
+          }}
+        >
+          {name.charAt(0).toUpperCase()}
+        </span>
 
-        {/* Watermark letter — centered, subtle */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 120, fontWeight: 900, lineHeight: 1,
-          color: 'rgba(255,255,255,0.08)', letterSpacing: '-0.04em',
-          userSelect: 'none', pointerEvents: 'none',
-        }}>
-          {name[0].toUpperCase()}
-        </div>
+        {/* Role chip */}
+        <span id={roleId} style={{ ...heroPill, position: 'absolute', top: 14, left: 14, textTransform: 'uppercase', letterSpacing: '0.08em', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+          <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: dot, boxShadow: `0 0 8px ${dot}` }} />
+          {isGm ? 'Director' : 'Jugador'}
+        </span>
 
-        {/* Role chip — top left */}
-        <div style={{
-          position: 'absolute', top: 14, left: 14,
-          display: 'flex', alignItems: 'center', gap: 5,
-          background: 'rgba(0,0,0,0.35)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 20, padding: '4px 10px',
-        }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: isGm ? '#fbbf24' : '#a78bfa',
-            boxShadow: isGm ? '0 0 8px rgba(251,191,36,0.8)' : '0 0 8px rgba(167,139,250,0.8)',
-            flexShrink: 0,
-          }} />
-          <span style={{
-            fontSize: 10, fontWeight: 700, color: 'white',
-            letterSpacing: '0.05em', textTransform: 'uppercase',
-          }}>
-            {isGm ? 'Game Master' : 'Jugador'}
-          </span>
-        </div>
-
-        {/* Bottom gradient + title */}
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.2) 60%, transparent 100%)',
-          padding: '52px 16px 16px',
-        }}>
-          <h3 style={{
-            color: 'white', fontSize: 18, fontWeight: 700,
-            letterSpacing: '-0.025em', lineHeight: 1.25,
-            textShadow: '0 2px 8px rgba(0,0,0,0.4)',
-          }}>
-            {name}
-          </h3>
-        </div>
-
-        {/* Hover shimmer */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.04), transparent 60%)',
-          opacity: hovered ? 1 : 0,
-          transition: 'opacity 0.2s',
-          pointerEvents: 'none',
-        }} />
+        {/* Title */}
+        <h2
+          id={titleId}
+          style={{
+            ...titleText,
+            position: 'absolute', left: 16, right: 16, bottom: 14,
+            fontSize: fs.xl, color: onGem,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {name}
+        </h2>
       </div>
+
+      {/* Stretched primary action: the whole card opens the campaign */}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-labelledby={titleId}
+        aria-describedby={`${roleId} ${metaId}`}
+        aria-busy={opening || undefined}
+        style={{ ...buttonReset, position: 'absolute', inset: 0, zIndex: 1, borderRadius: 'inherit', outlineOffset: -3 }}
+      />
 
       {/* ── Footer ──────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '11px 16px',
-        borderTop: '1px solid var(--border)',
-      }}>
-        {nextSessionDate ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-            <CalendarDays size={11} style={{ color: '#86efac', flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: '#86efac', fontWeight: 600, whiteSpace: 'nowrap' }}>
-              {new Date(nextSessionDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
-            </span>
-            {nextSessionTitle && (
-              <span style={{ fontSize: 11, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                · {nextSessionTitle}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 56, padding: '6px 8px 6px 16px', borderTop: `1px solid ${c.border}` }}>
+        <p id={metaId} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted }}>
+          {nextSessionDate ? (
+            <>
+              <CalendarDays size={15} aria-hidden style={{ color: tone.esmeralda.fg }} />
+              <span className="sr-only">Próxima sesión: </span>
+              <span style={{ color: tone.esmeralda.fg, fontWeight: 650, whiteSpace: 'nowrap' }}>
+                {new Date(nextSessionDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
               </span>
-            )}
-          </div>
-        ) : (
-          <span style={{ fontSize: 12, color: 'var(--text-subtle)', fontWeight: 500 }}>
-            {new Date(createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-          </span>
+              {nextSessionTitle && (
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                  · {nextSessionTitle}
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="sr-only">Creada: </span>
+              <span style={{ whiteSpace: 'nowrap', color: c.subtle }}>
+                {new Date(createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            </>
+          )}
+        </p>
+
+        {onDelete && (
+          <IconButton
+            label={`Eliminar ${name}`}
+            variant="danger"
+            size={40}
+            onClick={(e) => { e.stopPropagation(); onDelete() }}
+            style={{ position: 'relative', zIndex: 2 }}
+          >
+            <Trash2 size={17} aria-hidden />
+          </IconButton>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {onDelete && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete() }}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-subtle)', padding: '4px 6px', borderRadius: 8,
-                opacity: hovered ? 1 : 0.4,
-                transition: 'opacity 0.15s, color 0.15s',
-                display: 'flex', alignItems: 'center',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-            >
-              <Trash2 size={13} />
-            </button>
+        <span
+          aria-hidden
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, paddingRight: 8,
+            fontSize: fs.sm, fontWeight: 650,
+            color: hovered ? c.brandLight : c.muted,
+            transition: 'color var(--dur-1)',
+          }}
+        >
+          Abrir
+          {opening ? (
+            <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--brand-bg)', borderTopColor: 'var(--brand)', animation: 'spin 0.8s linear infinite' }} />
+          ) : (
+            <ArrowRight size={15} style={{ transform: hovered ? 'translateX(3px)' : 'none', transition: 'transform var(--dur-2) var(--ease-out)' }} />
           )}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            fontSize: 12, fontWeight: 500,
-            color: hovered ? 'var(--brand-light)' : 'var(--text-subtle)',
-            transition: 'color 0.15s',
-          }}>
-            Abrir
-            <ArrowRight
-              size={13}
-              style={{
-                transform: hovered ? 'translateX(3px)' : 'translateX(0)',
-                transition: 'transform 0.2s cubic-bezier(.22,.68,0,1.2)',
-              }}
-            />
-          </div>
-        </div>
+        </span>
       </div>
-    </div>
+    </li>
   )
 }

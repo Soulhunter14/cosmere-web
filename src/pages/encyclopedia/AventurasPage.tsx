@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Info, Shield, ShieldOff } from 'lucide-react'
 import {
   ESCENAS_SECTIONS,
   DESCANSOS,
@@ -11,8 +12,12 @@ import {
   DANO_SECTIONS,
 } from '../../data/aventuras'
 import type { AventuraSection, Estado, ActividadReposo, TipoDano } from '../../data/aventuras'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { Disclosure, PageHeader, SectionTitle, Tabs, TabPanel, type TabItem } from '../../components/ui'
+import { c, eyebrow, font, fs, numeral, page, pill, radius, shadow, tone, type Tone } from '../../theme'
 
-const TABS = [
+type TabId = 'escenas' | 'reposo' | 'sucesos' | 'estados' | 'dano'
+const TABS: TabItem<TabId>[] = [
   { id: 'escenas', label: 'Escenas' },
   { id: 'reposo', label: 'Reposo' },
   { id: 'sucesos', label: 'Sucesos' },
@@ -20,304 +25,320 @@ const TABS = [
   { id: 'dano', label: 'Daño' },
 ]
 
-function SectionCard({ section }: { section: AventuraSection }) {
-  const [open, setOpen] = useState(false)
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+const ACCENT = 'var(--esmeralda)'
+const rise = (i: number) => ({ className: 'rise', style: { '--i': i } as CSSProperties })
 
+/** Injury severity (DURACION_LESIONES[].tipo) → gem tone. The tipo is also shown as text. */
+const SEVERITY_TONE: Record<string, Tone> = {
+  muerte: tone.rubi,
+  permanente: tone.heliodoro,
+  grave: tone.topacio,
+  leve: tone.amatista,
+}
+
+// ── Shared bits ───────────────────────────────────────────────
+function RuleDetails({ details }: { details: { label: string; text: string }[] }) {
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 16px', textAlign: 'left', width: '100%',
-          background: 'var(--surface-1)', border: 'none', cursor: 'pointer',
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 3 }}>{section.title}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{section.summary}</div>
+    <dl style={stack(0)}>
+      {details.map((d, i) => (
+        <div key={d.label} style={{ paddingTop: i === 0 ? 0 : 12, paddingBottom: 12, borderTop: i === 0 ? 'none' : `1px solid ${c.border}` }}>
+          <dt style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.base - 1, fontWeight: 650, color: c.text, lineHeight: 1.35, marginBottom: 4 }}>
+            <CosmereIcon name="ornamento-rombo" size={8} style={{ color: 'var(--gold-ornament)' }} />
+            {d.label}
+          </dt>
+          <dd style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6, paddingLeft: 16 }}>{d.text}</dd>
         </div>
-        <div style={{
-          fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: 0.6,
-          transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
-        }}>›</div>
-      </button>
+      ))}
+    </dl>
+  )
+}
 
-      {open && (
-        <div style={{ padding: '0 16px 16px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12 }}>
-            {section.details.map((d) => (
-              <div key={d.label} style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                  {d.label}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{d.text}</div>
-              </div>
-            ))}
-          </div>
+function SectionCard({ section, headingLevel }: { section: AventuraSection; headingLevel: 2 | 3 }) {
+  return (
+    <Disclosure title={section.title} summary={section.summary} headingLevel={headingLevel} accent={ACCENT}>
+      <RuleDetails details={section.details} />
+    </Disclosure>
+  )
+}
+
+function SectionList({ sections, headingLevel }: { sections: AventuraSection[]; headingLevel: 2 | 3 }) {
+  return (
+    <div style={stack(10)}>
+      {sections.map((s, i) => (
+        <div key={s.id} {...rise(i)}>
+          <SectionCard section={s} headingLevel={headingLevel} />
         </div>
-      )}
+      ))}
     </div>
   )
 }
 
-function EstadoCard({ estado }: { estado: Estado }) {
-  const [open, setOpen] = useState(false)
-
+function Callout({ children }: { children: ReactNode }) {
   return (
-    <button
-      onClick={() => setOpen(!open)}
+    <p
       style={{
-        display: 'flex', flexDirection: 'column',
-        padding: '12px 14px', borderRadius: 12, textAlign: 'left', width: '100%',
-        background: 'var(--surface-1)', border: '1px solid var(--border)',
-        cursor: 'pointer', transition: 'border-color 0.15s',
+        display: 'flex', gap: 12, alignItems: 'flex-start',
+        fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6,
+        padding: '14px 16px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}`,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(180,190,254,0.25)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'white', flex: 1 }}>{estado.name}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', flex: 2, textAlign: 'left' }}>{estado.summary}</div>
-        <div style={{ fontSize: 14, color: 'var(--text-subtle)', opacity: 0.6 }}>{open ? '▾' : '›'}</div>
+      <Info size={18} aria-hidden style={{ color: c.brand, marginTop: 2 }} />
+      <span>{children}</span>
+    </p>
+  )
+}
+
+/** Horizontal scroller for the tab strip: fades the edge that still has hidden tabs. */
+function TabScroller({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ start: false, end: false })
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth
+      setEdges({ start: el.scrollLeft > 2, end: el.scrollLeft < max - 2 })
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', update); ro.disconnect() }
+  }, [])
+  const mask = `linear-gradient(90deg, ${edges.start ? 'transparent' : 'var(--bg)'} 0, var(--bg) 28px, var(--bg) calc(100% - 28px), ${edges.end ? 'transparent' : 'var(--bg)'} 100%)`
+  return (
+    <div
+      ref={ref}
+      style={{
+        overflowX: 'auto', scrollbarWidth: 'none', margin: '0 -16px 20px', padding: '2px 16px',
+        WebkitMaskImage: mask, maskImage: mask,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ── Estados / actividades / daño ──────────────────────────────
+function EstadoCard({ estado }: { estado: Estado }) {
+  return (
+    <Disclosure title={estado.name} summary={estado.summary} headingLevel={2} accent={ACCENT}>
+      <div style={stack(10)}>
+        <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6 }}>{estado.details}</p>
+        {estado.special && (
+          <p
+            style={{
+              fontSize: fs.sm + 1, color: c.brandLight, lineHeight: 1.55, padding: '10px 14px', borderRadius: radius.sm,
+              background: 'var(--brand-bg)', border: '1px solid var(--brand-border)',
+            }}
+          >
+            {estado.special}
+          </p>
+        )}
       </div>
-      {open && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>{estado.details}</div>
-          {estado.special && (
-            <div style={{ fontSize: 11, color: 'var(--brand-light)', lineHeight: 1.5, padding: '6px 10px', borderRadius: 8, background: 'rgba(180,190,254,0.06)', border: '1px solid rgba(180,190,254,0.12)' }}>
-              {estado.special}
-            </div>
-          )}
-        </div>
-      )}
-    </button>
+    </Disclosure>
   )
 }
 
 function ActividadCard({ actividad }: { actividad: ActividadReposo }) {
-  const [open, setOpen] = useState(false)
-
+  const meta: CSSProperties = { padding: '8px 12px', borderRadius: radius.sm, background: c.s2, border: `1px solid ${c.border}` }
   return (
-    <button
-      onClick={() => setOpen(!open)}
-      style={{
-        display: 'flex', flexDirection: 'column',
-        padding: '12px 14px', borderRadius: 12, textAlign: 'left', width: '100%',
-        background: 'var(--surface-1)', border: '1px solid var(--border)',
-        cursor: 'pointer', transition: 'border-color 0.15s',
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(52,211,153,0.25)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'white', flex: 1 }}>{actividad.name}</div>
-        <div style={{ fontSize: 14, color: 'var(--text-subtle)', opacity: 0.6 }}>{open ? '▾' : '›'}</div>
-      </div>
-      {open && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Duración: <span style={{ fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none' }}>{actividad.duration}</span>
-            </div>
-            {actividad.cost !== '—' && (
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Coste: <span style={{ fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none' }}>{actividad.cost}</span>
-              </div>
-            )}
+    <Disclosure title={actividad.name} headingLevel={3} accent={ACCENT}>
+      <div style={stack(12)}>
+        <dl style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={meta}>
+            <dt style={{ ...eyebrow, marginBottom: 2 }}>Duración</dt>
+            <dd style={{ fontSize: fs.sm + 1, color: c.text, fontWeight: 550 }}>{actividad.duration}</dd>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>{actividad.description}</div>
-        </div>
-      )}
-    </button>
+          {actividad.cost !== '—' && (
+            <div style={meta}>
+              <dt style={{ ...eyebrow, marginBottom: 2 }}>Coste</dt>
+              <dd style={{ fontSize: fs.sm + 1, color: c.text, fontWeight: 550 }}>{actividad.cost}</dd>
+            </div>
+          )}
+        </dl>
+        <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6 }}>{actividad.description}</p>
+      </div>
+    </Disclosure>
   )
 }
 
-function DamageTypeBadge({ tipo }: { tipo: TipoDano }) {
-  const color = tipo.reducedByDesvio ? '#fb923c' : '#f87171'
-  const bg = tipo.reducedByDesvio ? 'rgba(251,146,60,0.08)' : 'rgba(248,113,113,0.08)'
-  const border = tipo.reducedByDesvio ? 'rgba(251,146,60,0.2)' : 'rgba(248,113,113,0.2)'
+function DamageTypeCard({ tipo }: { tipo: TipoDano }) {
+  const t = tipo.reducedByDesvio ? tone.heliodoro : tone.rubi
+  const Icon = tipo.reducedByDesvio ? Shield : ShieldOff
 
   return (
-    <div style={{ padding: '10px 14px', borderRadius: 12, background: 'var(--surface-1)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{tipo.name}</div>
-        <div style={{ fontSize: 9, fontWeight: 700, color, background: bg, border: `1px solid ${border}`, borderRadius: 6, padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+    <article
+      style={{
+        ...stack(8), height: '100%', padding: '14px 16px', borderRadius: radius.md,
+        background: c.s1, border: `1px solid ${c.border}`, boxShadow: shadow[1],
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <h3 style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, color: c.text, lineHeight: 1.2 }}>{tipo.name}</h3>
+        <span style={pill(t)}>
+          <Icon size={12} aria-hidden />
           {tipo.reducedByDesvio ? 'desvío' : 'no desvío'}
-        </div>
+        </span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{tipo.description}</div>
-    </div>
+      <p style={{ fontSize: fs.sm + 1, color: c.muted, lineHeight: 1.55 }}>{tipo.description}</p>
+    </article>
   )
 }
+
+// ── Tables ────────────────────────────────────────────────────
+const tableWrap: CSSProperties = {
+  borderRadius: radius.md, border: `1px solid ${c.border}`, overflow: 'hidden', background: c.s1, boxShadow: shadow[1],
+}
+const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }
+const th: CSSProperties = {
+  ...eyebrow, textAlign: 'left', padding: '10px 14px', background: c.s2, borderBottom: `1px solid ${c.border}`,
+}
+const td = (first: boolean): CSSProperties => ({
+  padding: '12px 14px', verticalAlign: 'top', borderTop: first ? 'none' : `1px solid ${c.border}`,
+  fontSize: fs.sm + 1, lineHeight: 1.5, color: c.muted,
+})
 
 export function AventurasPage() {
-  const [tab, setTab] = useState('escenas')
+  const [tab, setTab] = useState<TabId>('escenas')
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
-        Aventuras
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-        Reglas de escenas, descanso, sucesos, estados y daño
-      </p>
+    <div style={page}>
+      <PageHeader title="Aventuras" subtitle="Reglas de escenas, descanso, sucesos, estados y daño" />
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, overflowX: 'auto' }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: '7px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', border: 'none', whiteSpace: 'nowrap',
-              background: tab === t.id ? 'rgba(180,190,254,0.12)' : 'transparent',
-              outline: `1px solid ${tab === t.id ? 'rgba(180,190,254,0.2)' : 'transparent'}`,
-              color: tab === t.id ? 'var(--brand-light)' : 'var(--text-subtle)',
-              transition: 'all 0.15s',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <TabScroller>
+        <Tabs
+          tabs={TABS}
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Secciones de Aventuras"
+          idPrefix="aventuras"
+          style={{ maxWidth: 'none', overflowX: 'visible' }}
+        />
+      </TabScroller>
 
-      {/* Escenas */}
       {tab === 'escenas' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {ESCENAS_SECTIONS.map((s) => (
-            <SectionCard key={s.id} section={s} />
-          ))}
-        </div>
+        <TabPanel idPrefix="aventuras" id="escenas">
+          <SectionList sections={ESCENAS_SECTIONS} headingLevel={2} />
+        </TabPanel>
       )}
 
-      {/* Reposo */}
       {tab === 'reposo' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-              Tipos de descanso
-            </div>
-            {DESCANSOS.map((s) => (
-              <SectionCard key={s.id} section={s} />
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-              Actividades durante el reposo
-            </div>
-            {ACTIVIDADES_REPOSO.map((a) => (
-              <ActividadCard key={a.name} actividad={a} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Sucesos */}
-      {tab === 'sucesos' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {SUCESOS_SECTIONS.map((s) => (
-            <SectionCard key={s.id} section={s} />
-          ))}
-        </div>
-      )}
-
-      {/* Estados */}
-      {tab === 'estados' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 10px', padding: '12px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-            Los estados son condiciones que afectan temporalmente a los personajes. Salvo indicación contraria, una instancia de un estado no puede aplicarse varias veces al mismo objetivo.
-          </p>
-          {ESTADOS.map((e) => (
-            <EstadoCard key={e.name} estado={e} />
-          ))}
-        </div>
-      )}
-
-      {/* Daño */}
-      {tab === 'dano' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Reglas de daño */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {DANO_SECTIONS.map((s) => (
-              <SectionCard key={s.id} section={s} />
-            ))}
-          </div>
-
-          {/* Tipos de daño */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              Tipos de daño
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {TIPOS_DANO.map((t) => (
-                <DamageTypeBadge key={t.name} tipo={t} />
+        <TabPanel idPrefix="aventuras" id="reposo" style={stack(28)}>
+          <section>
+            <SectionTitle>Tipos de descanso</SectionTitle>
+            <SectionList sections={DESCANSOS} headingLevel={3} />
+          </section>
+          <section>
+            <SectionTitle>Actividades durante el reposo</SectionTitle>
+            <div style={stack(8)}>
+              {ACTIVIDADES_REPOSO.map((a, i) => (
+                <div key={a.name} {...rise(i)}>
+                  <ActividadCard actividad={a} />
+                </div>
               ))}
             </div>
+          </section>
+        </TabPanel>
+      )}
+
+      {tab === 'sucesos' && (
+        <TabPanel idPrefix="aventuras" id="sucesos">
+          <SectionList sections={SUCESOS_SECTIONS} headingLevel={2} />
+        </TabPanel>
+      )}
+
+      {tab === 'estados' && (
+        <TabPanel idPrefix="aventuras" id="estados" style={stack(8)}>
+          <div style={{ marginBottom: 8 }}>
+            <Callout>
+              Los estados son condiciones que afectan temporalmente a los personajes. Salvo indicación contraria, una instancia de un estado no puede aplicarse varias veces al mismo objetivo.
+            </Callout>
           </div>
+          {ESTADOS.map((e, i) => (
+            <div key={e.name} {...rise(i)}>
+              <EstadoCard estado={e} />
+            </div>
+          ))}
+        </TabPanel>
+      )}
+
+      {tab === 'dano' && (
+        <TabPanel idPrefix="aventuras" id="dano" style={stack(28)}>
+          {/* Reglas de daño */}
+          <SectionList sections={DANO_SECTIONS} headingLevel={2} />
+
+          {/* Tipos de daño */}
+          <section>
+            <SectionTitle>Tipos de daño</SectionTitle>
+            <ul style={{ listStyle: 'none', display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))' }}>
+              {TIPOS_DANO.map((t, i) => (
+                <li key={t.name} {...rise(i)}>
+                  <DamageTypeCard tipo={t} />
+                </li>
+              ))}
+            </ul>
+          </section>
 
           {/* Tabla duración lesiones */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              Tabla de lesiones — duración (d20 + modificadores)
+          <section>
+            <SectionTitle id="tabla-lesiones-duracion">Tabla de lesiones — duración (d20 + modificadores)</SectionTitle>
+            <div style={tableWrap}>
+              <table aria-labelledby="tabla-lesiones-duracion" style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th scope="col" style={{ ...th, width: '46%' }}>Resultado</th>
+                    <th scope="col" style={th}>Duración</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DURACION_LESIONES.map((row, i) => {
+                    const t = SEVERITY_TONE[row.tipo] ?? tone.cuarzo
+                    return (
+                      <tr key={row.tirada}>
+                        <th scope="row" style={{ ...td(i === 0), textAlign: 'left', fontWeight: 'inherit' }}>
+                          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                            <span style={{ ...numeral, fontSize: fs.base, color: t.fg }}>{row.tirada}</span>
+                            <span style={{ ...pill(t), textTransform: 'capitalize' }}>{row.tipo}</span>
+                          </span>
+                        </th>
+                        <td style={{ ...td(i === 0), color: c.text }}>{row.duracion}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: 'var(--surface-2)', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Resultado</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Duración</div>
-              </div>
-              {DURACION_LESIONES.map((row, i) => {
-                const isLast = i === DURACION_LESIONES.length - 1
-                const rowColor = row.tipo === 'muerte' ? '#f87171' : row.tipo === 'permanente' ? '#fb923c' : row.tipo === 'grave' ? '#fbbf24' : row.tipo === 'leve' ? '#a78bfa' : 'var(--text-muted)'
-                return (
-                  <div
-                    key={row.tirada}
-                    style={{
-                      display: 'grid', gridTemplateColumns: '1fr 1fr',
-                      padding: '10px 14px', background: 'var(--surface-1)',
-                      borderBottom: isLast ? 'none' : '1px solid var(--border)',
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: rowColor }}>{row.tirada}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{row.duracion}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          </section>
 
           {/* Tabla efectos lesiones */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              Tabla de lesiones — efectos (d8)
+          <section>
+            <SectionTitle id="tabla-lesiones-efectos">Tabla de lesiones — efectos (d8)</SectionTitle>
+            <div style={tableWrap}>
+              <table aria-labelledby="tabla-lesiones-efectos" style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th scope="col" style={{ ...th, width: 64 }}>d8</th>
+                    <th scope="col" style={{ ...th, width: '38%' }}>Efecto</th>
+                    <th scope="col" style={th}>Narrativa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {EFECTOS_LESIONES.map((row, i) => (
+                    <tr key={row.d8}>
+                      <td style={{ ...td(i === 0), fontFamily: font.mono, fontSize: fs.base, fontWeight: 600, color: c.brandLight, whiteSpace: 'nowrap' }}>
+                        {row.d8}
+                      </td>
+                      <th scope="row" style={{ ...td(i === 0), textAlign: 'left', color: c.text, fontWeight: 650 }}>{row.efecto}</th>
+                      <td style={td(i === 0)}>{row.narrativa}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr', background: 'var(--surface-2)', padding: '8px 14px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>d8</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Efecto</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Narrativa</div>
-              </div>
-              {EFECTOS_LESIONES.map((row, i) => {
-                const isLast = i === EFECTOS_LESIONES.length - 1
-                return (
-                  <div
-                    key={row.d8}
-                    style={{
-                      display: 'grid', gridTemplateColumns: '40px 1fr 1fr',
-                      padding: '10px 14px', background: 'var(--surface-1)',
-                      borderBottom: isLast ? 'none' : '1px solid var(--border)',
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-light)' }}>{row.d8}</div>
-                    <div style={{ fontSize: 12, color: 'white', fontWeight: 600 }}>{row.efecto}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{row.narrativa}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+          </section>
+        </TabPanel>
       )}
     </div>
   )

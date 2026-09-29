@@ -1,243 +1,273 @@
-import { useState } from 'react'
-import { X, Star } from 'lucide-react'
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronRight, Star, X } from 'lucide-react'
 import { HEROIC_PATHS, type HeroicPath } from '../../data/heroicPaths'
 import { TalentActivation } from '../../components/TalentActivation'
+import { HeroicPathIcon } from '../../components/GameIcons'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { IconButton, PageHeader, SectionTitle, Tabs, TabPanel } from '../../components/ui'
+import { useDialogA11y } from '../../hooks/useDialogA11y'
+import { c, eyebrow, font, fs, page, pill, radius, shadow, tint, titleText, toneFrom } from '../../theme'
 
-function PathDetailSheet({ path, onClose }: { path: HeroicPath; onClose: () => void }) {
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+
+// ── Local sheet with a hero header (dialog named by the visible title) ──
+function HeroSheet({ open, onClose, labelledBy, children, maxWidth = 600 }: {
+  open: boolean
+  onClose: () => void
+  labelledBy: string
+  children: ReactNode
+  maxWidth?: number
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useDialogA11y(ref, open, onClose)
+  if (!open) return null
+  return createPortal(
+    <div className="ui-sheet-wrap">
+      <div
+        className="fade-in"
+        onClick={onClose}
+        aria-hidden
+        style={{ position: 'absolute', inset: 0, background: c.overlay, backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+      />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        tabIndex={-1}
+        className="ui-sheet"
+        style={{ maxWidth, overflow: 'hidden' }}
+      >
+        <IconButton
+          label="Cerrar"
+          variant="surface"
+          size={44}
+          onClick={onClose}
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 1, borderRadius: radius.full }}
+        >
+          <X size={18} aria-hidden />
+        </IconButton>
+        {/* Focusable scroller: keyboard users can scroll a sheet that has no controls of its own */}
+        <div
+          role="region"
+          aria-labelledby={labelledBy}
+          tabIndex={0}
+          style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 'calc(24px + var(--sab))', outlineOffset: -3 }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function PathDetail({ path, titleId }: { path: HeroicPath; titleId: string }) {
   const [activeSpecialty, setActiveSpecialty] = useState(0)
   const specialty = path.specialties[activeSpecialty]
+  const t = toneFrom(path.color)
+  const specPrefix = `spec-${path.id}`
+  const attrsId = useId()
+  const skillsId = useId()
 
   return (
     <>
+      {/* Hero */}
       <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-      />
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 61,
-        background: 'var(--surface-1)',
-        borderRadius: '20px 20px 0 0',
-        border: '1px solid var(--border-bright)',
-        borderBottom: 'none',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        padding: `0 0 calc(24px + var(--sab, 0px))`,
-      }}>
-        {/* Drag handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-        </div>
-
-        {/* Hero header */}
-        <div style={{
-          padding: '20px 20px 24px',
-          background: path.colorBg,
-          borderBottom: `1px solid ${path.colorBorder}`,
-          position: 'relative',
-        }}>
-          <button
-            onClick={onClose}
+        style={{
+          padding: '16px 20px 20px',
+          background: `linear-gradient(180deg, ${tint(path.color, 18)}, ${tint(path.color, 4)})`,
+          borderBottom: `1px solid ${t.border}`,
+        }}
+      >
+        <div aria-hidden className="ui-sheet-handle" style={{ marginTop: -6 }} />
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', paddingRight: 52, paddingTop: 4 }}>
+          <span
+            aria-hidden
             style={{
-              position: 'absolute', top: 16, right: 16,
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 6, color: 'var(--text-subtle)', borderRadius: 8,
+              width: 56, height: 56, borderRadius: radius.md, flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              background: t.bg, border: `1.5px solid ${t.border}`, color: t.fg,
             }}
           >
-            <X size={18} />
-          </button>
-
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', paddingRight: 32 }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 14, flexShrink: 0,
-              background: path.colorBg, border: `2px solid ${path.colorBorder}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 24,
-            }}>
-              {path.icon}
-            </div>
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: 4 }}>
-                {path.name}
-              </h2>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                  background: 'rgba(0,0,0,0.2)', border: `1px solid ${path.colorBorder}`,
-                  color: path.color,
-                }}>
-                  <Star size={8} style={{ display: 'inline', marginRight: 3 }} />
-                  Habilidad inicial: {path.initialSkill}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Main talent */}
-          <div style={{
-            marginTop: 16, padding: '10px 14px', borderRadius: 10,
-            background: 'rgba(0,0,0,0.2)', border: `1px solid ${path.colorBorder}`,
-          }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: path.color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-              Talento principal
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 4 }}>{path.mainTalent}</div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
-              {path.mainTalentEffect}
-            </p>
+            <HeroicPathIcon id={path.id} size={28} />
+          </span>
+          <div style={{ minWidth: 0 }}>
+            <h2 id={titleId} style={{ ...titleText, fontSize: fs['2xl'] - 2, color: c.text }}>
+              {path.name}
+            </h2>
+            <span style={{ ...pill(t), marginTop: 8, whiteSpace: 'normal' }}>
+              <Star size={12} aria-hidden />
+              Habilidad inicial: {path.initialSkill}
+            </span>
           </div>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Main talent */}
+        <div
+          style={{
+            marginTop: 18, padding: '14px 16px', borderRadius: radius.md,
+            background: 'color-mix(in srgb, var(--surface-1) 72%, transparent)', border: `1px solid ${t.border}`,
+          }}
+        >
+          <p style={{ ...eyebrow, color: t.fg, marginBottom: 6 }}>Talento principal</p>
+          <p style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, color: c.text, lineHeight: 1.25, marginBottom: 4 }}>
+            {path.mainTalent}
+          </p>
+          <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.55 }}>
+            {path.mainTalentEffect}
+          </p>
+        </div>
+      </div>
 
-          {/* Descripción */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: path.color, marginBottom: 8 }}>
-              Descripción
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
-              {path.definition}
-            </p>
-          </div>
+      {/* Body */}
+      <div style={{ ...stack(24), padding: '24px 20px 0' }}>
+        <section>
+          <SectionTitle as="h3">Descripción</SectionTitle>
+          <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: c.muted, lineHeight: 1.6 }}>
+            {path.definition}
+          </p>
+        </section>
 
-          {/* Atributos y habilidades */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1, padding: '12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Atributos</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {path.recommendedAttributes.map((a) => (
-                  <span key={a} style={{ fontSize: 11, color: 'var(--text-muted)' }}>• {a}</span>
-                ))}
-              </div>
-            </div>
-            <div style={{ flex: 1.5, padding: '12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Habilidades clave</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {path.recommendedSkills.map((s) => (
-                  <span key={s} style={{
-                    fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 12,
-                    background: path.colorBg, border: `1px solid ${path.colorBorder}`,
-                    color: path.color,
-                  }}>{s}</span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Especialidades */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: path.color, marginBottom: 10 }}>
-              Especialidades
-            </div>
-
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-              {path.specialties.map((s, i) => (
-                <button
-                  key={s.name}
-                  onClick={() => setActiveSpecialty(i)}
-                  style={{
-                    flex: 1, padding: '8px 4px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                    cursor: 'pointer',
-                    background: activeSpecialty === i ? path.colorBg : 'var(--surface-2)',
-                    border: `1px solid ${activeSpecialty === i ? path.colorBorder : 'var(--border)'}`,
-                    color: activeSpecialty === i ? path.color : 'var(--text-muted)',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {s.name}
-                </button>
+        {/* Atributos y habilidades */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 140px', padding: '12px 14px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}>
+            <p id={attrsId} style={{ ...eyebrow, marginBottom: 8 }}>Atributos</p>
+            <ul aria-labelledby={attrsId} style={{ ...stack(4), listStyle: 'none' }}>
+              {path.recommendedAttributes.map((a) => (
+                <li key={a} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.sm + 1, color: c.text }}>
+                  <CosmereIcon name="ornamento-rombo" size={8} style={{ color: t.fg }} />
+                  {a}
+                </li>
               ))}
-            </div>
+            </ul>
+          </div>
+          <div style={{ flex: '1.5 1 190px', padding: '12px 14px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}>
+            <p id={skillsId} style={{ ...eyebrow, marginBottom: 8 }}>Habilidades clave</p>
+            <ul aria-labelledby={skillsId} style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {path.recommendedSkills.map((s) => (
+                <li key={s} style={pill(t)}>{s}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
 
-            {/* Specialty content */}
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        {/* Especialidades */}
+        <section>
+          <SectionTitle as="h3">Especialidades</SectionTitle>
+          <Tabs
+            tabs={path.specialties.map((s, i) => ({ id: String(i), label: s.name }))}
+            value={String(activeSpecialty)}
+            onChange={(id) => setActiveSpecialty(Number(id))}
+            ariaLabel="Especialidades"
+            idPrefix={specPrefix}
+            stretch
+            size="sm"
+            style={{ marginBottom: 14 }}
+          />
+
+          <TabPanel idPrefix={specPrefix} id={String(activeSpecialty)} style={stack(8)}>
+            <p
+              style={{
+                fontSize: fs.base - 1, color: c.muted, lineHeight: 1.55, padding: '12px 14px', borderRadius: radius.md,
+                background: t.bg, border: `1px solid ${t.border}`, marginBottom: 4,
+              }}
+            >
               {specialty.description}
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {specialty.talentos.map((t) => (
-                <div key={t.name} style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                    <TalentActivation type={t.activation} compact />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>{t.name}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{t.description}</div>
+            {specialty.talentos.map((tal) => (
+              <article
+                key={tal.name}
+                style={{ padding: '12px 14px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <TalentActivation type={tal.activation} compact />
+                  <h4 style={{ fontFamily: font.ui, fontSize: fs.base - 1, fontWeight: 650, color: c.text, lineHeight: 1.3 }}>{tal.name}</h4>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.55 }}>{tal.description}</p>
+              </article>
+            ))}
+          </TabPanel>
+        </section>
       </div>
     </>
   )
 }
 
 function PathCard({ path, onClick }: { path: HeroicPath; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false)
+  const t = toneFrom(path.color)
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      aria-haspopup="dialog"
+      className="ui-card ui-card--interactive"
       style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '14px 16px', borderRadius: 14, textAlign: 'left', width: '100%',
-        background: hovered ? path.colorBg : 'var(--surface-1)',
-        border: `1px solid ${hovered ? path.colorBorder : 'var(--border)'}`,
-        cursor: 'pointer', transition: 'all 0.15s',
-        transform: hovered ? 'translateX(3px)' : 'none',
+        width: '100%', height: '100%', display: 'flex', alignItems: 'center', gap: 14,
+        padding: '14px 14px 14px 16px', minHeight: 84, textAlign: 'left', cursor: 'pointer',
+        background: c.s1, border: `1px solid ${c.border}`, borderRadius: radius.lg, boxShadow: shadow[1],
+        color: c.text, font: 'inherit',
       }}
     >
-      <div style={{
-        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-        background: path.colorBg, border: `1px solid ${path.colorBorder}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 20,
-      }}>
-        {path.icon}
-      </div>
+      <span
+        aria-hidden
+        style={{
+          width: 48, height: 48, borderRadius: radius.md, flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
+        }}
+      >
+        <HeroicPathIcon id={path.id} size={24} />
+      </span>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 4 }}>{path.name}</div>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, lineHeight: 1.2, color: c.text }}>
+          {path.name}
+        </span>
+        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {path.specialties.map((s) => (
-            <span key={s.name} style={{
-              fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20,
-              background: path.colorBg, border: `1px solid ${path.colorBorder}`,
-              color: path.color,
-            }}>
-              {s.name}
-            </span>
+            <span key={s.name} style={pill(t)}>{s.name}</span>
           ))}
-        </div>
-      </div>
+        </span>
+      </span>
 
-      <div style={{ fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: hovered ? 1 : 0.4 }}>›</div>
+      <ChevronRight size={18} aria-hidden style={{ color: c.subtle }} />
     </button>
   )
 }
 
 export function HeroicPathsPage() {
   const [selected, setSelected] = useState<HeroicPath | null>(null)
+  const sheetTitleId = useId()
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
-        Caminos Heroicos
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Los seis caminos que definen las competencias mundanas de cada héroe en Roshar
-      </p>
+    <div style={page}>
+      <PageHeader
+        title="Caminos Heroicos"
+        subtitle="Los seis caminos que definen las competencias mundanas de cada héroe en Roshar"
+      />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {HEROIC_PATHS.map((path) => (
-          <PathCard key={path.id} path={path} onClick={() => setSelected(path)} />
+      <ul
+        aria-label="Caminos heroicos"
+        style={{
+          listStyle: 'none', display: 'grid', gap: 10,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))',
+        }}
+      >
+        {HEROIC_PATHS.map((path, i) => (
+          <li key={path.id} className="rise" style={{ '--i': i } as CSSProperties}>
+            <PathCard path={path} onClick={() => setSelected(path)} />
+          </li>
         ))}
-      </div>
+      </ul>
 
-      {selected && <PathDetailSheet path={selected} onClose={() => setSelected(null)} />}
+      <HeroSheet open={!!selected} onClose={() => setSelected(null)} labelledBy={sheetTitleId}>
+        {/* key: the specialty tab resets to the first one for every path, as before */}
+        {selected && <PathDetail key={selected.id} path={selected} titleId={sheetTitleId} />}
+      </HeroSheet>
     </div>
   )
 }

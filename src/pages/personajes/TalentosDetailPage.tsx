@@ -1,9 +1,9 @@
-import { useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Check, Lock, Plus, Zap } from 'lucide-react'
+import { X, Check, Lock, Plus, Zap, Music, ChevronRight, TriangleAlert, CircleX, Sparkles } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { Spinner } from '../../components/ui'
+import { Button, ConfirmDialog, EmptyState, SectionTitle, Sheet, Spinner, TabPanel, Tabs, type TabItem } from '../../components/ui'
 import type { Character, UpdateCharacterRequest } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import type { HeroicPathTalento } from '../../data/heroicPaths'
@@ -18,6 +18,10 @@ import type { FormaCantor } from '../../data/cantores'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
 import { TalentActivation } from '../../components/TalentActivation'
 import type { ActivationType } from '../../components/TalentActivation'
+import { CharacterHero } from '../../components/CharacterHero'
+import { HeroicPathIcon, SurgeIcon } from '../../components/GameIcons'
+import { heroPill, onGem, onGemSoft } from '../../lib/hero'
+import { c, eyebrow, font, fs, ink, pill, radius, shadow, tint, titleText, tone } from '../../theme'
 
 // ── Skill map ─────────────────────────────────────────────────────────────
 
@@ -41,6 +45,8 @@ function checkPrereq(
   radiantMainTalent: string | undefined,
 ): { met: boolean; missing: string[] } {
   if (!prereq) return { met: true, missing: [] }
+  // Dynamic field access (skills and habilidadPersonalizada1..6) by name
+  const fields = char as unknown as Record<string, unknown>
   const missing: string[] = []
   const andClauses = prereq.split(/[,;]/).map((s) => s.trim()).filter(Boolean)
   for (const clause of andClauses) {
@@ -61,10 +67,10 @@ function checkPrereq(
         const minVal = parseInt(skillMatch[2])
         if (skillName === 'nivel') return (char.level ?? 0) >= minVal
         const key = SKILL_NAME_MAP[skillName]
-        if (key) return ((char as any)[key] ?? 0) >= minVal
+        if (key) return Number(fields[key] ?? 0) >= minVal
         for (let i = 1; i <= 6; i++) {
-          if ((char as any)[`habilidadPersonalizada${i}`] === skillName)
-            return ((char as any)[`habilidadPersonalizada${i}Valor`] ?? 0) >= minVal
+          if (fields[`habilidadPersonalizada${i}`] === skillName)
+            return Number(fields[`habilidadPersonalizada${i}Valor`] ?? 0) >= minVal
         }
         return false
       }
@@ -223,26 +229,172 @@ function getTalentosPermitidos(level: number, ascendencia: string): number {
   return total
 }
 
-// ── Color helper ──────────────────────────────────────────────────────────
+// ── Theme-aware accent from a data colour (heroic path, radiant order, cantor) ──
+// ink() clamps the data colour to a readable lightness per theme; every tint derives from it,
+// so borders and washes stay visible on paper and on ink.
 
-function alpha(hex: string, a: number): string {
-  if (!hex || !hex.startsWith('#') || hex.length < 7) return hex
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${a})`
+interface Accent {
+  /** text / icon colour: ink() nudged towards --text so it stays AA even on its own tinted wash */
+  fg: string
+  /** the clamped data colour itself (base for tints) */
+  ink: string
+  /** solid wash of the accent over a surface */
+  wash: (pct: number, base?: string) => string
+  /** tree connector lines */
+  line: string
+  /** outline of a learnable node / tinted card */
+  border: string
+  /** outline of a learned node */
+  borderStrong: string
 }
 
-// ── Avatar gradients ──────────────────────────────────────────────────────
+function accentOf(color: string): Accent {
+  const base = ink(color)
+  return {
+    fg: `color-mix(in oklab, ${base} 78%, var(--text))`,
+    ink: base,
+    wash: (pct, surface = c.s1) => `color-mix(in srgb, ${base} ${pct}%, ${surface})`,
+    line: tint(base, 38),
+    border: tint(base, 48),
+    borderStrong: tint(base, 62),
+  }
+}
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg,#7c3aed,#6366f1)',
-  'linear-gradient(135deg,#0e7490,#0284c7)',
-  'linear-gradient(135deg,#9d174d,#be185d)',
-  'linear-gradient(135deg,#065f46,#0d9488)',
-  'linear-gradient(135deg,#92400e,#b45309)',
-  'linear-gradient(135deg,#4c1d95,#7c3aed)',
-]
+/** Pill in an accent colour (text AA on its own tint) */
+const accentPill = (a: Accent): CSSProperties => ({
+  ...pill({ fg: a.fg, bg: tint(a.ink, 10), border: tint(a.ink, 32) }),
+  fontSize: fs.eyebrow,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+})
+
+type SectionKey = 'heroico' | 'radiante' | 'cantor'
+const TAB_PREFIX = 'talentos'
+
+/* Text on the CharacterHero gradient (see components/CharacterHero.tsx: ≥ 7:1 on every palette) */
+const HERO_TEXT = onGem
+const HERO_TEXT_SOFT = onGemSoft
+/** 0 below 640px, `px` from 640px (inline styles cannot use media queries) */
+const fromTablet = (px: number) => `clamp(0px, calc((100vw - 640px) * 999), ${px}px)`
+
+// ── Local presentational pieces ───────────────────────────────────────────
+
+/** Horizontal scroller for a talent tree: bleeds to the page gutter so wide trees scroll edge to edge.
+ *  position:relative makes it the containing block of the absolutely positioned .sr-only labels inside the
+ *  cards; without it they escape the clip and widen the whole page on phones.
+ *  `center`: single-root pyramids start scrolled to the middle so the root card is fully visible.
+ *  The edges fade out only on the side where more of the tree is hidden, as a scroll hint
+ *  (the mask uses an opaque token: only its alpha matters). */
+const FADE = 28
+function TreeScroll({ children, center = false }: { children: ReactNode; center?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ left: false, right: false })
+  const measure = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    const left = el.scrollLeft > 2
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+    setEdges((p) => (p.left === left && p.right === right ? p : { left, right }))
+  }, [])
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (center && el && el.scrollWidth > el.clientWidth) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2
+    measure()
+  }, [center, measure])
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [measure])
+  const mask = edges.left || edges.right
+    ? `linear-gradient(90deg, ${edges.left ? 'transparent' : 'var(--text)'} 0, var(--text) ${edges.left ? FADE : 0}px, var(--text) calc(100% - ${edges.right ? FADE : 0}px), ${edges.right ? 'transparent' : 'var(--text)'} 100%)`
+    : undefined
+  return (
+    <div
+      ref={ref}
+      onScroll={measure}
+      style={{
+        position: 'relative', overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        margin: '0 -16px', padding: '4px 16px 12px',
+        WebkitMaskImage: mask, maskImage: mask,
+      }}
+    >
+      <div style={{ minWidth: 'max-content' }}>{children}</div>
+    </div>
+  )
+}
+
+/** "Forma de poder" marker (vacíospren): icon + text for assistive tech when no visible note explains it */
+function PoderMark({ size = 14, announce }: { size?: number; announce: boolean }) {
+  return (
+    <span title="Forma de poder" style={{ display: 'inline-flex', color: tone.heliodoro.fg, flexShrink: 0 }}>
+      <Zap size={size} aria-hidden />
+      {announce && <span className="sr-only">Forma de poder</span>}
+    </span>
+  )
+}
+
+/** Singer form card used in the picker and in the talent drawer */
+function FormaCard({
+  forma,
+  isActive,
+  accent,
+  onActivate,
+  showPoderNote,
+  showAcciones,
+}: {
+  forma: FormaCantor
+  isActive: boolean
+  accent: Accent
+  onActivate?: () => void
+  showPoderNote: boolean
+  showAcciones: boolean
+}) {
+  return (
+    <li
+      style={{
+        listStyle: 'none',
+        borderRadius: radius.md,
+        border: isActive ? `1.5px solid ${accent.borderStrong}` : `1px solid ${c.border}`,
+        background: isActive ? accent.wash(8, c.s2) : c.s2,
+        padding: '12px 16px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+          {forma.esPoder && <PoderMark announce={!showPoderNote} />}
+          <span style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 650, lineHeight: 1.2, color: isActive ? accent.fg : c.text }}>
+            {forma.nombre}
+          </span>
+          {isActive && (
+            <span style={{ ...eyebrow, color: accent.fg, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Check size={13} aria-hidden strokeWidth={2.5} />
+              Activa
+            </span>
+          )}
+        </div>
+        {onActivate && (
+          <Button variant="secondary" size="md" onClick={onActivate} aria-label={`Activar forma ${forma.nombre}`} style={{ flexShrink: 0 }}>
+            Activar
+          </Button>
+        )}
+      </div>
+      <p style={{ fontSize: fs.sm, color: accent.fg, marginTop: 4 }}>{forma.spren}</p>
+      <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 4, lineHeight: 1.5 }}>{forma.bonos}</p>
+      {showPoderNote && forma.esPoder && (
+        <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.sm, color: tone.heliodoro.fg, marginTop: 6, fontStyle: 'italic' }}>
+          <TriangleAlert size={14} aria-hidden style={{ marginTop: 2 }} />
+          Vacíospren — influencia de Odium
+        </p>
+      )}
+      {showAcciones && forma.accionesEspeciales?.map((a) => (
+        <p key={a} style={{ fontSize: fs.sm, color: tone.heliodoro.fg, marginTop: 4, lineHeight: 1.45 }}>{a}</p>
+      ))}
+    </li>
+  )
+}
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -252,7 +404,9 @@ export function TalentosDetailPage() {
   const charId = Number(characterId)
   const qc = useQueryClient()
   const [drawerNode, setDrawerNode] = useState<DrawerNode | null>(null)
-  const [activeTab, setActiveTab] = useState<'heroico' | 'radiante' | 'cantor'>('heroico')
+  const [activeTab, setActiveTab] = useState<SectionKey>('heroico')
+  // "Olvidar" asks for confirmation first: it can also remove the talents that depend on this one
+  const [forgetConfirm, setForgetConfirm] = useState<{ name: string; afterRemove: string[]; alsoRemoved: string[] } | null>(null)
 
   const { data: character, isLoading } = useQuery<Character>({
     queryKey: ['character', cId, charId],
@@ -265,9 +419,9 @@ export function TalentosDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, charId] }),
   })
 
-  if (isLoading || !character) return <Spinner />
+  // Loading keeps a (visually hidden) h1 so the page is never headless, as in CharacterDetailPage
+  if (isLoading || !character) return <><h1 className="sr-only">Talentos</h1><Spinner /></>
 
-  const gradient = AVATAR_GRADIENTS[character.id % AVATAR_GRADIENTS.length]
   const heroicPath = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
   const radiantOrder = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
   const isCantor = character.ascendencia === 'Oyente'
@@ -335,17 +489,45 @@ export function TalentosDetailPage() {
     return { ...node, state, missing, color, isAutoAdded: autoAdded.has(node.name), cantorFormas }
   }
 
-  // ── Specialty section header ────────────────────────────────────────────
+  // ── Sections and tabs ───────────────────────────────────────────────────
+  // The visible section falls back to the first available one, so a character without a heroic
+  // path (radiant + cantor) never lands on an empty panel with no selected tab.
 
-  function renderSpecialtyHeader(label: string, color: string, topSpacing = 20) {
+  const sections: TabItem<SectionKey>[] = [
+    ...(heroicPath ? [{
+      id: 'heroico' as const,
+      label: <><span className="hide-mobile" style={{ lineHeight: 0 }}><HeroicPathIcon id={heroicPath.id} size={16} /></span>{heroicPath.name}</>,
+    }] : []),
+    ...(radiantOrder ? [{
+      id: 'radiante' as const,
+      label: <><span className="hide-mobile" style={{ lineHeight: 0 }}><RadiantOrderIcon orderId={radiantOrder.id} size={18} decorative /></span>{radiantOrder.name}</>,
+    }] : []),
+    ...(isCantor ? [{
+      id: 'cantor' as const,
+      label: <><span className="hide-mobile" style={{ lineHeight: 0 }}><Music size={15} aria-hidden /></span>Cantor</>,
+    }] : []),
+  ]
+  const showTabs = sections.length >= 2
+  const currentTab: SectionKey | undefined = sections.some((s) => s.id === activeTab) ? activeTab : sections[0]?.id
+
+  const panel = (id: SectionKey, content: ReactNode) =>
+    showTabs ? <TabPanel key={id} idPrefix={TAB_PREFIX} id={id}>{content}</TabPanel> : <div key={id}>{content}</div>
+
+  // ── Section header (book style: small caps + gold rule) ─────────────────
+
+  function renderSectionHeader(label: ReactNode, icon?: ReactNode, topSpacing = 32) {
     return (
-      <div style={{ marginTop: topSpacing, marginBottom: 14, padding: '5px 12px', background: alpha(color, 0.12), borderLeft: `3px solid ${color}`, borderRadius: '0 6px 6px 0' }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color, letterSpacing: '0.12em' }}>
-          {label.toUpperCase()}
+      <SectionTitle style={{ marginTop: topSpacing, marginBottom: 12 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+          {icon}
+          {label}
         </span>
-      </div>
+      </SectionTitle>
     )
   }
+
+  /** Staggered entrance for each section block */
+  const rise = (i: number) => ({ className: 'rise', style: { '--i': i } as CSSProperties })
 
   // ── Pyramid tree renderer ───────────────────────────────────────────────
   //
@@ -375,64 +557,68 @@ export function TalentosDetailPage() {
   function renderNode(node: TNode, color: string): ReactElement {
     const dn = toDrawerNode(node, color)
     const { state } = dn
-    const lineColor = alpha(color, 0.3)
+    const a = accentOf(color)
+    const lineColor = a.line
 
-    const cardBorder =
-      state === 'selected' ? `1.5px solid ${alpha(color, 0.6)}`
-      : state === 'available' ? `1.5px dashed ${alpha(color, 0.45)}`
-      : '1.5px solid var(--border)'
-
-    const cardBg =
-      state === 'selected' ? alpha(color, 0.14)
-      : state === 'available' ? alpha(color, 0.04)
-      : 'var(--surface-1)'
+    // State is carried by shape + icon + text, not by colour alone:
+    // learned = solid tinted card + check · learnable = dashed outline · locked = recessed + lock + "Bloqueado"
+    const cardState: CSSProperties =
+      state === 'selected' ? { border: `1.5px solid ${a.borderStrong}`, background: a.wash(12), boxShadow: shadow[1] }
+      : state === 'available' ? { border: `1.5px dashed ${a.border}`, background: c.s1, boxShadow: shadow[1] }
+      : { border: `1px solid ${c.border}`, background: c.s2 }
 
     const nameColor =
-      state === 'selected' ? color
-      : state === 'available' ? 'var(--text)'
-      : 'var(--text-subtle)'
+      state === 'selected' ? a.fg
+      : state === 'available' ? c.text
+      : c.muted
 
     return (
       <div key={node.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
 
         {/* ── Compact card ────────────────────────────────────────────── */}
         <button
+          type="button"
+          aria-haspopup="dialog"
           onClick={() => setDrawerNode(dn)}
+          className="ui-btn"
           style={{
-            display: 'inline-flex', flexDirection: 'column', gap: 5,
-            padding: '10px 12px', borderRadius: 10,
-            border: cardBorder, background: cardBg,
-            opacity: state === 'locked' ? 0.45 : 1,
-            transition: 'opacity 0.15s',
-            cursor: 'pointer', textAlign: 'left',
-            minWidth: 100, maxWidth: 185,
+            display: 'inline-flex', flexDirection: 'column', gap: 6,
+            padding: '10px 12px', borderRadius: radius.sm,
+            ...cardState,
+            cursor: 'pointer', textAlign: 'left', color: c.text,
+            minWidth: 100, maxWidth: 185, minHeight: 44,
           }}
         >
           {/* Activation icon + name */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <span style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
             {node.activation && (
               <span style={{ flexShrink: 0, marginTop: 1 }}>
                 <TalentActivation type={node.activation} compact />
               </span>
             )}
-            <span style={{ fontSize: 12, fontWeight: 700, color: nameColor, lineHeight: 1.3 }}>
+            {state === 'selected' && (
+              <Check size={15} aria-hidden strokeWidth={2.75} style={{ color: a.fg, flexShrink: 0, marginTop: 3 }} />
+            )}
+            <span style={{ fontFamily: font.display, fontSize: fs.md, fontWeight: 650, color: nameColor, lineHeight: 1.2 }}>
               {node.name}
+              {state === 'selected' && <span className="sr-only">, aprendido</span>}
+              {state === 'available' && <span className="sr-only">, disponible</span>}
             </span>
-          </div>
+          </span>
 
           {/* Prereq text — only when NOT acquired */}
           {state !== 'selected' && node.prereq && (
-            <span style={{ fontSize: 10, fontStyle: 'italic', lineHeight: 1.3, color: state === 'locked' ? 'var(--text-subtle)' : alpha(color, 0.7) }}>
+            <span style={{ fontSize: fs.xs, fontStyle: 'italic', lineHeight: 1.35, color: state === 'locked' ? c.subtle : c.muted }}>
               {node.prereq}
             </span>
           )}
 
           {/* Lock chip */}
           {state === 'locked' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <Lock size={9} style={{ color: 'var(--text-subtle)' }} />
-              <span style={{ fontSize: 9, color: 'var(--text-subtle)', fontWeight: 600 }}>Bloqueado</span>
-            </div>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: c.subtle }}>
+              <Lock size={12} aria-hidden />
+              <span style={{ fontSize: fs.xs, fontWeight: 600 }}>Bloqueado</span>
+            </span>
           )}
         </button>
 
@@ -440,7 +626,7 @@ export function TalentosDetailPage() {
         {node.children.length > 0 && (
           <>
             {/* Vertical stem from card down to children bar */}
-            <div style={{ width: 2, height: 16, background: lineColor, flexShrink: 0 }} />
+            <div aria-hidden style={{ width: 2, height: 16, background: lineColor, flexShrink: 0 }} />
 
             {/* Children row — each child gets flex:1 (equal horizontal space).
                 Gap of 10px between columns; bars extend 5px into the gap on each
@@ -457,16 +643,16 @@ export function TalentosDetailPage() {
                   >
                     {/* Left half — extends 5 px into the gap to meet the neighbour's right half */}
                     {!isFirst && (
-                      <div style={{ position: 'absolute', top: 0, left: -5, width: 'calc(50% + 5px)', height: 2, background: lineColor }} />
+                      <div aria-hidden style={{ position: 'absolute', top: 0, left: -5, width: 'calc(50% + 5px)', height: 2, background: lineColor }} />
                     )}
 
                     {/* Right half — extends 5 px into the gap */}
                     {!isLast && (
-                      <div style={{ position: 'absolute', top: 0, right: -5, width: 'calc(50% + 5px)', height: 2, background: lineColor }} />
+                      <div aria-hidden style={{ position: 'absolute', top: 0, right: -5, width: 'calc(50% + 5px)', height: 2, background: lineColor }} />
                     )}
 
                     {/* Vertical drop from bar top down to child card */}
-                    <div style={{ width: 2, height: 14, background: lineColor, flexShrink: 0 }} />
+                    <div aria-hidden style={{ width: 2, height: 14, background: lineColor, flexShrink: 0 }} />
 
                     {renderNode(child, color)}
                   </div>
@@ -501,72 +687,262 @@ export function TalentosDetailPage() {
     )
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Talent excess (talentos que no consumen slot no cuentan) ────────────
+  //   • Talento principal del camino heroico
+  //   • Todos los ideales Radiantes (Primer → Cuarto Ideal)
+  //   • Nombres de potencias / surges (se añaden automáticamente al elegir la Orden)
+  const talentosLibres = new Set<string>([
+    ...(heroicPath ? [heroicPath.mainTalent] : []),
+    ...(radiantOrder?.talentos.map((t) => t.name) ?? []),
+    ...(radiantOrder?.surges ?? []),
+  ])
+  const counted = selectedTalentos.filter(
+    (t) => !t.startsWith(FORMA_ACTIVA_PREFIX) && !talentosLibres.has(t),
+  )
+  const permitidos = getTalentosPermitidos(character.level, character.ascendencia)
+  const exceso = counted.length - permitidos
 
-  return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
+  // ── Drawer (talent detail / singer form picker) ─────────────────────────
 
-      {/* ── Hero header — scrolls with the page ──────────────────────────── */}
-      <div style={{ background: gradient, padding: '28px 20px 20px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', inset: 0, opacity: 0.12, mixBlendMode: 'overlay', pointerEvents: 'none',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
-          backgroundSize: '200px',
-        }} />
-        <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: 'white', letterSpacing: '-0.03em', lineHeight: 1.2 }}>
-              {character.name}
-            </h1>
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'white', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '2px 8px', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
-              Nv. {character.level}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 3 }}>
-            {heroicPath && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)' }}>
-                {heroicPath.icon} {heroicPath.name}
-              </span>
-            )}
-            {radiantOrder && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <RadiantOrderIcon orderId={radiantOrder.id} size={10} />
-                {radiantOrder.name}
-              </span>
-            )}
-          </div>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', lineHeight: 1.4, margin: 0 }}>Talentos</p>
-        </div>
-      </div>
+  function renderDrawer(dn: DrawerNode) {
+    const a = accentOf(dn.color)
+    const close = () => setDrawerNode(null)
 
-      {/* ── Tab bar — sticky: se ancla cuando el header sube ─────────────────
-          Se muestra cuando hay 2 o más secciones disponibles.             */}
-      {(() => {
-        const tabs = [
-          ...(heroicPath  ? [{ key: 'heroico'  as const, label: `${heroicPath.icon} ${heroicPath.name}`, color: heroicPath.color }]  : []),
-          ...(radiantOrder ? [{ key: 'radiante' as const, label: radiantOrder.name,                       color: radiantOrder.color }] : []),
-          ...(isCantor     ? [{ key: 'cantor'   as const, label: '🎵 Cantor',                              color: CANTOR_COLOR }]       : []),
-        ]
-        if (tabs.length < 2) return null
-        return (
-          <div style={{ position: 'sticky', top: 52, zIndex: 20, display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--surface-1)' }}>
-            {tabs.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setActiveTab(t.key)}
-                style={{ flex: 1, padding: '10px 8px', fontSize: 12, fontWeight: 600, color: activeTab === t.key ? t.color : 'var(--text-subtle)', background: 'none', border: 'none', borderBottom: activeTab === t.key ? `2px solid ${t.color}` : '2px solid transparent', cursor: 'pointer', transition: 'color 0.15s', letterSpacing: '0.01em' }}
-              >
-                {t.label}
-              </button>
-            ))}
+    // Forget plan: the talent plus every dependent that would lose its prerequisites
+    const forgetPlan = !dn.isFormaPicker && !dn.isAutoAdded && dn.state === 'selected'
+      ? (() => {
+          const afterRemove = computeCascadeRemove(dn.name)
+          const alsoRemoved = selectedTalentos
+            .filter((n) => !n.startsWith(FORMA_ACTIVA_PREFIX))
+            .filter((n) => n !== dn.name && !afterRemove.includes(n))
+          return { afterRemove, alsoRemoved }
+        })()
+      : null
+
+    let action: ReactNode = null
+    if (!dn.isFormaPicker && !dn.isAutoAdded) {
+      if (forgetPlan) {
+        action = (
+          <Button
+            variant="danger"
+            size="lg"
+            icon={<X size={16} aria-hidden />}
+            onClick={() => setForgetConfirm({ name: dn.name, ...forgetPlan })}
+            aria-haspopup="dialog"
+            style={{ flex: 1 }}
+          >
+            {forgetPlan.alsoRemoved.length > 0 ? `Olvidar ${1 + forgetPlan.alsoRemoved.length} talentos` : 'Olvidar talento'}
+          </Button>
+        )
+      } else if (dn.state === 'available') {
+        action = (
+          <Button
+            variant="primary"
+            size="lg"
+            icon={<Plus size={16} aria-hidden />}
+            onClick={() => { talentosMutation.mutate([...selectedTalentos, dn.name]); setDrawerNode(null) }}
+            style={{ flex: 1 }}
+          >
+            Aprender talento
+          </Button>
+        )
+      } else {
+        action = (
+          <div
+            style={{
+              flex: 1, minHeight: 50, padding: '8px 14px', borderRadius: radius.md,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              background: c.s2, border: `1px dashed ${c.borderBright}`,
+              color: c.muted, fontSize: fs.sm, fontWeight: 600, textAlign: 'center',
+            }}
+          >
+            <Lock size={16} aria-hidden style={{ flexShrink: 0 }} />
+            Prerrequisitos no cumplidos
           </div>
         )
-      })()}
+      }
+    }
 
-      {/* ── Tree content — horizontally scrollable, tree centered ─────────
-          overflowX: auto lets the pyramid scroll sideways on narrow screens
-          instead of cramping the cards. The inner div centres content that
-          is narrower than the viewport.                                     */}
+    const footer = (
+      <>
+        <Button variant="secondary" size="lg" onClick={close} data-autofocus style={{ flex: action ? '0 0 auto' : 1 }}>
+          Cerrar
+        </Button>
+        {action}
+      </>
+    )
+
+    // ── Modo picker de forma activa ──────────────────────────────────────
+    if (dn.isFormaPicker) {
+      return (
+        <Sheet
+          open
+          onClose={close}
+          title="Seleccionar forma activa"
+          description="Solo puedes estar en una forma a la vez. El cambio ocurre durante una alta tormenta."
+          footer={footer}
+        >
+          <ul style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {dn.cantorFormas?.map((forma) => {
+              const isActive = getFormaActiva(selectedTalentos) === forma.nombre
+              return (
+                <FormaCard
+                  key={forma.nombre}
+                  forma={forma}
+                  isActive={isActive}
+                  accent={a}
+                  showPoderNote
+                  showAcciones={false}
+                  onActivate={!isActive ? () => { talentosMutation.mutate(withFormaActiva(selectedTalentos, forma.nombre)); setDrawerNode(null) } : undefined}
+                />
+              )
+            })}
+          </ul>
+        </Sheet>
+      )
+    }
+
+    // ── Modo normal del drawer ───────────────────────────────────────────
+    return (
+      <Sheet
+        open
+        onClose={close}
+        title={<span style={{ fontFamily: font.display, color: dn.state === 'selected' ? a.fg : c.text }}>{dn.name}</span>}
+        footer={footer}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {(dn.activation || dn.source) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {dn.activation && <TalentActivation type={dn.activation} />}
+              {dn.source && (
+                <span style={accentPill(a)}>
+                  {dn.source}
+                </span>
+              )}
+            </div>
+          )}
+
+          {dn.prereq && (
+            <div style={{ padding: '12px 16px', borderRadius: radius.sm, background: c.s2, border: `1px solid ${c.border}` }}>
+              <p style={eyebrow}>Prerrequisito</p>
+              <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 4, lineHeight: 1.45 }}>
+                {dn.prereq}
+                {dn.state === 'selected' && (
+                  <span style={{ display: 'inline-flex', verticalAlign: 'middle', color: a.fg, marginLeft: 6 }}>
+                    <Check size={14} aria-hidden strokeWidth={2.75} />
+                    <span className="sr-only">(cumplido)</span>
+                  </span>
+                )}
+              </p>
+              {dn.state === 'locked' && dn.missing.length > 0 && (
+                <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.sm, fontWeight: 600, color: tone.topacio.fg, marginTop: 6, lineHeight: 1.45 }}>
+                  <CircleX size={14} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span>Falta: {dn.missing.join(', ')}</span>
+                </p>
+              )}
+            </div>
+          )}
+
+          <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: c.text, lineHeight: 1.55, whiteSpace: 'pre-line' }}>
+            {dn.description}
+          </p>
+
+          {/* Formas que desbloquea este talento de cantor */}
+          {dn.cantorFormas && dn.cantorFormas.length > 0 && (
+            <div>
+              <h3 style={{ ...eyebrow, fontFamily: font.ui, marginBottom: 8 }}>
+                Formas {dn.state === 'selected' ? 'desbloqueadas' : 'que obtendrás'}
+              </h3>
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {dn.cantorFormas.map((forma) => {
+                  const isActive = getFormaActiva(selectedTalentos) === forma.nombre
+                  return (
+                    <FormaCard
+                      key={forma.nombre}
+                      forma={forma}
+                      isActive={isActive}
+                      accent={a}
+                      showPoderNote={false}
+                      showAcciones
+                      onActivate={dn.state === 'selected' && !isActive
+                        ? () => { talentosMutation.mutate(withFormaActiva(selectedTalentos, forma.nombre)); setDrawerNode(null) }
+                        : undefined}
+                    />
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
+          {forgetPlan && forgetPlan.alsoRemoved.length > 0 && (
+            <div style={{ padding: '12px 16px', borderRadius: radius.sm, background: tone.rubi.bg, border: `1px solid ${tone.rubi.border}` }}>
+              <p style={{ ...eyebrow, color: tone.rubi.fg }}>También se olvidarán</p>
+              <ul style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {forgetPlan.alsoRemoved.map((n) => (
+                  <li key={n} style={{ listStyle: 'none', display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.sm, color: c.text, lineHeight: 1.35 }}>
+                    <span aria-hidden style={{ width: 5, height: 5, borderRadius: '50%', background: tone.rubi.fg, flexShrink: 0 }} />
+                    {n}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </Sheet>
+    )
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────
+
+  const forgetCount = forgetConfirm ? 1 + forgetConfirm.alsoRemoved.length : 0
+
+  return (
+    <div style={{ maxWidth: 680, margin: '0 auto' }}>
+
+      {/* ── Hero header — scrolls with the page ──────────────────────────── */}
+      {/* Same framing as the ficha and metas heroes: full-bleed on phones, a rounded card from 640px */}
+      <CharacterHero
+        characterId={character.id}
+        style={{ borderRadius: fromTablet(radius.lg), marginTop: fromTablet(16), borderBottom: 'none' }}
+      >
+        <p style={{ ...eyebrow, color: HERO_TEXT_SOFT, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <Sparkles size={14} aria-hidden />
+          Talentos
+        </p>
+        <h1 style={{ ...titleText, fontSize: fs['2xl'], color: HERO_TEXT, marginBottom: 14, overflowWrap: 'anywhere' }}>
+          {character.name}
+        </h1>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
+          {heroicPath && (
+            <span style={heroPill}>
+              <HeroicPathIcon id={heroicPath.id} size={13} />
+              {heroicPath.name}
+            </span>
+          )}
+          {radiantOrder && (
+            <span style={{ ...heroPill, paddingLeft: 4 }}>
+              <RadiantOrderIcon orderId={radiantOrder.id} size={16} decorative />
+              {radiantOrder.name}
+            </span>
+          )}
+        </div>
+      </CharacterHero>
+
+      {/* ── Tab bar — sticky under the mobile top bar; only with 2+ sections ── */}
+      {showTabs && currentTab && (
+        <div className="sticky-under-topbar glass" style={{ padding: '8px 16px', borderBottom: `1px solid ${c.border}` }}>
+          <Tabs<SectionKey>
+            tabs={sections}
+            value={currentTab}
+            onChange={setActiveTab}
+            ariaLabel="Árboles de talentos"
+            idPrefix={TAB_PREFIX}
+            stretch
+          />
+        </div>
+      )}
+
       {/* ── Tree content ─────────────────────────────────────────────────
           Padding and static cards (main talent, section headers) live in
           normal block flow — no overflow context that could clip them.
@@ -576,106 +952,101 @@ export function TalentosDetailPage() {
       <div style={{ padding: '20px 16px 56px' }}>
 
         {!heroicPath && !radiantOrder && !isCantor && (
-          <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 14, padding: '28px 20px', textAlign: 'center' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.5 }}>
-              Asigna un Camino Heroico u Orden Radiante en la ficha para ver los talentos disponibles.
-            </p>
-          </div>
+          <EmptyState
+            icon={<Sparkles size={24} aria-hidden />}
+            title="Sin camino asignado"
+            description="Asigna un Camino Heroico u Orden Radiante en la ficha para ver los talentos disponibles."
+          />
         )}
 
         {/* ── Warning exceso de talentos ──────────────────────────────── */}
-        {(() => {
-          // Talentos que no consumen slot (regalados por el GM o automáticos):
-          //   • Talento principal del camino heroico
-          //   • Todos los ideales Radiantes (Primer → Cuarto Ideal)
-          //   • Nombres de potencias / surges (se añaden automáticamente al elegir la Orden)
-          const talentosLibres = new Set<string>([
-            ...(heroicPath ? [heroicPath.mainTalent] : []),
-            ...(radiantOrder?.talentos.map((t) => t.name) ?? []),
-            ...(radiantOrder?.surges ?? []),
-          ])
-          const counted = selectedTalentos.filter(
-            (t) => !t.startsWith(FORMA_ACTIVA_PREFIX) && !talentosLibres.has(t),
-          )
-          const permitidos = getTalentosPermitidos(character.level, character.ascendencia)
-          const exceso = counted.length - permitidos
-          if (exceso <= 0) return null
-          return (
-            <div style={{
-              display: 'flex', alignItems: 'flex-start', gap: 10,
-              background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)',
-              borderRadius: 12, padding: '10px 14px', marginBottom: 16,
-            }}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: 2 }}>
-                  Exceso de talentos
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>
-                  {counted.length} talentos seleccionados, pero a nivel {character.level} solo corresponden {permitidos}.
-                  {' '}Retira {exceso} talento{exceso > 1 ? 's' : ''} para estar dentro del límite.
-                </div>
-              </div>
+        {exceso > 0 && (
+          <div
+            role="status"
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+              background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`,
+              borderRadius: radius.md, padding: '12px 16px', marginBottom: 20,
+            }}
+          >
+            <TriangleAlert size={20} aria-hidden style={{ color: tone.topacio.fg, flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <p style={{ fontSize: fs.sm + 1, fontWeight: 700, color: tone.topacio.fg, marginBottom: 2 }}>
+                Exceso de talentos
+              </p>
+              <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>
+                {counted.length} talentos seleccionados, pero a nivel {character.level} solo corresponden {permitidos}.
+                {' '}Retira {exceso} talento{exceso > 1 ? 's' : ''} para estar dentro del límite.
+              </p>
             </div>
-          )
-        })()}
+          </div>
+        )}
 
         {/* ── Camino Heroico ──────────────────────────────────────────── */}
-        {heroicPath && (activeTab === 'heroico' || (!radiantOrder && !isCantor)) && (() => {
+        {heroicPath && currentTab === 'heroico' && (() => {
           const color = heroicPath.color
-          return (
-            <div>
-              {/* Main talent — hero card, original design */}
-              <div style={{ background: alpha(color, 0.1), border: `1.5px solid ${alpha(color, 0.35)}`, borderRadius: 14, padding: '14px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', padding: '2px 7px', borderRadius: 20, background: alpha(color, 0.18), border: `1px solid ${alpha(color, 0.35)}`, color }}>
-                    {heroicPath.icon} {heroicPath.name.toUpperCase()}
+          const a = accentOf(color)
+          return panel('heroico', (
+            <>
+              {/* Main talent — highlighted card (not clickable: it is granted by the path) */}
+              <section
+                aria-labelledby="talento-principal"
+                className="rise"
+                style={{
+                  '--i': 0,
+                  background: a.wash(8), border: `1px solid ${a.border}`,
+                  borderRadius: radius.lg, padding: '16px 20px', boxShadow: shadow[1],
+                } as CSSProperties}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <span style={accentPill(a)}>
+                    <HeroicPathIcon id={heroicPath.id} size={13} />
+                    {heroicPath.name}
                   </span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em' }}>TALENTO PRINCIPAL</span>
+                  <span style={eyebrow}>Talento principal</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <Check size={14} style={{ color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 15, fontWeight: 800, color }}>{heroicPath.mainTalent}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <Check size={18} aria-hidden strokeWidth={2.75} style={{ color: a.fg, flexShrink: 0 }} />
+                  <h2 id="talento-principal" style={{ fontFamily: font.display, fontSize: fs.xl - 2, fontWeight: 650, color: a.fg, lineHeight: 1.2 }}>
+                    {heroicPath.mainTalent}
+                  </h2>
                   {heroicPath.mainTalentActivation && <TalentActivation type={heroicPath.mainTalentActivation} compact />}
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>
+                <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6 }}>
                   {heroicPath.mainTalentEffect}
                 </p>
-              </div>
+              </section>
 
               {/* Specialty trees — each scrolls horizontally on its own */}
-              {heroicPath.specialties.map((spec) => (
-                <div key={spec.name}>
-                  {renderSpecialtyHeader(spec.name, color)}
-                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-                    <div style={{ minWidth: 'max-content' }}>
-                      {renderForest(buildSpecialtyNodes(spec.talentos, heroicPath.mainTalent, spec.name), color)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
+              {heroicPath.specialties.map((spec, i) => {
+                const roots = buildSpecialtyNodes(spec.talentos, heroicPath.mainTalent, spec.name)
+                return (
+                  <section key={spec.name} {...rise(i + 1)}>
+                    {renderSectionHeader(spec.name)}
+                    <TreeScroll center={roots.length === 1}>
+                      {renderForest(roots, color)}
+                    </TreeScroll>
+                  </section>
+                )
+              })}
+            </>
+          ))
         })()}
 
         {/* ── Orden Radiante ──────────────────────────────────────────── */}
-        {radiantOrder && (activeTab === 'radiante' || (!heroicPath && !isCantor)) && (() => {
+        {radiantOrder && currentTab === 'radiante' && (() => {
           const color = radiantOrder.color
-          return (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <RadiantOrderIcon orderId={radiantOrder.id} size={16} />
-                <span style={{ fontSize: 13, fontWeight: 800, color }}>{radiantOrder.name}</span>
-                <div style={{ flex: 1, height: 1, background: alpha(color, 0.25) }} />
-              </div>
-
-              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-                <div style={{ minWidth: 'max-content' }}>
+          const a = accentOf(color)
+          return panel('radiante', (
+            <>
+              <section {...rise(0)}>
+                {renderSectionHeader(radiantOrder.name, <RadiantOrderIcon orderId={radiantOrder.id} size={28} decorative />, 4)}
+                <TreeScroll center>
                   {renderForest(buildOrderNodes(radiantOrder.talentos, radiantOrder.name), color)}
-                </div>
-              </div>
+                </TreeScroll>
+              </section>
 
-              {radiantOrder.surges.map((surgeName) => {
+              {radiantOrder.surges.map((surgeName, i) => {
                 const potencia = POTENCIAS.find((p) => p.name === surgeName)
                 if (!potencia) return null
                 const potNode: TNode = {
@@ -686,22 +1057,22 @@ export function TalentosDetailPage() {
                   children: buildPotenciaChildren(potencia.talentos, potencia.name, potencia.name),
                 }
                 return (
-                  <div key={surgeName}>
-                    {renderSpecialtyHeader(surgeName, color)}
-                    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-                      <div style={{ minWidth: 'max-content' }}>
-                        {renderForest([potNode], color)}
-                      </div>
-                    </div>
-                  </div>
+                  <section key={surgeName} {...rise(i + 1)}>
+                    {renderSectionHeader(surgeName, <SurgeIcon surge={surgeName} size={22} style={{ color: a.fg }} />)}
+                    <TreeScroll center>
+                      {renderForest([potNode], color)}
+                    </TreeScroll>
+                  </section>
                 )
               })}
-            </div>
-          )
+            </>
+          ))
         })()}
+
         {/* ── Cantor / Oyente ─────────────────────────────────────────── */}
-        {isCantor && (activeTab === 'cantor' || (!heroicPath && !radiantOrder)) && (() => {
+        {isCantor && currentTab === 'cantor' && (() => {
           const color = CANTOR_COLOR
+          const a = accentOf(color)
           const formaActiva = getFormaActiva(selectedTalentos)
           const formasDisponibles = getFormasDisponibles(selectedTalentos)
           const formaActivaData = formasDisponibles.find((f) => f.nombre === formaActiva)
@@ -723,220 +1094,91 @@ export function TalentosDetailPage() {
             })
           }
 
-          return (
-            <div>
+          return panel('cantor', (
+            <>
               {/* Forma activa card */}
-              <div style={{ background: alpha(color, 0.08), border: `1.5px solid ${alpha(color, 0.3)}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: formaActiva ? 8 : 0 }}>
-                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.1em', color, textTransform: 'uppercase' }}>
-                    🎵 Forma activa
-                  </span>
-                  <button
-                    onClick={openFormaPicker}
-                    style={{ fontSize: 10, fontWeight: 700, color, background: alpha(color, 0.12), border: `1px solid ${alpha(color, 0.3)}`, borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}
-                  >
-                    Cambiar ▶
-                  </button>
+              <section
+                aria-labelledby="forma-activa"
+                className="rise"
+                style={{
+                  '--i': 0,
+                  background: a.wash(8), border: `1px solid ${a.border}`,
+                  borderRadius: radius.lg, padding: '16px 20px', boxShadow: shadow[1],
+                } as CSSProperties}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                  <h2 id="forma-activa" style={{ ...eyebrow, fontFamily: font.ui, color: a.fg, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Music size={14} aria-hidden />
+                    Forma activa
+                  </h2>
+                  <Button variant="secondary" size="md" onClick={openFormaPicker} aria-label="Cambiar forma activa" aria-haspopup="dialog">
+                    Cambiar
+                    <ChevronRight size={16} aria-hidden style={{ marginRight: -4 }} />
+                  </Button>
                 </div>
                 {formaActiva ? (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {formaActivaData?.esPoder && <Zap size={13} style={{ color: '#fb923c', flexShrink: 0 }} />}
-                      <span style={{ fontSize: 16, fontWeight: 800, color }}>{formaActiva}</span>
+                      {formaActivaData?.esPoder && <PoderMark size={16} announce={false} />}
+                      <p style={{ fontFamily: font.display, fontSize: fs.xl - 2, fontWeight: 650, lineHeight: 1.2, color: a.fg }}>{formaActiva}</p>
                     </div>
                     {formaActivaData && (
                       <>
-                        <span style={{ fontSize: 11, color: alpha(color, 0.7), display: 'block', marginTop: 2 }}>
+                        <p style={{ fontSize: fs.sm, color: a.fg, marginTop: 4 }}>
                           {formaActivaData.spren}
-                        </span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 4, lineHeight: 1.4 }}>
+                        </p>
+                        <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 6, lineHeight: 1.5 }}>
                           {formaActivaData.bonos}
-                        </span>
+                        </p>
                         {formaActivaData.esPoder && (
-                          <span style={{ fontSize: 10, color: '#fb923c', display: 'block', marginTop: 5, fontStyle: 'italic' }}>
-                            ⚠ Forma de poder — riesgo de influencia de Odium
-                          </span>
+                          <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.sm, color: tone.heliodoro.fg, marginTop: 8, fontStyle: 'italic' }}>
+                            <TriangleAlert size={14} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+                            Forma de poder — riesgo de influencia de Odium
+                          </p>
                         )}
                       </>
                     )}
                   </>
                 ) : (
-                  <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: '6px 0 0', fontStyle: 'italic' }}>
-                    Sin forma activa. Toca "Cambiar ▶" para seleccionar una.
+                  <p style={{ fontSize: fs.sm, color: c.muted, fontStyle: 'italic' }}>
+                    Sin forma activa. Toca "Cambiar" para seleccionar una.
                   </p>
                 )}
-              </div>
+              </section>
 
               {/* Árbol de talentos de cantor */}
-              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-                <div style={{ minWidth: 'max-content' }}>
+              <section {...rise(1)}>
+                {renderSectionHeader('Talentos de cantor')}
+                <TreeScroll center>
                   {renderForest(buildCantorTNodes(), color)}
-                </div>
-              </div>
-            </div>
-          )
+                </TreeScroll>
+              </section>
+            </>
+          ))
         })()}
 
       </div>{/* end tree content */}
 
       {/* ── Talent drawer ──────────────────────────────────────────────── */}
-      {drawerNode && (
-        <>
-          <div onClick={() => setDrawerNode(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)' }} />
-          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71, background: 'var(--surface-1)', borderRadius: '20px 20px 0 0', border: '1px solid var(--border-bright)', borderBottom: 'none', maxHeight: '58vh', display: 'flex', flexDirection: 'column', paddingBottom: 'calc(20px + var(--sab, 0px))' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-            </div>
-            <button onClick={() => setDrawerNode(null)} style={{ position: 'absolute', top: 10, right: 14, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', padding: 6 }}>
-              <X size={18} />
-            </button>
-            <div style={{ padding: '12px 20px 0', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {drawerNode && renderDrawer(drawerNode)}
 
-              {/* ── Modo picker de forma activa ──────────────────────────── */}
-              {drawerNode.isFormaPicker ? (
-                <>
-                  <p style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)', margin: 0 }}>Seleccionar forma activa</p>
-                  <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0, lineHeight: 1.4 }}>
-                    Solo puedes estar en una forma a la vez. El cambio ocurre durante una alta tormenta.
-                  </p>
-                  {drawerNode.cantorFormas?.map((forma) => {
-                    const isActive = getFormaActiva(selectedTalentos) === forma.nombre
-                    return (
-                      <div key={forma.nombre} style={{ borderRadius: 10, border: isActive ? `1.5px solid ${alpha(drawerNode.color, 0.55)}` : '1px solid var(--border)', background: isActive ? alpha(drawerNode.color, 0.07) : 'var(--surface-2)', padding: '10px 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            {forma.esPoder && <Zap size={11} style={{ color: '#fb923c' }} />}
-                            <span style={{ fontSize: 13, fontWeight: 700, color: isActive ? drawerNode.color : 'var(--text)' }}>{forma.nombre}</span>
-                            {isActive && <span style={{ fontSize: 9, fontWeight: 800, color: drawerNode.color, letterSpacing: '0.08em' }}>✓ ACTIVA</span>}
-                          </div>
-                          {!isActive && (
-                            <button
-                              onClick={() => { talentosMutation.mutate(withFormaActiva(selectedTalentos, forma.nombre)); setDrawerNode(null) }}
-                              style={{ fontSize: 11, fontWeight: 700, color: drawerNode.color, background: alpha(drawerNode.color, 0.1), border: `1px solid ${alpha(drawerNode.color, 0.3)}`, borderRadius: 20, padding: '3px 10px', cursor: 'pointer' }}
-                            >
-                              Activar
-                            </button>
-                          )}
-                        </div>
-                        <span style={{ fontSize: 10, color: 'var(--text-subtle)', display: 'block' }}>{forma.spren}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 3, lineHeight: 1.35 }}>{forma.bonos}</span>
-                        {forma.esPoder && <span style={{ fontSize: 10, color: '#fb923c', display: 'block', marginTop: 4, fontStyle: 'italic' }}>⚠ Vacíospren — influencia de Odium</span>}
-                      </div>
-                    )
-                  })}
-                </>
-              ) : (
-                /* ── Modo normal del drawer ────────────────────────────── */
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 17, fontWeight: 800, color: drawerNode.state === 'selected' ? drawerNode.color : 'var(--text)' }}>
-                      {drawerNode.name}
-                    </span>
-                    {drawerNode.activation && <TalentActivation type={drawerNode.activation} compact />}
-                    {drawerNode.source && (
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 6px', borderRadius: 20, background: alpha(drawerNode.color, 0.12), border: `1px solid ${alpha(drawerNode.color, 0.3)}`, color: drawerNode.color }}>
-                        {drawerNode.source.toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-
-                  {drawerNode.prereq && (
-                    <div style={{ padding: '7px 10px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em' }}>PRERREQUISITO</span>
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '3px 0 0', lineHeight: 1.4 }}>
-                        {drawerNode.prereq}
-                        {drawerNode.state === 'selected' && <span style={{ color: drawerNode.color, marginLeft: 4 }}>✓</span>}
-                        {drawerNode.state === 'locked' && drawerNode.missing.length > 0 && (
-                          <span style={{ color: '#f59e0b', display: 'block', marginTop: 3 }}>✗ Falta: {drawerNode.missing.join(', ')}</span>
-                        )}
-                      </p>
-                    </div>
-                  )}
-
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.65, margin: 0, whiteSpace: 'pre-line' }}>
-                    {drawerNode.description}
-                  </p>
-
-                  {/* Formas que desbloquea este talento de cantor */}
-                  {drawerNode.cantorFormas && drawerNode.cantorFormas.length > 0 && (
-                    <div>
-                      <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-subtle)', letterSpacing: '0.08em', margin: '4px 0 8px' }}>
-                        FORMAS {drawerNode.state === 'selected' ? 'DESBLOQUEADAS' : 'QUE OBTENDRÁS'}
-                      </p>
-                      {drawerNode.cantorFormas.map((forma) => {
-                        const isActive = getFormaActiva(selectedTalentos) === forma.nombre
-                        return (
-                          <div key={forma.nombre} style={{ borderRadius: 8, border: `1px solid ${isActive ? alpha(drawerNode.color, 0.45) : 'var(--border)'}`, background: isActive ? alpha(drawerNode.color, 0.07) : 'var(--surface-2)', padding: '8px 10px', marginBottom: 6 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                {forma.esPoder && <Zap size={10} style={{ color: '#fb923c' }} />}
-                                <span style={{ fontSize: 12, fontWeight: 700, color: isActive ? drawerNode.color : 'var(--text)' }}>{forma.nombre}</span>
-                                {isActive && <span style={{ fontSize: 9, fontWeight: 800, color: drawerNode.color }}>✓</span>}
-                              </div>
-                              {drawerNode.state === 'selected' && !isActive && (
-                                <button
-                                  onClick={() => { talentosMutation.mutate(withFormaActiva(selectedTalentos, forma.nombre)); setDrawerNode(null) }}
-                                  style={{ fontSize: 10, fontWeight: 700, color: drawerNode.color, background: alpha(drawerNode.color, 0.1), border: `1px solid ${alpha(drawerNode.color, 0.3)}`, borderRadius: 20, padding: '2px 8px', cursor: 'pointer' }}
-                                >
-                                  Activar
-                                </button>
-                              )}
-                            </div>
-                            <span style={{ fontSize: 10, color: 'var(--text-subtle)', display: 'block', marginTop: 2 }}>{forma.spren}</span>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.3 }}>{forma.bonos}</span>
-                            {forma.accionesEspeciales?.map((a) => (
-                              <span key={a} style={{ fontSize: 10, color: '#fb923c', display: 'block', marginTop: 3 }}>{a}</span>
-                            ))}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {!drawerNode.isAutoAdded && (
-                    <div style={{ marginTop: 4, paddingBottom: 4 }}>
-                      {drawerNode.state === 'selected' ? (() => {
-                        const afterRemove = computeCascadeRemove(drawerNode.name)
-                        const alsoRemoved = selectedTalentos
-                          .filter((n) => !n.startsWith(FORMA_ACTIVA_PREFIX))
-                          .filter((n) => n !== drawerNode.name && !afterRemove.includes(n))
-                        return (
-                          <>
-                            {alsoRemoved.length > 0 && (
-                              <div style={{ padding: '8px 10px', borderRadius: 8, marginBottom: 8, background: 'rgba(251,113,133,0.07)', border: '1px solid rgba(251,113,133,0.25)' }}>
-                                <p style={{ fontSize: 10, fontWeight: 700, color: '#fb7185', margin: '0 0 4px', letterSpacing: '0.06em' }}>TAMBIÉN SE OLVIDARÁN</p>
-                                {alsoRemoved.map((n) => <p key={n} style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0', lineHeight: 1.3 }}>· {n}</p>)}
-                              </div>
-                            )}
-                            <button
-                              onClick={() => { talentosMutation.mutate(afterRemove); setDrawerNode(null) }}
-                              style={{ width: '100%', padding: '11px', borderRadius: 10, background: 'rgba(251,113,133,0.08)', border: '1px solid rgba(251,113,133,0.3)', color: '#fb7185', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                            >
-                              <X size={14} />
-                              {alsoRemoved.length > 0 ? `Olvidar ${1 + alsoRemoved.length} talentos` : 'Olvidar talento'}
-                            </button>
-                          </>
-                        )
-                      })() : drawerNode.state === 'available' ? (
-                        <button
-                          onClick={() => { talentosMutation.mutate([...selectedTalentos, drawerNode.name]); setDrawerNode(null) }}
-                          style={{ width: '100%', padding: '11px', borderRadius: 10, background: alpha(drawerNode.color, 0.12), border: `1px solid ${alpha(drawerNode.color, 0.35)}`, color: drawerNode.color, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                        >
-                          <Plus size={14} /> Aprender talento
-                        </button>
-                      ) : (
-                        <div style={{ width: '100%', padding: '11px', borderRadius: 10, textAlign: 'center', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-subtle)', fontSize: 13 }}>
-                          🔒 Prerrequisitos no cumplidos
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+      {/* ── Confirm: forget talent (and cascaded dependents) ───────────── */}
+      <ConfirmDialog
+        open={!!forgetConfirm}
+        title={forgetCount > 1 ? `¿Olvidar ${forgetCount} talentos?` : '¿Olvidar este talento?'}
+        message={forgetConfirm
+          ? forgetCount > 1
+            ? `Se olvidará «${forgetConfirm.name}» y también ${forgetCount - 1} talento${forgetCount - 1 > 1 ? 's que dependen' : ' que depende'} de él: ${forgetConfirm.alsoRemoved.join(', ')}.`
+            : `Se olvidará «${forgetConfirm.name}».`
+          : undefined}
+        confirmLabel={forgetCount > 1 ? `Olvidar ${forgetCount} talentos` : 'Olvidar talento'}
+        onConfirm={() => {
+          if (forgetConfirm) talentosMutation.mutate(forgetConfirm.afterRemove)
+          setForgetConfirm(null)
+          setDrawerNode(null)
+        }}
+        onCancel={() => setForgetConfirm(null)}
+      />
     </div>
   )
 }

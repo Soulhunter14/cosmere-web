@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet, useParams } from 'react-router-dom'
+import { Outlet, useLocation, useParams } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { DiceRoller } from './DiceRoller'
 import { useCampaignStore } from '../store/campaignStore'
@@ -8,24 +8,24 @@ import { campaignsApi } from '../api/campaigns'
 export function AppLayout() {
   const { campaignId } = useParams<{ campaignId: string }>()
   const { setCurrentCampaign } = useCampaignStore()
+  const { pathname } = useLocation()
 
   useEffect(() => {
     const id = Number(campaignId)
     if (!id) return
     campaignsApi.getById(id).then(setCurrentCampaign).catch(() => {})
-  }, [campaignId])
+  }, [campaignId, setCurrentCampaign])
 
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', minHeight: '100dvh' }}>
+      <a href="#main" className="skip-link">Saltar al contenido</a>
       <Sidebar />
-      {/*
-        sm:pt-0      — desktop has no top bar
-        pt-[52px]    — mobile: clear the fixed top bar (52px)
-        sm:pb-0      — desktop: no bottom nav
-        pb-[60px]    — mobile: clear the fixed bottom nav (60px)
-      */}
-      <main className="app-main flex-1 overflow-auto min-w-0">
-        <Outlet />
+      {/* .app-main clears the fixed mobile top bar / bottom nav (+ safe areas); no offsets from 640px */}
+      <main id="main" tabIndex={-1} className="app-main" style={{ flex: 1, minWidth: 0, outline: 'none' }}>
+        {/* key: replays the entrance animation on every route change */}
+        <div key={pathname} className="fade-in">
+          <Outlet />
+        </div>
       </main>
       <DiceRoller />
     </div>

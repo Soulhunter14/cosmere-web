@@ -1,23 +1,132 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type Ref } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Info, X } from 'lucide-react'
+import { Plus, Minus, Trash2, Info, Sword, Shield, ShieldCheck, Package, ShoppingBag, Star, TriangleAlert, type LucideIcon } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
-import { Spinner } from '../../components/ui'
+import { Button, Card, ConfirmDialog, IconButton, SectionTitle, Sheet, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest, WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { CharacterHero } from '../../components/CharacterHero'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { HeroicPathIcon } from '../../components/GameIcons'
+import { heroPill, onGem, onGemSoft } from '../../lib/hero'
+import { cosmereImage } from '../../lib/cosmereAssets'
+import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, titleText, tone, type Tone } from '../../theme'
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg,#7c3aed,#6366f1)',
-  'linear-gradient(135deg,#0e7490,#0284c7)',
-  'linear-gradient(135deg,#9d174d,#be185d)',
-  'linear-gradient(135deg,#065f46,#0d9488)',
-  'linear-gradient(135deg,#92400e,#b45309)',
-  'linear-gradient(135deg,#4c1d95,#7c3aed)',
-]
+type ItemKind = 'weapon' | 'armor' | 'gear'
+
+/* Category identity, shared with the catalog: Armas = rubí · Armaduras = circón · Equipo = amatista */
+const CATEGORY: Record<ItemKind, { tone: Tone; Icon: LucideIcon }> = {
+  weapon: { tone: tone.rubi, Icon: Sword },
+  armor: { tone: tone.circon, Icon: Shield },
+  gear: { tone: tone.amatista, Icon: Package },
+}
+
+/* Full-bleed hero on phones, rounded card from 640px (same trick as the other character detail pages) */
+const fromTablet = (px: number) => `clamp(0px, calc((100vw - 640px) * 999), ${px}px)`
+
+/* Official sphere illustrations */
+const IMG_MARCO = cosmereImage('esfera-marco-diamante')
+const IMG_CHIP = cosmereImage('esfera-chip-zafiro')
+
+/* ─── Local primitives ─────────────────────────────────────────────────── */
+
+/** Tinted pill button in a gem tone (Añadir / Gastar / Añadir por categoría).
+ *  Hover mirrors the shared danger button: 20% tint, 50% outline. */
+function ToneButton({ t, icon, children, style, ref, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { t: Tone; icon?: ReactNode; ref?: Ref<HTMLButtonElement> }) {
+  const [hover, setHover] = useState(false)
+  const lit = hover && !props.disabled
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className="ui-btn"
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHover(true) }}
+      onPointerLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        minHeight: 36,
+        padding: '0 14px',
+        borderRadius: radius.full,
+        background: lit ? tint(t.fg, 20) : t.bg,
+        border: `1px solid ${lit ? tint(t.fg, 50) : t.border}`,
+        color: t.fg,
+        fontSize: fs.sm,
+        fontWeight: 650,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        ...style,
+      }}
+      {...props}
+    >
+      {icon}
+      {children}
+    </button>
+  )
+}
+
+/** Sub-section of the item detail sheet (h3 under the sheet's h2) */
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h3 style={{ ...eyebrow, fontFamily: font.ui, marginBottom: 8 }}>{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+/** Label/value tile inside a <dl> */
+function StatPill({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 12px', borderRadius: radius.sm, background: c.s2, border: `1px solid ${c.border}`, minWidth: 0 }}>
+      <dt style={eyebrow}>{label}</dt>
+      <dd style={{ fontSize: fs.sm + 1, fontWeight: 650, color: c.text, overflowWrap: 'anywhere' }}>{value}</dd>
+    </div>
+  )
+}
+
+function TraitRow({ name, description, expert = false }: { name: ReactNode; description?: string | null; expert?: boolean }) {
+  const t = expert ? tone.topacio : null
+  return (
+    <li
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: '10px 12px',
+        borderRadius: radius.sm,
+        background: t ? t.bg : c.s2,
+        border: `1px solid ${t ? t.border : c.border}`,
+      }}
+    >
+      {t ? (
+        <Star size={14} aria-hidden style={{ color: t.fg, fill: 'currentColor', marginTop: 3 }} />
+      ) : (
+        <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: c.subtle, marginTop: 8, flexShrink: 0 }} />
+      )}
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontSize: fs.sm + 1, fontWeight: 650, color: t ? t.fg : c.text }}>
+          {expert && <span className="sr-only">Rasgo experto: </span>}
+          {name}
+        </p>
+        {description && <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45, marginTop: 2 }}>{description}</p>}
+      </div>
+    </li>
+  )
+}
+
+function SphereImg({ src, size, style }: { src?: string; size: number; style?: CSSProperties }) {
+  if (!src) return null
+  return <img src={src} alt="" width={size} height={size} style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0, ...style }} />
+}
+
+/* ─── Page ─────────────────────────────────────────────────────────────── */
 
 export function BolsaDetailPage() {
   const { campaignId, characterId } = useParams<{ campaignId: string; characterId: string }>()
@@ -31,6 +140,11 @@ export function BolsaDetailPage() {
   const [itemPicker, setItemPicker] = useState<'weapon' | 'armor' | 'gear' | null>(null)
   const [confirmRemoveItem, setConfirmRemoveItem] = useState<{ type: 'weapon' | 'armor' | 'gear'; index: number; name: string } | null>(null)
   const [bolsaDetail, setBolsaDetail] = useState<{ kind: 'weapon' | 'armor' | 'gear'; name: string } | null>(null)
+  // Focus targets after removing an item (see keepFocusAfterRemoval)
+  const addButtons = useRef<Partial<Record<ItemKind, HTMLButtonElement | null>>>({})
+  const itemLists = useRef<Partial<Record<ItemKind, HTMLUListElement | null>>>({})
+  // Focus target after spending every Marco ("Gastar" becomes disabled and cannot take focus back)
+  const addMarcosButton = useRef<HTMLButtonElement>(null)
 
   const { data: character, isLoading } = useQuery<Character>({
     queryKey: ['character', cId, charId],
@@ -38,6 +152,8 @@ export function BolsaDetailPage() {
   })
 
   useEffect(() => {
+    // Optimistic local copy, re-synced from the server on every refetch (pre-existing behaviour, kept as is)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (character) setMarcos({ infusas: character.marcosInfusas ?? 0, opacas: character.marcosOpacas ?? 0 })
   }, [character])
 
@@ -110,7 +226,6 @@ export function BolsaDetailPage() {
 
   if (isLoading || !character) return <Spinner />
 
-  const gradient = AVATAR_GRADIENTS[character.id % AVATAR_GRADIENTS.length]
   const heroicPath = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
   const radiantOrder = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
   const marcosTotal = marcos.infusas + marcos.opacas
@@ -129,407 +244,577 @@ export function BolsaDetailPage() {
     (character.armor ?? []).reduce((sum, name) => sum + (catalogArmor.find((a) => a.name === name)?.weight ?? 0), 0) +
     (character.equipment ?? []).reduce((sum, name) => sum + (catalogGear.find((g) => g.name === name)?.weight ?? 0), 0)
   const weightPct = Math.min(currentWeight / capacity, 1)
-  const barColor = weightPct >= 1 ? '#f87171' : weightPct >= 0.75 ? '#fbbf24' : '#34d399'
+  // Same thresholds as before: ≥100% rubí (sobrecarga) · ≥75% topacio (aviso) · otherwise esmeralda
+  const barTone = weightPct >= 1 ? tone.rubi : weightPct >= 0.75 ? tone.topacio : tone.esmeralda
   const weightLabel = Number.isInteger(currentWeight) ? `${currentWeight}` : currentWeight.toFixed(1)
   const capLabel = Number.isInteger(capacity) ? `${capacity}` : capacity.toFixed(1)
 
+  const pending = marcosMutation.isPending
+  const canSpendInfusa = !(marcos.infusas === 0 || pending)
+  const canRecharge = !(marcos.opacas === 0 || pending)
+
+  const confirmMarcos = () => {
+    if (marcosDialog === 'add') {
+      applyMarcos(marcos.infusas + marcosDelta, marcos.opacas)
+    } else {
+      const toRemove = Math.min(marcosDelta, marcosTotal)
+      const newOpacas = Math.max(0, marcos.opacas - toRemove)
+      const removed = marcos.opacas - newOpacas
+      const newInfusas = Math.max(0, marcos.infusas - (toRemove - removed))
+      applyMarcos(newInfusas, newOpacas)
+      // Spending everything disables "Gastar", so the dialog's focus restore would fall to <body>
+      if (toRemove >= marcosTotal) window.setTimeout(() => addMarcosButton.current?.focus(), 0)
+    }
+    setMarcosDialog(null)
+  }
+
+  // Rows are keyed by index: after a removal every row but the last stays mounted, and the dialog's focus
+  // restore lands on the Trash button that now shows the next item. When the LAST row is removed, its button
+  // unmounts on refetch and focus would fall to <body>, so move it to the row above, or to the section's
+  // "Añadir" button when the list becomes empty.
+  const keepFocusAfterRemoval = (type: ItemKind, index: number, count: number) => {
+    if (index < count - 1) return
+    window.setTimeout(() => {
+      const rowAbove = index > 0 ? itemLists.current[type]?.querySelectorAll<HTMLButtonElement>('[data-remove]')[index - 1] : undefined
+      ;(rowAbove ?? addButtons.current[type])?.focus()
+    }, 0)
+  }
+
+  // The Infusas ± steppers use aria-disabled (not `disabled`): they are unavailable while the mutation is
+  // pending, and a natively disabled button drops keyboard focus to <body> after every press.
+  // Pointer events are off in that state so the mouse behaves exactly as with `disabled`.
+  const roundStep = (enabled: boolean): CSSProperties => ({
+    borderRadius: '50%',
+    background: tone.brand.bg,
+    border: `1px solid ${tone.brand.border}`,
+    color: tone.brand.fg,
+    fontSize: fs.lg,
+    fontWeight: 700,
+    opacity: enabled ? 1 : 0.4,
+    pointerEvents: enabled ? undefined : 'none',
+  })
+
   return (
     <div style={{ maxWidth: 680, margin: '0 auto' }}>
-      {/* Hero header */}
-      <div style={{ background: gradient, padding: '28px 20px 20px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', inset: 0, opacity: 0.12, mixBlendMode: 'overlay', pointerEvents: 'none',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
-          backgroundSize: '200px',
-        }} />
-        <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: 'white', letterSpacing: '-0.03em', lineHeight: 1.2 }}>
-              {character.name}
-            </h1>
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'white', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, padding: '2px 8px', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
-              Nv. {character.level}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 3 }}>
+      {/* ─── Hero ─── */}
+      <CharacterHero
+        characterId={character.id}
+        padding="24px 20px 22px"
+        style={{ borderRadius: fromTablet(radius.lg), marginTop: fromTablet(16), borderBottom: 'none' }}
+      >
+        <p style={{ ...eyebrow, color: onGemSoft, display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <ShoppingBag size={14} aria-hidden />
+          Bolsa
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <h1 style={{ ...titleText, fontSize: fs['2xl'], color: onGem, overflowWrap: 'anywhere' }}>{character.name}</h1>
+          <span style={heroPill}>Nv. {character.level}</span>
+        </div>
+        {(heroicPath || radiantOrder) && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
             {heroicPath && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)' }}>
-                {heroicPath.icon} {heroicPath.name}
+              <span style={heroPill}>
+                <HeroicPathIcon id={heroicPath.id} size={13} />
+                {heroicPath.name}
               </span>
             )}
             {radiantOrder && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <RadiantOrderIcon orderId={radiantOrder.id} size={10} />
+              <span style={{ ...heroPill, paddingLeft: 4 }}>
+                <RadiantOrderIcon orderId={radiantOrder.id} size={16} decorative />
                 {radiantOrder.name}
               </span>
             )}
           </div>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', lineHeight: 1.4, margin: 0 }}>Bolsa</p>
-        </div>
-      </div>
+        )}
+      </CharacterHero>
 
-      <div style={{ padding: '20px 16px 48px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-        {/* Marcos card */}
-        <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em' }}>MARCOS</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: 'white', lineHeight: 1.1, marginTop: 2 }}>
-                {marcosTotal}
-                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-subtle)', marginLeft: 6 }}>total</span>
+      <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 32 }}>
+        {/* ─── Marcos ─── */}
+        <section aria-labelledby="bolsa-marcos">
+          <SectionTitle
+            id="bolsa-marcos"
+            action={
+              <div style={{ display: 'flex', gap: 8 }}>
+                <ToneButton
+                  ref={addMarcosButton}
+                  t={tone.esmeralda}
+                  icon={<Plus size={15} aria-hidden />}
+                  aria-label="Añadir Marcos"
+                  aria-haspopup="dialog"
+                  onClick={() => { setMarcosDelta(1); setMarcosDialog('add') }}
+                >
+                  Añadir
+                </ToneButton>
+                <ToneButton
+                  t={tone.rubi}
+                  icon={<Minus size={15} aria-hidden />}
+                  aria-label="Gastar Marcos"
+                  aria-haspopup="dialog"
+                  onClick={() => { setMarcosDelta(1); setMarcosDialog('remove') }}
+                  disabled={marcosTotal === 0}
+                  style={{ cursor: marcosTotal === 0 ? 'not-allowed' : 'pointer' }}
+                >
+                  Gastar
+                </ToneButton>
               </div>
+            }
+          >
+            Marcos
+          </SectionTitle>
+          <Card padding={0} style={{ overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${c.border}` }}>
+              <SphereImg src={IMG_MARCO} size={40} />
+              <p style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ ...numeral, fontSize: fs['2xl'], color: c.text }}>{marcosTotal}</span>
+                <span style={{ fontSize: fs.sm, color: c.muted }}>total</span>
+              </p>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => { setMarcosDelta(1); setMarcosDialog('add') }}
-                style={{ padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#34d399' }}
-              >+ Añadir</button>
-              <button
-                onClick={() => { setMarcosDelta(1); setMarcosDialog('remove') }}
-                disabled={marcosTotal === 0}
-                style={{ padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: marcosTotal === 0 ? 'not-allowed' : 'pointer', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: marcosTotal === 0 ? 'var(--text-subtle)' : '#f87171', opacity: marcosTotal === 0 ? 0.5 : 1 }}
-              >− Gastar</button>
-            </div>
-          </div>
-          <div style={{ display: 'flex' }}>
-            <div style={{ flex: 1, padding: '14px 16px', borderRight: '1px solid var(--border)', textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', letterSpacing: '0.08em', marginBottom: 8 }}>INFUSAS</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <button onClick={() => applyMarcos(marcos.infusas - 1, marcos.opacas + 1)} disabled={marcos.infusas === 0 || marcosMutation.isPending}
-                  style={{ width: 32, height: 32, borderRadius: '50%', fontSize: 18, fontWeight: 700, cursor: (marcos.infusas === 0 || marcosMutation.isPending) ? 'not-allowed' : 'pointer', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: (marcos.infusas === 0 || marcosMutation.isPending) ? 0.4 : 1 }}
-                >{marcosMutation.isPending ? '…' : '−'}</button>
-                <span style={{ fontSize: 28, fontWeight: 800, color: '#93c5fd', minWidth: 28 }}>{marcos.infusas}</span>
-                <button onClick={() => applyMarcos(marcos.infusas + 1, marcos.opacas - 1)} disabled={marcos.opacas === 0 || marcosMutation.isPending}
-                  style={{ width: 32, height: 32, borderRadius: '50%', fontSize: 18, fontWeight: 700, cursor: (marcos.opacas === 0 || marcosMutation.isPending) ? 'not-allowed' : 'pointer', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: (marcos.opacas === 0 || marcosMutation.isPending) ? 0.4 : 1 }}
-                >{marcosMutation.isPending ? '…' : '+'}</button>
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-subtle)', marginTop: 6 }}>brillantes</div>
-            </div>
-            <div style={{ flex: 1, padding: '14px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 8 }}>OPACAS</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-muted)', minWidth: 28 }}>{marcos.opacas}</span>
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-subtle)', marginTop: 6 }}>apagadas</div>
-            </div>
-          </div>
-          {marcosTotal > 0 && (
-            <div style={{ padding: '8px 16px 12px', fontSize: 11, color: 'var(--text-subtle)', textAlign: 'center' }}>
-              Usa +/− en Infusas para cambiar el estado de un Marco
-            </div>
-          )}
-        </div>
 
-        {/* Weight capacity */}
-        <div style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#34d399', letterSpacing: '0.08em' }}>CAPACIDAD DE CARGA</span>
-            <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>Fuerza <strong style={{ color: 'var(--text)' }}>{character.fuerza ?? 0}</strong></span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
-            <span style={{ fontSize: 22, fontWeight: 800, color: barColor }}>{weightLabel}</span>
-            <span style={{ fontSize: 13, color: 'var(--text-subtle)' }}>/ {capLabel} kg</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-3)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${weightPct * 100}%`, borderRadius: 3, background: barColor, transition: 'width 0.3s, background 0.3s' }} />
-          </div>
-          {weightPct >= 1 && <div style={{ fontSize: 11, color: '#f87171', marginTop: 6, fontWeight: 600 }}>¡Sobrecargado!</div>}
-        </div>
-
-        {/* Item sections */}
-        {([
-          { type: 'weapon' as const, label: 'Armas',     items: character.weapons ?? [],   color: '#f87171', colorBg: 'rgba(239,68,68,0.1)',   colorBorder: 'rgba(239,68,68,0.25)' },
-          { type: 'armor'  as const, label: 'Armaduras', items: character.armor ?? [],    color: '#fbbf24', colorBg: 'rgba(251,191,36,0.1)',  colorBorder: 'rgba(251,191,36,0.25)' },
-          { type: 'gear'   as const, label: 'Equipo',    items: character.equipment ?? [], color: '#34d399', colorBg: 'rgba(52,211,153,0.1)', colorBorder: 'rgba(52,211,153,0.25)' },
-        ] as const).map(({ type, label, items, color, colorBg, colorBorder }) => (
-          <div key={type} style={{ background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', borderBottom: items.length > 0 ? '1px solid var(--border)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: '0.08em' }}>{label.toUpperCase()}</span>
-              <button
-                onClick={() => setItemPicker(type)}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: colorBg, border: `1px solid ${colorBorder}`, color }}
-              >
-                <Plus size={11} />Añadir
-              </button>
-            </div>
-            {items.map((name, idx) => {
-              const equippedIndex = type === 'armor' ? items.findIndex((n) => n === character.equippedArmor) : -1
-              const isEquipped = type === 'armor' && idx === equippedIndex
-              return (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderTop: idx > 0 ? '1px solid var(--border)' : 'none', background: isEquipped ? 'rgba(251,191,36,0.05)' : 'transparent' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, flex: 1 }}>{name}</span>
-                  <button
-                    onClick={() => setBolsaDetail({ kind: type, name })}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', display: 'flex', flexShrink: 0 }}
-                  ><Info size={14} /></button>
-                  {type === 'armor' && (
-                    <button
-                      onClick={() => {
-                        const armorData = catalogArmor.find((a) => a.name === name)
-                        desvioMutation.mutate(isEquipped ? { equippedArmor: '', desvio: 0 } : { equippedArmor: name, desvio: armorData?.desvio ?? 0 })
-                      }}
-                      style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 20, border: `1px solid ${isEquipped ? 'rgba(251,191,36,0.4)' : 'var(--border)'}`, background: isEquipped ? 'rgba(251,191,36,0.12)' : 'var(--surface-2)', color: isEquipped ? '#fbbf24' : 'var(--text-subtle)', cursor: 'pointer', flexShrink: 0 }}
-                    >{isEquipped ? 'Equipada' : 'Equipar'}</button>
-                  )}
-                  <button
-                    onClick={() => setConfirmRemoveItem({ type, index: idx, name })}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)', display: 'flex', flexShrink: 0 }}
-                  ><Trash2 size={14} /></button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+              {/* Infusas: hold Stormlight */}
+              <div style={{ ...marcoColumn, borderRight: `1px solid ${c.border}` }}>
+                <p style={{ ...eyebrow, color: tone.brand.fg, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <SphereImg src={IMG_CHIP} size={20} style={{ filter: 'drop-shadow(0 0 5px var(--brand-glow))' }} />
+                  Infusas
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                  <IconButton
+                    label="Apagar un Marco infuso"
+                    size={44}
+                    onClick={() => { if (canSpendInfusa) applyMarcos(marcos.infusas - 1, marcos.opacas + 1) }}
+                    aria-disabled={!canSpendInfusa || undefined}
+                    aria-busy={pending || undefined}
+                    style={roundStep(canSpendInfusa)}
+                  >
+                    {pending ? '…' : <Minus size={18} aria-hidden />}
+                  </IconButton>
+                  <span style={{ ...numeral, fontSize: fs['2xl'], color: c.brandLight, minWidth: 36, textAlign: 'center' }}>{marcos.infusas}</span>
+                  <IconButton
+                    label="Recargar un Marco opaco"
+                    size={44}
+                    onClick={() => { if (canRecharge) applyMarcos(marcos.infusas + 1, marcos.opacas - 1) }}
+                    aria-disabled={!canRecharge || undefined}
+                    aria-busy={pending || undefined}
+                    style={roundStep(canRecharge)}
+                  >
+                    {pending ? '…' : <Plus size={18} aria-hidden />}
+                  </IconButton>
                 </div>
-              )
-            })}
-            {items.length === 0 && (
-              <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--text-subtle)', textAlign: 'center' }}>
-                Sin {label.toLowerCase()} equipadas
+                <p style={marcoCaption}>brillantes</p>
               </div>
+
+              {/* Opacas: dun spheres */}
+              <div style={marcoColumn}>
+                <p style={{ ...eyebrow, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <SphereImg src={IMG_CHIP} size={20} style={{ filter: 'grayscale(1)', opacity: 0.6 }} />
+                  Opacas
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44 }}>
+                  <span style={{ ...numeral, fontSize: fs['2xl'], color: c.muted, minWidth: 36, textAlign: 'center' }}>{marcos.opacas}</span>
+                </div>
+                <p style={marcoCaption}>apagadas</p>
+              </div>
+            </div>
+
+            <p className="sr-only" aria-live="polite">
+              {`${marcosTotal} Marcos en total: ${marcos.infusas} infusas y ${marcos.opacas} opacas`}
+            </p>
+
+            {marcosTotal > 0 && (
+              <p style={{ padding: '10px 16px 12px', borderTop: `1px solid ${c.border}`, fontSize: fs.xs, color: c.muted, textAlign: 'center' }}>
+                Usa +/− en Infusas para cambiar el estado de un Marco
+              </p>
             )}
-          </div>
-        ))}
+          </Card>
+        </section>
+
+        {/* ─── Capacidad de carga ─── */}
+        <section aria-labelledby="bolsa-carga">
+          <SectionTitle
+            id="bolsa-carga"
+            action={
+              <span style={{ fontSize: fs.sm, color: c.muted, whiteSpace: 'nowrap' }}>
+                Fuerza <strong style={{ ...numeral, fontSize: fs.base, color: c.text }}>{character.fuerza ?? 0}</strong>
+              </span>
+            }
+          >
+            Capacidad de carga
+          </SectionTitle>
+          <Card padding="16px 16px 18px">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+              <p style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span style={{ ...numeral, fontSize: fs['2xl'], color: barTone.fg }}>{weightLabel}</span>
+                <span style={{ fontSize: fs.sm, color: c.muted }}>/ {capLabel} kg</span>
+              </p>
+              {weightPct >= 1 ? (
+                <span style={pill(tone.rubi)}>
+                  <TriangleAlert size={13} aria-hidden />
+                  ¡Sobrecargado!
+                </span>
+              ) : weightPct >= 0.75 ? (
+                <span style={pill(tone.topacio)}>
+                  <TriangleAlert size={13} aria-hidden />
+                  Cerca del límite
+                </span>
+              ) : null}
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Capacidad de carga"
+              aria-valuemin={0}
+              aria-valuemax={capacity}
+              aria-valuenow={Math.min(currentWeight, capacity)}
+              aria-valuetext={`${weightLabel} de ${capLabel} kg`}
+              style={{ height: 8, borderRadius: radius.full, background: c.track, overflow: 'hidden' }}
+            >
+              <div style={{ height: '100%', width: `${weightPct * 100}%`, borderRadius: radius.full, background: barTone.fg, transition: 'width 0.3s, background 0.3s' }} />
+            </div>
+          </Card>
+        </section>
+
+        {/* ─── Armas / Armaduras / Equipo ─── */}
+        {([
+          { type: 'weapon' as const, label: 'Armas',     items: character.weapons ?? [] },
+          { type: 'armor'  as const, label: 'Armaduras', items: character.armor ?? [] },
+          { type: 'gear'   as const, label: 'Equipo',    items: character.equipment ?? [] },
+        ] as const).map(({ type, label, items }) => {
+          const cat = CATEGORY[type]
+          const CatIcon = cat.Icon
+          return (
+            <section key={type} aria-labelledby={`bolsa-${type}`}>
+              <SectionTitle
+                id={`bolsa-${type}`}
+                action={
+                  <ToneButton
+                    ref={(el) => { addButtons.current[type] = el }}
+                    t={cat.tone}
+                    icon={<Plus size={15} aria-hidden />}
+                    aria-label={`Añadir ${label}`}
+                    aria-haspopup="dialog"
+                    onClick={() => setItemPicker(type)}
+                  >
+                    Añadir
+                  </ToneButton>
+                }
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <CatIcon size={17} aria-hidden style={{ color: cat.tone.fg }} />
+                  {label}
+                </span>
+              </SectionTitle>
+
+              <Card padding={0} style={{ overflow: 'hidden' }}>
+                {items.length > 0 ? (
+                  <ul role="list" ref={(el) => { itemLists.current[type] = el }} style={{ listStyle: 'none' }}>
+                    {items.map((name, idx) => {
+                      const equippedIndex = type === 'armor' ? items.findIndex((n) => n === character.equippedArmor) : -1
+                      const isEquipped = type === 'armor' && idx === equippedIndex
+                      return (
+                        <li
+                          key={idx}
+                          className="rise"
+                          style={{
+                            '--i': idx,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            minHeight: 56,
+                            padding: '8px 8px 8px 16px',
+                            borderTop: idx > 0 ? `1px solid ${c.border}` : 'none',
+                            background: isEquipped ? tint('var(--topacio)', 7) : 'transparent',
+                            boxShadow: isEquipped ? 'inset 3px 0 0 var(--topacio)' : undefined,
+                          } as CSSProperties}
+                        >
+                          <span style={{ flex: 1, minWidth: 0, fontSize: fs.base, fontWeight: 550, color: c.text, overflowWrap: 'anywhere', lineHeight: 1.35 }}>{name}</span>
+                          <IconButton label={`Ver detalles de ${name}`} size={40} aria-haspopup="dialog" onClick={() => setBolsaDetail({ kind: type, name })}>
+                            <Info size={18} aria-hidden />
+                          </IconButton>
+                          {type === 'armor' && (
+                            <button
+                              type="button"
+                              className="ui-btn"
+                              aria-pressed={isEquipped}
+                              onClick={() => {
+                                const armorData = catalogArmor.find((a) => a.name === name)
+                                desvioMutation.mutate(isEquipped ? { equippedArmor: '', desvio: 0 } : { equippedArmor: name, desvio: armorData?.desvio ?? 0 })
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                minHeight: 36,
+                                padding: '0 12px',
+                                borderRadius: radius.full,
+                                border: `1px solid ${isEquipped ? tone.topacio.border : c.borderBright}`,
+                                background: isEquipped ? tone.topacio.bg : c.s2,
+                                color: isEquipped ? tone.topacio.fg : c.muted,
+                                fontSize: fs.sm,
+                                fontWeight: 650,
+                                whiteSpace: 'nowrap',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {isEquipped && <ShieldCheck size={14} aria-hidden />}
+                              {isEquipped ? 'Equipada' : 'Equipar'}
+                              <span className="sr-only"> {name}</span>
+                            </button>
+                          )}
+                          <IconButton label={`Retirar ${name}`} size={40} variant="danger" aria-haspopup="dialog" data-remove="" onClick={() => setConfirmRemoveItem({ type, index: idx, name })}>
+                            <Trash2 size={17} aria-hidden />
+                          </IconButton>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : (
+                  <p style={{ padding: '18px 16px', fontSize: fs.sm, color: c.muted, textAlign: 'center' }}>
+                    Sin {label.toLowerCase()} equipadas
+                  </p>
+                )}
+              </Card>
+            </section>
+          )
+        })}
       </div>
 
-      {/* Marcos dialog */}
-      {marcosDialog && (
-        <>
-          <div onClick={() => setMarcosDialog(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71, background: 'var(--surface-1)', borderRadius: '20px 20px 0 0', border: '1px solid var(--border-bright)', borderBottom: 'none', padding: '20px 20px calc(24px + var(--sab, 0px))' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
-              {marcosDialog === 'add' ? 'Añadir Marcos' : 'Gastar Marcos'}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-subtle)', marginBottom: 20 }}>
-              {marcosDialog === 'add' ? 'Los Marcos se añaden como Infusas.' : `Tienes ${marcosTotal} Marco${marcosTotal !== 1 ? 's' : ''}. Se gastan primero las Opacas.`}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 24 }}>
-              <button onClick={() => setMarcosDelta((d) => Math.max(1, d - 1))} style={{ width: 40, height: 40, borderRadius: '50%', fontSize: 20, fontWeight: 700, cursor: 'pointer', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-              <span style={{ fontSize: 32, fontWeight: 800, color: 'white', minWidth: 40, textAlign: 'center' }}>{marcosDelta}</span>
-              <button onClick={() => setMarcosDelta((d) => marcosDialog === 'remove' ? Math.min(marcosTotal, d + 1) : d + 1)} style={{ width: 40, height: 40, borderRadius: '50%', fontSize: 20, fontWeight: 700, cursor: 'pointer', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-            </div>
-            <button
-              onClick={() => {
-                if (marcosDialog === 'add') {
-                  applyMarcos(marcos.infusas + marcosDelta, marcos.opacas)
-                } else {
-                  let toRemove = Math.min(marcosDelta, marcosTotal)
-                  const newOpacas = Math.max(0, marcos.opacas - toRemove)
-                  const removed = marcos.opacas - newOpacas
-                  const newInfusas = Math.max(0, marcos.infusas - (toRemove - removed))
-                  applyMarcos(newInfusas, newOpacas)
-                }
-                setMarcosDialog(null)
-              }}
-              style={{ width: '100%', padding: '13px', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', border: 'none', background: marcosDialog === 'add' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)', color: marcosDialog === 'add' ? '#34d399' : '#f87171' }}
-            >
+      {/* ─── Marcos dialog ─── */}
+      <Sheet
+        open={!!marcosDialog}
+        onClose={() => setMarcosDialog(null)}
+        maxWidth={440}
+        title={marcosDialog === 'add' ? 'Añadir Marcos' : 'Gastar Marcos'}
+        description={marcosDialog === 'add' ? 'Los Marcos se añaden como Infusas.' : `Tienes ${marcosTotal} Marco${marcosTotal !== 1 ? 's' : ''}. Se gastan primero las Opacas.`}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={() => setMarcosDialog(null)}>
+              Cancelar
+            </Button>
+            <Button variant={marcosDialog === 'add' ? 'primary' : 'danger'} size="lg" style={{ flex: 2 }} onClick={confirmMarcos}>
               {marcosDialog === 'add' ? `Añadir ${marcosDelta} Marco${marcosDelta !== 1 ? 's' : ''}` : `Gastar ${marcosDelta} Marco${marcosDelta !== 1 ? 's' : ''}`}
-            </button>
-          </div>
-        </>
-      )}
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '8px 0 4px' }}>
+          <SphereImg src={marcosDialog === 'add' ? IMG_CHIP : IMG_MARCO} size={56} style={marcosDialog === 'add' ? { filter: 'drop-shadow(0 0 10px var(--brand-glow))' } : undefined} />
+          <Stepper
+            value={marcosDelta}
+            onChange={setMarcosDelta}
+            min={1}
+            max={marcosDialog === 'remove' ? marcosTotal : Infinity}
+            label="Cantidad de Marcos"
+            format={(v) => <span style={{ fontSize: fs['3xl'] }}>{v}</span>}
+          />
+        </div>
+      </Sheet>
 
-      {/* Item picker */}
+      {/* ─── Item picker ─── */}
       {itemPicker && (() => {
         const config = {
-          weapon: { label: 'Armas',     items: catalogWeapons.map((w) => ({ id: w.name, label: w.name })) },
-          armor:  { label: 'Armaduras', items: catalogArmor.map((a) => ({ id: a.name, label: a.name })) },
-          gear:   { label: 'Equipo',    items: catalogGear.map((g) => ({ id: g.name, label: g.name })) },
+          weapon: { label: 'Armas',     items: catalogWeapons.map((w) => ({ id: w.name, label: w.name, weight: w.weight })) },
+          armor:  { label: 'Armaduras', items: catalogArmor.map((a) => ({ id: a.name, label: a.name, weight: a.weight })) },
+          gear:   { label: 'Equipo',    items: catalogGear.map((g) => ({ id: g.name, label: g.name, weight: g.weight })) },
         }[itemPicker]
+        const cat = CATEGORY[itemPicker]
+        const CatIcon = cat.Icon
+        const close = () => setItemPicker(null)
         return (
-          <>
-            <div onClick={() => setItemPicker(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-            <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71, background: 'var(--surface-1)', borderRadius: '20px 20px 0 0', border: '1px solid var(--border-bright)', borderBottom: 'none', maxHeight: '70vh', display: 'flex', flexDirection: 'column', paddingBottom: 'calc(16px + var(--sab, 0px))' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
-                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 16px', flexShrink: 0 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Añadir {config.label}</span>
-                <button onClick={() => setItemPicker(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}><X size={18} /></button>
-              </div>
-              <div style={{ overflowY: 'auto', padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {config.items.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '20px 0' }}>Cargando...</p>}
+          <Sheet
+            open
+            onClose={close}
+            title={`Añadir ${config.label}`}
+            footer={<Button variant="secondary" size="lg" fullWidth onClick={close}>Cerrar</Button>}
+          >
+            {config.items.length === 0 ? (
+              <p role="status" style={{ fontSize: fs.sm, color: c.muted, textAlign: 'center', padding: '20px 0' }}>Cargando...</p>
+            ) : (
+              <ul role="list" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {config.items.map((item) => (
-                  <button key={item.id} onClick={() => addItem(itemPicker, item.id)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 12, cursor: 'pointer', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', textAlign: 'left', width: '100%' }}
-                  >
-                    <span style={{ fontSize: 13, fontWeight: 500 }}>{item.label}</span>
-                  </button>
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      className="ui-card ui-card--interactive"
+                      onClick={() => addItem(itemPicker, item.id)}
+                      style={{
+                        ...buttonReset,
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        minHeight: 52,
+                        padding: '8px 14px 8px 8px',
+                        borderRadius: radius.md,
+                        background: c.s1,
+                        border: `1px solid ${c.border}`,
+                        color: c.text,
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span aria-hidden style={{ width: 36, height: 36, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: cat.tone.bg, border: `1px solid ${cat.tone.border}`, color: cat.tone.fg }}>
+                        <CatIcon size={17} />
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: fs.base, fontWeight: 550, overflowWrap: 'anywhere' }}>{item.label}</span>
+                      <span style={{ fontSize: fs.sm, color: c.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                        <span className="sr-only">, </span>
+                        {item.weight} kg
+                      </span>
+                      <Plus size={16} aria-hidden style={{ color: cat.tone.fg }} />
+                    </button>
+                  </li>
                 ))}
-              </div>
-            </div>
-          </>
+              </ul>
+            )}
+          </Sheet>
         )
       })()}
 
-      {/* Confirm remove */}
-      {confirmRemoveItem && (
-        <>
-          <div onClick={() => setConfirmRemoveItem(null)} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-          <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71, background: 'var(--surface-1)', borderRadius: '20px 20px 0 0', border: '1px solid var(--border-bright)', borderBottom: 'none', padding: '20px 20px calc(24px + var(--sab, 0px))' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>¿Retirar del inventario?</div>
-            <div style={{ fontSize: 13, color: 'var(--text-subtle)', marginBottom: 24 }}>
-              Se eliminará <strong style={{ color: 'var(--text)' }}>{confirmRemoveItem.name}</strong> del inventario de {character.name}.
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setConfirmRemoveItem(null)} style={{ flex: 1, padding: '12px', borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: 'pointer', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)' }}>Cancelar</button>
-              <button onClick={() => removeItem(confirmRemoveItem.type, confirmRemoveItem.index)} style={{ flex: 1, padding: '12px', borderRadius: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'rgba(239,68,68,0.2)', color: '#f87171' }}>Retirar</button>
-            </div>
-          </div>
-        </>
-      )}
+      {/* ─── Confirm remove ─── */}
+      <ConfirmDialog
+        open={!!confirmRemoveItem}
+        title="¿Retirar del inventario?"
+        message={confirmRemoveItem ? <>Se eliminará <strong style={{ color: 'var(--text)' }}>{confirmRemoveItem.name}</strong> del inventario de {character.name}.</> : undefined}
+        confirmLabel="Retirar"
+        onConfirm={() => {
+          if (!confirmRemoveItem) return
+          const { type, index } = confirmRemoveItem
+          const count = (type === 'weapon' ? character.weapons : type === 'armor' ? character.armor : character.equipment)?.length ?? 0
+          removeItem(type, index)
+          keepFocusAfterRemoval(type, index, count)
+        }}
+        onCancel={() => setConfirmRemoveItem(null)}
+      />
 
-      {/* Item detail sheet */}
+      {/* ─── Item detail sheet ─── */}
       {bolsaDetail && (() => {
         const onClose = () => setBolsaDetail(null)
         const weapon = bolsaDetail.kind === 'weapon' ? catalogWeapons.find((w) => w.name === bolsaDetail.name) : null
         const armor  = bolsaDetail.kind === 'armor'  ? catalogArmor.find((a) => a.name === bolsaDetail.name)  : null
         const gear   = bolsaDetail.kind === 'gear'   ? catalogGear.find((g) => g.name === bolsaDetail.name)   : null
-        const colors = {
-          weapon: { accent: '#f87171', bg: 'rgba(239,68,68,0.1)',   bgHover: 'rgba(239,68,68,0.25)' },
-          armor:  { accent: '#fbbf24', bg: 'rgba(251,191,36,0.1)',  bgHover: 'rgba(251,191,36,0.25)' },
-          gear:   { accent: '#34d399', bg: 'rgba(52,211,153,0.1)',  bgHover: 'rgba(52,211,153,0.25)' },
-        }[bolsaDetail.kind]
+        const accent = CATEGORY[bolsaDetail.kind].tone
+        const statGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(128px, 1fr))', gap: 8 }
+        const traitList: CSSProperties = { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }
+        const prose: CSSProperties = { fontSize: fs.sm + 1, color: c.muted, lineHeight: 1.55 }
         return (
-          <>
-            <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} />
-            <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71, background: 'var(--surface-1)', borderRadius: '20px 20px 0 0', border: '1px solid var(--border-bright)', borderBottom: 'none', padding: '20px 20px calc(20px + var(--sab, 0px))', maxHeight: '85vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
+          <Sheet
+            open
+            onClose={onClose}
+            title={bolsaDetail.name}
+            footer={<Button variant="secondary" size="lg" fullWidth onClick={onClose}>Cerrar</Button>}
+          >
+            {weapon && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <DetailSection title="Daño">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: font.mono, fontSize: fs.xl, fontWeight: 700, color: accent.fg, padding: '4px 14px', borderRadius: radius.sm, background: accent.bg, border: `1px solid ${accent.border}` }}>
+                      {weapon.damageDiceCount}d{weapon.damageDiceValue}
+                    </span>
+                    <span style={{ fontSize: fs.base, color: c.muted }}>{dtMap.get(weapon.damageTypeId) ?? '—'}</span>
+                  </div>
+                </DetailSection>
+                <DetailSection title="Estadísticas">
+                  <dl style={statGrid}>
+                    {[{ label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' }, { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' }, { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' }, { label: 'Peso', value: `${weapon.weight} kg` }].map(({ label, value }) => (
+                      <StatPill key={label} label={label} value={value} />
+                    ))}
+                  </dl>
+                </DetailSection>
+                {(weapon.traitIds.length > 0 || weapon.expertTraitIds.length > 0) && (
+                  <DetailSection title="Rasgos">
+                    <ul role="list" style={traitList}>
+                      {weapon.traitIds.map((id) => { const opt = wtrMap.get(id); return (
+                        <TraitRow key={id} name={opt?.name ?? id} description={opt?.description} />
+                      )})}
+                      {weapon.expertTraitIds.map((id) => { const opt = wtrMap.get(id); return (
+                        <TraitRow key={`ex-${id}`} expert name={opt?.name ?? id} description={opt?.description} />
+                      )})}
+                    </ul>
+                  </DetailSection>
+                )}
+                {weapon.description && (
+                  <DetailSection title="Descripción">
+                    <p style={prose}>{weapon.description}</p>
+                  </DetailSection>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
-                <div style={{ fontSize: 17, fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>{bolsaDetail.name}</div>
-                <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}><X size={18} /></button>
+            )}
+
+            {armor && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <DetailSection title="Defensa">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {/* Official character-sheet desvío frame around the value */}
+                    <span style={{ display: 'inline-grid', placeItems: 'center', color: c.goldOrnament }}>
+                      <CosmereIcon name="marco-desvio" size={56} style={{ gridArea: '1 / 1' }} />
+                      <span style={{ gridArea: '1 / 1', ...numeral, fontSize: fs.xl, color: c.text, paddingTop: 4 }}>+{armor.desvio}</span>
+                    </span>
+                    <span style={{ fontSize: fs.md, fontWeight: 700, letterSpacing: '0.08em', color: accent.fg }}> DEF</span>
+                  </div>
+                </DetailSection>
+                <DetailSection title="Tipo">
+                  <dl style={statGrid}>
+                    {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }].map(({ label, value }) => (
+                      <StatPill key={label} label={label} value={value} />
+                    ))}
+                  </dl>
+                </DetailSection>
+                {(armor.traitIds.length > 0 || armor.expertTraitIds.length > 0) && (
+                  <DetailSection title="Rasgos">
+                    <ul role="list" style={traitList}>
+                      {armor.traitIds.map((id) => { const opt = atrMap.get(id); return (
+                        <TraitRow key={id} name={opt?.name ?? id} description={opt?.description} />
+                      )})}
+                      {armor.expertTraitIds.map((id) => { const opt = atrMap.get(id); return (
+                        <TraitRow key={`ex-${id}`} expert name={opt?.name ?? id} description={opt?.description} />
+                      )})}
+                    </ul>
+                  </DetailSection>
+                )}
+                {armor.description && (
+                  <DetailSection title="Descripción">
+                    <p style={prose}>{armor.description}</p>
+                  </DetailSection>
+                )}
               </div>
+            )}
 
-              {weapon && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Daño</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 20, fontWeight: 900, fontFamily: 'monospace', color: colors.accent, padding: '4px 14px', borderRadius: 10, background: colors.bg, border: `1px solid ${colors.bgHover}` }}>
-                        {weapon.damageDiceCount}d{weapon.damageDiceValue}
-                      </span>
-                      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{dtMap.get(weapon.damageTypeId) ?? '—'}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Estadísticas</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                      {[{ label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' }, { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' }, { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' }, { label: 'Peso', value: `${weapon.weight} kg` }].map(({ label, value }) => (
-                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {(weapon.traitIds.length > 0 || weapon.expertTraitIds.length > 0) && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Rasgos</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {weapon.traitIds.map((id) => { const opt = wtrMap.get(id); return (
-                          <div key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: 'var(--text-subtle)' }}>·</span>
-                            <div><div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>{opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}</div>
-                          </div>
-                        )})}
-                        {weapon.expertTraitIds.map((id) => { const opt = wtrMap.get(id); return (
-                          <div key={`ex-${id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: '#fbbf24' }}>★</span>
-                            <div><div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>{opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}</div>
-                          </div>
-                        )})}
-                      </div>
-                    </div>
-                  )}
-                  {weapon.description && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
-                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{weapon.description}</p>
-                    </div>
-                  )}
-                </div>
-              )}
+            {gear && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <DetailSection title="Detalles">
+                  <dl style={statGrid}>
+                    {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: `${gear.price} mc` }].map(({ label, value }) => (
+                      <StatPill key={label} label={label} value={value} />
+                    ))}
+                  </dl>
+                </DetailSection>
+                {gear.description && (
+                  <DetailSection title="Descripción">
+                    <p style={prose}>{gear.description}</p>
+                  </DetailSection>
+                )}
+              </div>
+            )}
 
-              {armor && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Defensa</div>
-                    <span style={{ fontSize: 20, fontWeight: 900, color: colors.accent, padding: '4px 14px', borderRadius: 10, background: colors.bg, border: `1px solid ${colors.bgHover}` }}>+{armor.desvio} DEF</span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Tipo</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                      {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }].map(({ label, value }) => (
-                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {(armor.traitIds.length > 0 || armor.expertTraitIds.length > 0) && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Rasgos</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {armor.traitIds.map((id) => { const opt = atrMap.get(id); return (
-                          <div key={id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: 'var(--text-subtle)' }}>·</span>
-                            <div><div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>{opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}</div>
-                          </div>
-                        )})}
-                        {armor.expertTraitIds.map((id) => { const opt = atrMap.get(id); return (
-                          <div key={`ex-${id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, marginTop: 1, flexShrink: 0, color: '#fbbf24' }}>★</span>
-                            <div><div style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', marginBottom: opt?.description ? 2 : 0 }}>{opt?.name ?? id}</div>{opt?.description && <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.4 }}>{opt.description}</div>}</div>
-                          </div>
-                        )})}
-                      </div>
-                    </div>
-                  )}
-                  {armor.description && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
-                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{armor.description}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {gear && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Detalles</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: `${gear.price} mc` }].map(({ label, value }) => (
-                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '7px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {gear.description && (
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Descripción</div>
-                      <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{gear.description}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!weapon && !armor && !gear && (
-                <p style={{ fontSize: 13, color: 'var(--text-subtle)', textAlign: 'center', padding: '24px 0' }}>
-                  No se encontró información en el catálogo.
-                </p>
-              )}
-            </div>
-          </>
+            {!weapon && !armor && !gear && (
+              <p style={{ fontSize: fs.sm + 1, color: c.muted, textAlign: 'center', padding: '24px 0' }}>
+                No se encontró información en el catálogo.
+              </p>
+            )}
+          </Sheet>
         )
       })()}
     </div>
   )
 }
+
+const marcoColumn: CSSProperties = {
+  padding: '16px 12px',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 10,
+  textAlign: 'center',
+  minWidth: 0,
+}
+
+const marcoCaption: CSSProperties = { fontSize: fs.xs, color: c.muted }

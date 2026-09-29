@@ -1,14 +1,19 @@
-import { useState } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
+import { Eye, EyeOff } from 'lucide-react'
 import { authApi } from '../../api/auth'
 import { useAuthStore } from '../../store/authStore'
-import { Button, Input, ErrorMessage } from '../../components/ui'
+import { Button, ErrorMessage, Field, IconButton, Input, Label, SectionTitle } from '../../components/ui'
+import { BrandGlyph } from '../../components/BrandMark'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { c, card, eyebrow, fs, radius, shadow, titleText } from '../../theme'
 
 export function RegisterPage() {
   const navigate = useNavigate()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [form, setForm] = useState({ username: '', password: '', displayName: '' })
+  const [pwVisible, setPwVisible] = useState(false)
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -20,149 +25,147 @@ export function RegisterPage() {
     },
   })
 
-  return (
-    <div
-      className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ background: 'var(--bg)' }}
-    >
-      {/* Ambient glows */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: '-20%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '600px',
-          height: '400px',
-          background: 'radial-gradient(ellipse, rgba(124,58,237,0.15) 0%, transparent 70%)',
-          filter: 'blur(1px)',
-        }}
-      />
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          bottom: '-10%',
-          right: '10%',
-          width: '400px',
-          height: '300px',
-          background: 'radial-gradient(ellipse, rgba(99,102,241,0.08) 0%, transparent 70%)',
-        }}
-      />
+  const disabled = isPending || !form.username || !form.password || !form.displayName
 
-      <div className="w-full max-w-sm px-4 relative z-10">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div
-            className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-4"
-            style={{
-              background: 'linear-gradient(135deg, #7c3aed, #6366f1)',
-              boxShadow: '0 8px 32px rgba(124,58,237,0.4)',
-            }}
-          >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
+  return (
+    <AuthShell>
+      <SectionTitle>Crear cuenta</SectionTitle>
+
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!disabled) mutate()
+        }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 6 }}
+      >
+        <Field label="Nombre visible">
+          <Input
+            id="register-display-name"
+            name="displayName"
+            placeholder="Tu nombre"
+            value={form.displayName}
+            onChange={set('displayName')}
+            autoComplete="name"
+          />
+        </Field>
+
+        <Field label="Usuario">
+          <Input
+            id="register-username"
+            name="username"
+            placeholder="tu_usuario"
+            value={form.username}
+            onChange={set('username')}
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </Field>
+
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <Label htmlFor="register-password">Contraseña</Label>
+          <div style={{ position: 'relative' }}>
+            <Input
+              id="register-password"
+              name="password"
+              type={pwVisible ? 'text' : 'password'}
+              placeholder="••••••••"
+              value={form.password}
+              onChange={set('password')}
+              autoComplete="new-password"
+              style={{ paddingRight: 52 }}
+            />
+            <IconButton
+              label={pwVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              aria-pressed={pwVisible}
+              aria-controls="register-password"
+              size={40}
+              onClick={() => setPwVisible((v) => !v)}
+              style={passwordToggle}
+            >
+              {pwVisible ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+            </IconButton>
           </div>
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{
-              background: 'linear-gradient(135deg, #b4befe, #cba6f7)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            Cosmere RPG
-          </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-            Companion App
-          </p>
         </div>
 
-        {/* Card */}
+        {error && <ErrorMessage message="No se pudo crear la cuenta. El usuario puede estar en uso." />}
+
+        <Button type="submit" size="lg" fullWidth disabled={disabled} aria-busy={isPending || undefined} style={{ marginTop: 4 }}>
+          {isPending ? 'Creando...' : 'Crear cuenta'}
+        </Button>
+      </form>
+
+      <div aria-hidden className="hairline" style={{ margin: '22px 0 16px' }} />
+
+      <p style={{ textAlign: 'center', fontSize: fs.sm + 1, color: c.muted }}>
+        ¿Ya tienes cuenta?{' '}
+        <Link to="/login" className="ui-link" style={{ fontWeight: 650, display: 'inline-block', padding: '4px 2px' }}>
+          Iniciar sesión
+        </Link>
+      </p>
+    </AuthShell>
+  )
+}
+
+/* ─── Local shell shared in spirit with LoginPage (candidate for a shared AuthShell) ─── */
+
+const passwordToggle: CSSProperties = { position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)' }
+
+function AuthShell({ children }: { children: ReactNode }) {
+  return (
+    <main
+      style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 'calc(32px + var(--sat)) calc(16px + var(--sar)) calc(32px + var(--sab)) calc(16px + var(--sal))',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ width: '100%', maxWidth: 400, position: 'relative' }}>
+        <header className="rise" style={{ textAlign: 'center', marginBottom: 28 }}>
+          <AuthEmblem />
+          <h1 style={{ ...titleText, fontSize: fs['3xl'], color: c.text, letterSpacing: '0.08em' }}>Cosmere RPG</h1>
+          <OrnamentRule />
+          <p style={{ ...eyebrow, color: c.gold, marginTop: 10 }}>Compañero de mesa</p>
+        </header>
+
         <div
-          className="rounded-2xl p-7"
-          style={{
-            background: 'var(--surface-1)',
-            border: '1px solid var(--border-bright)',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
-          }}
+          className="rise"
+          style={{ ...card, '--i': 1, borderRadius: radius.xl, boxShadow: shadow[2], padding: '24px 22px 26px' } as CSSProperties}
         >
-          <h2 className="text-base font-semibold mb-5" style={{ color: 'var(--text)' }}>
-            Crear cuenta
-          </h2>
-
-          <div className="space-y-4">
-            <div>
-              <label
-                className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-                style={{ color: 'var(--text-subtle)' }}
-              >
-                Nombre visible
-              </label>
-              <Input
-                placeholder="Tu nombre"
-                value={form.displayName}
-                onChange={set('displayName')}
-                autoComplete="name"
-              />
-            </div>
-            <div>
-              <label
-                className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-                style={{ color: 'var(--text-subtle)' }}
-              >
-                Usuario
-              </label>
-              <Input
-                placeholder="tu_usuario"
-                value={form.username}
-                onChange={set('username')}
-                autoComplete="username"
-              />
-            </div>
-            <div>
-              <label
-                className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-                style={{ color: 'var(--text-subtle)' }}
-              >
-                Contraseña
-              </label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={set('password')}
-                onKeyDown={(e) => e.key === 'Enter' && mutate()}
-                autoComplete="new-password"
-              />
-            </div>
-
-            {error && <ErrorMessage message="No se pudo crear la cuenta. El usuario puede estar en uso." />}
-
-            <Button
-              className="w-full justify-center mt-1"
-              onClick={() => mutate()}
-              disabled={isPending || !form.username || !form.password || !form.displayName}
-              size="lg"
-            >
-              {isPending ? 'Creando...' : 'Crear cuenta'}
-            </Button>
-          </div>
-
-          <p className="text-center text-sm mt-6" style={{ color: 'var(--text-muted)' }}>
-            ¿Ya tienes cuenta?{' '}
-            <Link
-              to="/login"
-              className="font-medium transition-colors"
-              style={{ color: 'var(--brand-light)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'white')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--brand-light)')}
-            >
-              Iniciar sesión
-            </Link>
-          </p>
+          {children}
         </div>
       </div>
+    </main>
+  )
+}
+
+/** Official Cosmere emblem inside the gold chapter medallion, with a soft Stormlight halo */
+function AuthEmblem() {
+  return (
+    <div
+      aria-hidden
+      style={{ position: 'relative', width: 116, height: 116, margin: '0 auto 18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <span style={{ position: 'absolute', inset: -36, borderRadius: '50%', background: 'radial-gradient(closest-side, var(--brand-glow), transparent)' }} />
+      <CosmereIcon name="ornamento-medallon" size={116} square style={{ position: 'absolute', inset: 0, color: 'var(--gold-ornament)' }} />
+      <BrandGlyph size={60} />
+    </div>
+  )
+}
+
+/** Gold hairline with the official rhombus at its centre */
+function OrnamentRule() {
+  return (
+    <div aria-hidden style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+      <span style={{ width: 64, height: 1, background: 'linear-gradient(90deg, transparent, var(--gold-ornament))' }} />
+      <CosmereIcon name="ornamento-rombo" size={8} square style={{ color: 'var(--gold-ornament)' }} />
+      <span style={{ width: 64, height: 1, background: 'linear-gradient(90deg, var(--gold-ornament), transparent)' }} />
     </div>
   )
 }

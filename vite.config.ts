@@ -41,29 +41,21 @@ export default defineConfig({
 
       // Manifest generado por el plugin (elimina la necesidad de public/manifest.json)
       manifest: {
-        name: 'Cosmere RPG',
+        name: 'Cosmere · Compañero de campaña',
         short_name: 'Cosmere',
-        description: 'Cosmere RPG Companion — gestiona campañas, personajes y sesiones',
+        description: 'Cosmere RPG — el compañero de mesa para campañas, personajes y sesiones',
         start_url: '/',
         scope: '/',
         display: 'standalone',
         orientation: 'portrait-primary',
-        background_color: '#1e1e2e',
-        theme_color: '#1e1e2e',
+        background_color: '#0a0e15',
+        theme_color: '#0a0e15',
         lang: 'es',
         icons: [
-          {
-            src: '/icon-192.svg',
-            sizes: '192x192',
-            type: 'image/svg+xml',
-            purpose: 'any',
-          },
-          {
-            src: '/icon-512.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'any maskable',
-          },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-512.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
         categories: ['games', 'utilities'],
       },

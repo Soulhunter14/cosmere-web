@@ -1,148 +1,132 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
+import { Info } from 'lucide-react'
 import { COMBAT_ACTIONS, COMBAT_SECTIONS } from '../../data/combatRules'
 import { TalentActivation } from '../../components/TalentActivation'
 import type { ActivationType } from '../../components/TalentActivation'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { Disclosure, PageHeader, SectionTitle, Tabs, TabPanel, type TabItem } from '../../components/ui'
+import { c, font, fs, page, radius } from '../../theme'
 
-const TABS = [
+type TabId = 'sections' | 'actions' | 'reactions'
+const TABS: TabItem<TabId>[] = [
   { id: 'sections', label: 'Reglas' },
   { id: 'actions', label: 'Acciones' },
   { id: 'reactions', label: 'Reacciones' },
 ]
 
-function ActionCard({ name, cost, description }: { name: string; cost: ActivationType; description: string }) {
-  const [open, setOpen] = useState(false)
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+const ACCENT = 'var(--rubi)'
 
+function ActionCard({ name, cost, description, headingLevel }: {
+  name: string
+  cost: ActivationType
+  description: string
+  headingLevel: 2 | 3
+}) {
   return (
-    <button
-      onClick={() => setOpen(!open)}
-      style={{
-        display: 'flex', flexDirection: 'column',
-        padding: '12px 14px', borderRadius: 12, textAlign: 'left', width: '100%',
-        background: 'var(--surface-1)', border: '1px solid var(--border)',
-        cursor: 'pointer', transition: 'border-color 0.15s',
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(180,190,254,0.25)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+    <Disclosure
+      headingLevel={headingLevel}
+      accent={ACCENT}
+      title={
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* The badge is UI text: Geist, not the serif of the card title */}
+          <span style={{ display: 'inline-flex', fontFamily: font.ui }}>
+            <TalentActivation type={cost} />
+          </span>
+          <span>{name}</span>
+        </span>
+      }
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <TalentActivation type={cost} />
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'white', flex: 1 }}>{name}</div>
-        <div style={{ fontSize: 14, color: 'var(--text-subtle)', opacity: 0.6 }}>{open ? '▾' : '›'}</div>
-      </div>
-      {open && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-          {description}
-        </div>
-      )}
-    </button>
+      <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6 }}>{description}</p>
+    </Disclosure>
   )
 }
 
-function SectionCard({ section }: { section: typeof COMBAT_SECTIONS[0] }) {
-  const [open, setOpen] = useState(false)
-
+function RuleDetails({ details }: { details: { label: string; text: string }[] }) {
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 16px', textAlign: 'left', width: '100%',
-          background: 'var(--surface-1)', border: 'none',
-          cursor: 'pointer',
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 3 }}>{section.title}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{section.summary}</div>
+    <dl style={stack(0)}>
+      {details.map((d, i) => (
+        <div key={d.label} style={{ paddingTop: i === 0 ? 0 : 12, paddingBottom: 12, borderTop: i === 0 ? 'none' : `1px solid ${c.border}` }}>
+          <dt style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.base - 1, fontWeight: 650, color: c.text, lineHeight: 1.35, marginBottom: 4 }}>
+            <CosmereIcon name="ornamento-rombo" size={8} style={{ color: 'var(--gold-ornament)' }} />
+            {d.label}
+          </dt>
+          <dd style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6, paddingLeft: 16 }}>{d.text}</dd>
         </div>
-        <div style={{ fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: 0.6, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>›</div>
-      </button>
-
-      {open && (
-        <div style={{ padding: '0 16px 16px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12 }}>
-            {section.details.map((d) => (
-              <div key={d.label} style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                  {d.label}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{d.text}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+      ))}
+    </dl>
   )
 }
 
 export function CombatPage() {
-  const [tab, setTab] = useState('sections')
+  const [tab, setTab] = useState<TabId>('sections')
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
-        Combate
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-        Referencia rápida de reglas de combate del Archivo de las Tormentas
-      </p>
+    <div style={page}>
+      <PageHeader
+        title="Combate"
+        subtitle="Referencia rápida de reglas de combate del Archivo de las Tormentas"
+      />
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: '7px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', border: 'none',
-              background: tab === t.id ? 'rgba(180,190,254,0.12)' : 'transparent',
-              outline: `1px solid ${tab === t.id ? 'rgba(180,190,254,0.2)' : 'transparent'}`,
-              color: tab === t.id ? 'var(--brand-light)' : 'var(--text-subtle)',
-              transition: 'all 0.15s',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} value={tab} onChange={setTab} ariaLabel="Secciones de Combate" idPrefix="combat" style={{ marginBottom: 20 }} />
 
       {tab === 'sections' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {COMBAT_SECTIONS.map((s) => (
-            <SectionCard key={s.id} section={s} />
+        <TabPanel idPrefix="combat" id="sections" style={stack(10)}>
+          {COMBAT_SECTIONS.map((s, i) => (
+            <div key={s.id} className="rise" style={{ '--i': i } as CSSProperties}>
+              <Disclosure title={s.title} summary={s.summary} headingLevel={2} accent={ACCENT}>
+                <RuleDetails details={s.details} />
+              </Disclosure>
+            </div>
           ))}
-        </div>
+        </TabPanel>
       )}
 
       {tab === 'actions' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-            Acciones estándar
-          </div>
-          {COMBAT_ACTIONS.actions.map((a) => (
-            <ActionCard key={a.name} {...a} />
-          ))}
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 8, marginBottom: 4 }}>
-            Acciones gratuitas
-          </div>
-          {COMBAT_ACTIONS.freeActions.map((a) => (
-            <ActionCard key={a.name} {...a} />
-          ))}
-        </div>
+        <TabPanel idPrefix="combat" id="actions" style={stack(28)}>
+          <section>
+            <SectionTitle>Acciones estándar</SectionTitle>
+            <div style={stack(8)}>
+              {COMBAT_ACTIONS.actions.map((a, i) => (
+                <div key={a.name} className="rise" style={{ '--i': i } as CSSProperties}>
+                  <ActionCard {...a} headingLevel={3} />
+                </div>
+              ))}
+            </div>
+          </section>
+          <section>
+            <SectionTitle>Acciones gratuitas</SectionTitle>
+            <div style={stack(8)}>
+              {COMBAT_ACTIONS.freeActions.map((a, i) => (
+                <div key={a.name} className="rise" style={{ '--i': COMBAT_ACTIONS.actions.length + i } as CSSProperties}>
+                  <ActionCard {...a} headingLevel={3} />
+                </div>
+              ))}
+            </div>
+          </section>
+        </TabPanel>
       )}
 
       {tab === 'reactions' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, margin: '0 0 12px', padding: '12px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-            Las reacciones se activan en respuesta a un detonante específico. Solo puedes usar una reacción por detonante, aunque ciertos talentos pueden otorgarte reacciones adicionales.
+        <TabPanel idPrefix="combat" id="reactions" style={stack(8)}>
+          <p
+            style={{
+              display: 'flex', gap: 12, alignItems: 'flex-start',
+              fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6, marginBottom: 8,
+              padding: '14px 16px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}`,
+            }}
+          >
+            <Info size={18} aria-hidden style={{ color: c.brand, marginTop: 2 }} />
+            <span>
+              Las reacciones se activan en respuesta a un detonante específico. Solo puedes usar una reacción por detonante, aunque ciertos talentos pueden otorgarte reacciones adicionales.
+            </span>
           </p>
-          {COMBAT_ACTIONS.reactions.map((a) => (
-            <ActionCard key={a.name} {...a} />
+          {COMBAT_ACTIONS.reactions.map((a, i) => (
+            <div key={a.name} className="rise" style={{ '--i': i } as CSSProperties}>
+              <ActionCard {...a} headingLevel={2} />
+            </div>
           ))}
-        </div>
+        </TabPanel>
       )}
     </div>
   )

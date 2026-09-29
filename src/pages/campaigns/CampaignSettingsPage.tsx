@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, RefreshCw, Users, Check, Link2, Link2Off, LogOut } from 'lucide-react'
+import { Copy, RefreshCw, Check, Link2, Link2Off, LogOut } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { campaignsApi } from '../../api/campaigns'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Spinner } from '../../components/ui'
+import { Avatar, Badge, Button, Card, ErrorMessage, PageHeader, SectionTitle, Sheet, Spinner, Switch } from '../../components/ui'
+import { ThemeSwitcher } from '../../components/ThemeSwitcher'
+import { c, eyebrow, font, fs, page, radius, titleText, tone } from '../../theme'
 
 export function CampaignSettingsPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
@@ -15,13 +17,14 @@ export function CampaignSettingsPage() {
   const { isGm } = useCampaignStore()
   const { user, logout } = useAuthStore()
   const [copied, setCopied] = useState(false)
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false)
 
   const handleLogout = () => {
     logout()
     navigate('/login')
   }
 
-  const { data: campaign, isLoading } = useQuery({
+  const { data: campaign, isLoading, error } = useQuery({
     queryKey: ['campaign', id],
     queryFn: () => campaignsApi.getById(id),
   })
@@ -46,258 +49,181 @@ export function CampaignSettingsPage() {
 
   if (isLoading) return <Spinner />
 
+  const members = campaign?.members ?? []
+
   return (
-    <div style={{ padding: '24px 20px', maxWidth: 680, margin: '0 auto' }}>
+    <div style={page}>
+      <PageHeader title="Ajustes" subtitle={campaign?.name} />
 
-      {/* ── Header ───────────────────────────────────────────── */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{
-          fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em',
-          color: 'var(--text)', marginBottom: 4, lineHeight: 1.2,
-        }}>
-          Ajustes
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          {campaign?.name}
-        </p>
-      </div>
+      {error && <ErrorMessage message="No se pudo cargar la campaña." style={{ marginBottom: 24 }} />}
 
-      {/* ── Invite code (GM only) ─────────────────────────────── */}
-      {isGm && campaign?.inviteCode && (
-        <div
-          style={{
-            borderRadius: 18,
-            padding: '20px',
-            marginBottom: 16,
-            background: 'var(--surface-1)',
-            border: '1px solid var(--border)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: 9,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.15)',
-            }}>
-              <Users size={14} style={{ color: 'var(--brand-light)' }} />
-            </div>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-              Código de invitación
-            </h3>
-          </div>
-
-          {/* Code display */}
-          <div
-            style={{
-              borderRadius: 14,
-              padding: '16px 18px',
-              marginBottom: 14,
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border-bright)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-            }}
-          >
-            <code style={{
-              fontSize: 26, fontFamily: 'monospace', fontWeight: 800,
-              letterSpacing: '0.22em', color: 'var(--brand-light)',
-            }}>
-              {campaign.inviteCode}
-            </code>
-            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              <button
-                onClick={copyCode}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  background: copied ? 'rgba(16,185,129,0.1)' : 'var(--surface-1)',
-                  border: `1px solid ${copied ? 'rgba(16,185,129,0.25)' : 'var(--border-bright)'}`,
-                  color: copied ? '#34d399' : 'var(--text-muted)',
-                  borderRadius: 10, padding: '6px 12px',
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {copied ? <Check size={12} /> : <Copy size={12} />}
-                {copied ? 'Copiado' : 'Copiar'}
-              </button>
-              <button
-                onClick={() => regenerateMutation.mutate()}
-                disabled={regenerateMutation.isPending}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  background: 'transparent',
-                  border: '1px solid var(--border-bright)',
-                  color: 'var(--text-subtle)',
-                  borderRadius: 10, padding: '6px 12px',
-                  fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                  transition: 'color 0.15s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-              >
-                <RefreshCw size={12} style={{ animation: regenerateMutation.isPending ? 'spin 1s linear infinite' : 'none' }} />
-                Regenerar
-              </button>
-            </div>
-          </div>
-
-          {/* Toggle */}
-          <label
-            style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none' }}
-          >
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <input
-                type="checkbox"
-                checked={campaign.inviteActive}
-                onChange={(e) => toggleInviteMutation.mutate(e.target.checked)}
-                style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
-              />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+        {/* ── Invite code (GM only) ─────────────────────────────── */}
+        {isGm && campaign?.inviteCode && (
+          <section aria-labelledby="settings-invite" className="rise">
+            <SectionTitle id="settings-invite">Código de invitación</SectionTitle>
+            <Card padding={0} style={{ overflow: 'hidden' }}>
+              {/* Code display */}
               <div
                 style={{
-                  width: 40, height: 22, borderRadius: 11,
-                  background: campaign.inviteActive ? 'var(--brand)' : 'var(--surface-3)',
-                  border: '1px solid var(--border-bright)',
-                  transition: 'background 0.2s',
-                  position: 'relative',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
+                  padding: '18px 16px 18px 20px',
+                  background: 'linear-gradient(160deg, var(--surface-2), var(--surface-1))',
                 }}
               >
-                <div
+                <code
                   style={{
-                    position: 'absolute', top: 2, width: 16, height: 16,
-                    borderRadius: '50%', background: 'white',
-                    boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
-                    transition: 'left 0.2s',
-                    left: campaign.inviteActive ? '20px' : '2px',
+                    fontFamily: font.mono, fontSize: fs['2xl'], fontWeight: 700,
+                    letterSpacing: '0.22em', color: c.brandLight, lineHeight: 1.1,
+                    overflowWrap: 'anywhere',
                   }}
+                >
+                  {campaign.inviteCode}
+                </code>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <Button
+                    variant="secondary"
+                    onClick={copyCode}
+                    icon={copied ? <Check size={15} aria-hidden /> : <Copy size={15} aria-hidden />}
+                    /* Full `border` shorthand: overriding only borderColor would wipe the variant's colour when it reverts */
+                    style={copied ? { background: tone.esmeralda.bg, border: `1px solid ${tone.esmeralda.border}`, color: tone.esmeralda.fg } : undefined}
+                  >
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setConfirmRegenerate(true)}
+                    disabled={regenerateMutation.isPending}
+                    aria-haspopup="dialog"
+                    icon={<RefreshCw size={15} aria-hidden style={{ animation: regenerateMutation.isPending ? 'spin 1s linear infinite' : 'none' }} />}
+                  >
+                    Regenerar
+                  </Button>
+                </div>
+                <span role="status" className="sr-only">{copied ? 'Copiado' : ''}</span>
+              </div>
+
+              {/* Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px 14px 20px', borderTop: `1px solid ${c.border}` }}>
+                <span
+                  aria-hidden
+                  style={{
+                    width: 36, height: 36, flexShrink: 0, borderRadius: radius.sm,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: campaign.inviteActive ? tone.brand.bg : c.s2,
+                    border: `1px solid ${campaign.inviteActive ? tone.brand.border : c.border}`,
+                    color: campaign.inviteActive ? c.brandLight : c.subtle,
+                  }}
+                >
+                  {campaign.inviteActive ? <Link2 size={17} /> : <Link2Off size={17} />}
+                </span>
+                <label htmlFor="settings-invite-switch" style={{ flex: 1, minWidth: 0, cursor: 'pointer', userSelect: 'none' }}>
+                  <span style={{ display: 'block', fontSize: fs.base, fontWeight: 650, color: campaign.inviteActive ? c.text : c.muted }}>
+                    Invitaciones {campaign.inviteActive ? 'activas' : 'desactivadas'}
+                  </span>
+                  <span style={{ display: 'block', fontSize: fs.sm, color: c.subtle, marginTop: 2 }}>
+                    {campaign.inviteActive ? 'Cualquiera con el código puede unirse' : 'Nadie puede unirse con el código'}
+                  </span>
+                </label>
+                <Switch
+                  id="settings-invite-switch"
+                  label="Invitaciones"
+                  checked={campaign.inviteActive}
+                  disabled={toggleInviteMutation.isPending}
+                  onChange={(next) => toggleInviteMutation.mutate(next)}
                 />
               </div>
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {campaign.inviteActive
-                  ? <Link2 size={13} style={{ color: 'var(--brand-light)' }} />
-                  : <Link2Off size={13} style={{ color: 'var(--text-subtle)' }} />}
-                <span style={{ fontSize: 13, fontWeight: 600, color: campaign.inviteActive ? 'var(--text)' : 'var(--text-muted)' }}>
-                  Invitaciones {campaign.inviteActive ? 'activas' : 'desactivadas'}
-                </span>
+            </Card>
+          </section>
+        )}
+
+        {/* ── Account ──────────────────────────────────────────── */}
+        <section aria-labelledby="settings-account" className="rise" style={{ '--i': 1 } as CSSProperties}>
+          <SectionTitle id="settings-account">Tu cuenta</SectionTitle>
+          <Card padding={0}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, padding: '16px 16px 16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <Avatar name={user?.displayName} size={44} tone={isGm ? 'rubi' : 'brand'} />
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ ...titleText, fontSize: fs.lg, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user?.displayName}
+                  </p>
+                  <p style={{ fontSize: fs.sm, color: c.subtle, marginTop: 2 }}>@{user?.username}</p>
+                </div>
               </div>
-              <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 1 }}>
-                {campaign.inviteActive ? 'Cualquiera con el código puede unirse' : 'Nadie puede unirse con el código'}
-              </p>
+              <Button variant="danger" size="sm" icon={<LogOut size={15} aria-hidden />} onClick={handleLogout}>
+                Cerrar sesión
+              </Button>
             </div>
-          </label>
-        </div>
-      )}
+            <div style={{ padding: '14px 20px 18px', borderTop: `1px solid ${c.border}` }}>
+              <p style={{ ...eyebrow, marginBottom: 8 }}>Apariencia</p>
+              <ThemeSwitcher />
+            </div>
+          </Card>
+        </section>
 
-      {/* ── Account ──────────────────────────────────────────── */}
-      <div
-        style={{
-          borderRadius: 18,
-          padding: '16px 20px',
-          marginBottom: 16,
-          background: 'var(--surface-1)',
-          border: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 700, color: 'white',
-            background: 'linear-gradient(135deg,#7c3aed,#6366f1)',
-          }}>
-            {user?.displayName?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{user?.displayName}</p>
-            <p style={{ fontSize: 11, color: 'var(--text-subtle)' }}>@{user?.username}</p>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.2)',
-            color: '#fb7185', borderRadius: 12, padding: '7px 14px',
-            fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(244,63,94,0.14)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(244,63,94,0.08)')}
-        >
-          <LogOut size={13} />
-          Cerrar sesión
-        </button>
-      </div>
-
-      {/* ── Members ───────────────────────────────────────────── */}
-      <div
-        style={{
-          borderRadius: 18,
-          padding: '20px',
-          background: 'var(--surface-1)',
-          border: '1px solid var(--border)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <div style={{
-            width: 30, height: 30, borderRadius: 9,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.15)',
-          }}>
-            <Users size={14} style={{ color: 'var(--brand-light)' }} />
-          </div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-            Miembros
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-subtle)', marginLeft: 6 }}>
+        {/* ── Members ───────────────────────────────────────────── */}
+        <section aria-labelledby="settings-members" className="rise" style={{ '--i': 2 } as CSSProperties}>
+          <SectionTitle id="settings-members">
+            Miembros{' '}
+            <span style={{ fontFamily: font.ui, fontVariantCaps: 'normal', fontSize: fs.sm, fontWeight: 600, letterSpacing: 0, color: c.subtle }}>
               ({campaign?.members.length ?? 0})
             </span>
-          </h3>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {campaign?.members.map((m) => {
-            const isGmMember = m.role === 'gm'
-            return (
-              <div
-                key={m.userId}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 12px', borderRadius: 12,
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = '')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 12, fontWeight: 700, color: 'white', flexShrink: 0,
-                    background: isGmMember
-                      ? 'linear-gradient(135deg,#d97706,#92400e)'
-                      : 'linear-gradient(135deg,#7c3aed,#6366f1)',
-                  }}>
-                    {m.displayName[0].toUpperCase()}
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text)' }}>
-                    {m.displayName}
-                  </span>
-                </div>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
-                  padding: '3px 9px', borderRadius: 20,
-                  background: isGmMember ? 'rgba(245,158,11,0.1)' : 'rgba(124,58,237,0.1)',
-                  border: isGmMember ? '1px solid rgba(245,158,11,0.2)' : '1px solid rgba(124,58,237,0.2)',
-                  color: isGmMember ? '#fbbf24' : 'var(--brand-light)',
-                }}>
-                  {isGmMember ? 'GM' : 'Jugador'}
-                </span>
-              </div>
-            )
-          })}
-        </div>
+          </SectionTitle>
+          <Card padding={0}>
+            <ul role="list" style={{ listStyle: 'none' }}>
+              {members.map((m, i) => {
+                const isGmMember = m.role === 'gm'
+                return (
+                  <li
+                    key={m.userId}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      minHeight: 60, padding: '10px 16px 10px 20px',
+                      borderTop: i === 0 ? 'none' : `1px solid ${c.border}`,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                      <Avatar name={m.displayName} size={36} tone={isGmMember ? 'rubi' : 'brand'} />
+                      <span style={{ fontSize: fs.base, fontWeight: 600, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {m.displayName}
+                      </span>
+                    </div>
+                    <Badge tone={isGmMember ? 'rubi' : 'brand'} style={{ textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>
+                      {isGmMember ? 'Director' : 'Jugador'}
+                    </Badge>
+                  </li>
+                )
+              })}
+            </ul>
+          </Card>
+        </section>
       </div>
+
+      {/* Regenerating invalidates the current code: ask first */}
+      <Sheet
+        open={confirmRegenerate}
+        onClose={() => setConfirmRegenerate(false)}
+        role="alertdialog"
+        maxWidth={420}
+        title="¿Regenerar el código?"
+        description="El código actual dejará de funcionar y tendrás que compartir el nuevo."
+        footer={
+          <>
+            <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={() => setConfirmRegenerate(false)} data-autofocus>
+              Cancelar
+            </Button>
+            <Button
+              size="lg"
+              style={{ flex: 1 }}
+              icon={<RefreshCw size={16} aria-hidden />}
+              onClick={() => { setConfirmRegenerate(false); regenerateMutation.mutate() }}
+            >
+              Regenerar
+            </Button>
+          </>
+        }
+      />
     </div>
   )
 }

@@ -1,448 +1,472 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   BookOpen, Swords, Compass, MessageCircle, GitFork,
-  Map, ChevronLeft, Users, Shield, Star, Heart,
-  CheckSquare, Zap, Info,
+  MapIcon, ChevronLeft, ChevronRight, Users, Shield, Star, Heart,
+  Zap, Info, MapPin, Maximize2, ExternalLink, Clock,
+  type LucideIcon,
 } from 'lucide-react'
-import { CHAPTERS, type AdventureChapter, type Scene, type Npc, type Combat, type AdventureMap, type SceneType, type NpcRole } from '../../data/caminapiedras'
+import { CHAPTERS, type AdventureChapter, type Scene, type Npc, type Combat, type AdventureMap, type SceneType, type NpcRole, type SceneTable } from '../../data/caminapiedras'
+import { Button, Disclosure, SectionTitle, Sheet, TabPanel, Tabs } from '../../components/ui'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { PlotIcon } from '../../components/GameIcons'
+import { buttonReset, c, eyebrow, font, fs, page, pill, radius, shadow, titleText, tone, type Tone } from '../../theme'
 
 // ── Helpers ───────────────────────────────────────────────────
 
-const SCENE_META: Record<SceneType, { label: string; color: string; bg: string }> = {
-  narrative: { label: 'Narrativa', color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
-  social: { label: 'Social', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
-  exploration: { label: 'Exploración', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
-  combat: { label: 'Combate', color: '#f87171', bg: 'rgba(248,113,113,0.12)' },
-  choice: { label: 'Decisión', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
+const SCENE_META: Record<SceneType, { label: string; tone: Tone; icon: LucideIcon }> = {
+  narrative: { label: 'Narrativa', tone: tone.amatista, icon: BookOpen },
+  social: { label: 'Social', tone: tone.zafiro, icon: MessageCircle },
+  exploration: { label: 'Exploración', tone: tone.esmeralda, icon: Compass },
+  combat: { label: 'Combate', tone: tone.rubi, icon: Swords },
+  choice: { label: 'Decisión', tone: tone.topacio, icon: GitFork },
 }
 
 function SceneIcon({ type, size = 14 }: { type: SceneType; size?: number }) {
-  const color = SCENE_META[type].color
-  if (type === 'narrative') return <BookOpen size={size} style={{ color }} />
-  if (type === 'social') return <MessageCircle size={size} style={{ color }} />
-  if (type === 'exploration') return <Compass size={size} style={{ color }} />
-  if (type === 'combat') return <Swords size={size} style={{ color }} />
-  return <GitFork size={size} style={{ color }} />
-}
-
-function NpcRoleIcon({ role, size = 14 }: { role: NpcRole; size?: number }) {
-  if (role === 'ally') return <Heart size={size} style={{ color: '#34d399' }} />
-  if (role === 'villain') return <Shield size={size} style={{ color: '#f87171' }} />
-  if (role === 'special') return <Star size={size} style={{ color: '#fbbf24' }} />
-  return <Users size={size} style={{ color: '#94a3b8' }} />
+  const { icon: Icon, tone: t } = SCENE_META[type]
+  return <Icon size={size} aria-hidden style={{ color: t.fg }} />
 }
 
 const NPC_ROLE_LABEL: Record<NpcRole, string> = {
   ally: 'Aliado', neutral: 'Neutral', villain: 'Antagonista', special: 'Especial',
 }
-const NPC_ROLE_COLOR: Record<NpcRole, string> = {
-  ally: '#34d399', neutral: '#94a3b8', villain: '#f87171', special: '#fbbf24',
+const NPC_ROLE_META: Record<NpcRole, { tone: Tone; icon: LucideIcon }> = {
+  ally: { tone: tone.esmeralda, icon: Heart },
+  neutral: { tone: tone.cuarzo, icon: Users },
+  villain: { tone: tone.rubi, icon: Shield },
+  special: { tone: tone.topacio, icon: Star },
 }
 
-const CHAPTER_ACCENT = '#d97706'
-const CHAPTER_BG = 'rgba(217,119,6,0.1)'
-const CHAPTER_BORDER = 'rgba(217,119,6,0.3)'
+function NpcRoleIcon({ role, size = 14 }: { role: NpcRole; size?: number }) {
+  const { icon: Icon, tone: t } = NPC_ROLE_META[role]
+  return <Icon size={size} aria-hidden style={{ color: t.fg }} />
+}
+
+/** Adventure / chapter identity: the book's gold (chapter ornaments) */
+const CHAPTER = tone.gold
+
+const PROGRESSION_META: Record<'key' | 'spren' | 'info', { label: string; tone: Tone; icon: LucideIcon }> = {
+  key: { label: 'Clave', tone: tone.topacio, icon: Zap },
+  spren: { label: 'Spren', tone: tone.amatista, icon: Star },
+  info: { label: 'Información', tone: tone.cuarzo, icon: Info },
+}
+
+const bodyText: CSSProperties = { fontSize: fs.sm + 1, color: c.text, lineHeight: 1.55 }
+const proseText: CSSProperties = { fontFamily: font.display, fontSize: fs.lg - 1, color: c.text, lineHeight: 1.6 }
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
+const riseIndex = (i: number) => ({ '--i': Math.min(i, 12) }) as CSSProperties
+
+/** Small uppercase heading inside cards (h3 under a scene, h4 under NPC/combat/map cards) */
+function Kicker({
+  as: Tag = 'h3',
+  color = c.subtle,
+  icon,
+  children,
+  style,
+}: {
+  as?: 'h3' | 'h4' | 'p'
+  color?: string
+  icon?: ReactNode
+  children: ReactNode
+  style?: CSSProperties
+}) {
+  return (
+    <Tag style={{ ...eyebrow, fontFamily: font.ui, lineHeight: 1.4, color, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, ...style }}>
+      {icon && <span aria-hidden style={{ display: 'flex' }}>{icon}</span>}
+      {children}
+    </Tag>
+  )
+}
+
+/** Tinted square that carries a card's icon */
+function IconTile({ t, children, size = 40 }: { t: Tone; children: ReactNode; size?: number }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size, height: size, flexShrink: 0, borderRadius: radius.sm + 2,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
+      }}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** List with the book's gold lozenge as bullet */
+function LozengeList({ items, color = c.goldOrnament }: { items: string[]; color?: string }) {
+  return (
+    <ul style={{ ...listReset, ...stack(8) }}>
+      {items.map((item, i) => (
+        <li key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span aria-hidden style={{ display: 'flex', color, paddingTop: 7 }}>
+            <CosmereIcon name="ornamento-rombo" size={8} square />
+          </span>
+          <span style={bodyText}>{item}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** "Nv. 1→2" with the arrow hidden from screen readers */
+function LevelRange({ from, to }: { from: number; to: number }) {
+  return (
+    <span>
+      Nv. {from}<span aria-hidden>→</span><span className="sr-only"> a </span>{to}
+    </span>
+  )
+}
+
+/** Tinted callout box */
+function Callout({ t, children, style }: { t: Tone; children: ReactNode; style?: CSSProperties }) {
+  return (
+    <div style={{ padding: '12px 14px', borderRadius: radius.md, background: t.bg, border: `1px solid ${t.border}`, ...style }}>
+      {children}
+    </div>
+  )
+}
+
+/** Roll table: a real <table>; the roll is the row header. Plot results use the official plot-die symbols. */
+function RollTable({ table, t }: { table: SceneTable; t: Tone }) {
+  const hasRoll = table.entries.some((e) => e.roll)
+  const cell: CSSProperties = { padding: '10px 12px', verticalAlign: 'top', textAlign: 'left' }
+  return (
+    <div style={{ borderRadius: radius.md, border: `1px solid ${c.border}`, overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <caption
+          style={{
+            ...eyebrow, color: t.fg, textAlign: 'left', captionSide: 'top',
+            padding: '9px 12px', background: t.bg, borderBottom: `1px solid ${t.border}`, lineHeight: 1.4,
+          }}
+        >
+          {table.title}
+        </caption>
+        <tbody>
+          {table.entries.map((e, ei) => {
+            const plot = e.roll === 'Oportunidad' ? 'oportunidad' : e.roll === 'Complicación' ? 'complicacion' : null
+            return (
+              <tr key={ei} style={{ background: ei % 2 === 0 ? c.s2 : 'transparent', borderTop: ei > 0 ? `1px solid ${c.border}` : undefined }}>
+                {hasRoll && (e.roll ? (
+                  <th
+                    scope="row"
+                    style={{
+                      ...cell, width: '1%', whiteSpace: 'nowrap',
+                      fontSize: fs.sm, fontWeight: 700, fontVariantNumeric: 'tabular-nums lining-nums',
+                      color: plot === 'oportunidad' ? c.brand : plot === 'complicacion' ? tone.rubi.fg : t.fg,
+                    }}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      {plot && <PlotIcon result={plot} size={14} />}
+                      {e.roll}
+                    </span>
+                  </th>
+                ) : (
+                  <td style={cell} />
+                ))}
+                <td style={{ ...cell, ...bodyText }}>{e.text}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 // ── Scene card ────────────────────────────────────────────────
 function SceneCard({ scene }: { scene: Scene }) {
-  const [open, setOpen] = useState(false)
   const meta = SCENE_META[scene.type]
 
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 16px', textAlign: 'left', width: '100%',
-          background: 'var(--surface-1)', border: 'none', cursor: 'pointer',
-        }}
-      >
-        <div style={{
-          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-          background: meta.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <SceneIcon type={scene.type} size={16} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 3 }}>{scene.title}</div>
-          <span style={{
-            fontSize: 9, fontWeight: 700, color: meta.color, textTransform: 'uppercase',
-            letterSpacing: '0.06em', background: meta.bg, padding: '2px 6px', borderRadius: 6,
-          }}>
-            {meta.label}
-          </span>
-        </div>
-        <div style={{
-          fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: 0.6,
-          transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
-        }}>›</div>
-      </button>
-
-      {open && (
-        <div style={{ padding: '0 16px 16px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
-
-          {/* Read aloud */}
-          {scene.readAloud && (
-            <div style={{
-              marginTop: 12, padding: '12px 14px', borderRadius: 10,
-              background: 'rgba(217,119,6,0.07)', border: `1px solid ${CHAPTER_BORDER}`,
-            }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: CHAPTER_ACCENT, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                Leer en voz alta
-              </div>
+    <Disclosure
+      headingLevel={2}
+      accent={meta.tone.fg}
+      icon={<IconTile t={meta.tone}><SceneIcon type={scene.type} size={18} /></IconTile>}
+      title={scene.title}
+      summary={
+        <span style={{ display: 'flex', marginTop: 6 }}>
+          <span style={pill(meta.tone)}>{meta.label}</span>
+        </span>
+      }
+    >
+      <div style={stack(18)}>
+        {/* Read aloud */}
+        {scene.readAloud && (
+          <div
+            style={{
+              display: 'flex', gap: 14, padding: '14px 16px 16px 12px', borderRadius: radius.md,
+              background: CHAPTER.bg, border: `1px solid ${CHAPTER.border}`,
+            }}
+          >
+            <span aria-hidden style={{ display: 'flex', color: c.goldOrnament, paddingTop: 2 }}>
+              <CosmereIcon name="ornamento-cita" size={52} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <Kicker color={CHAPTER.fg}>Leer en voz alta</Kicker>
               {scene.readAloud.split('\n\n').map((p, i) => (
-                <p key={i} style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, fontStyle: 'italic', margin: i > 0 ? '8px 0 0' : 0 }}>
+                <p key={i} style={{ ...proseText, fontStyle: 'italic', margin: i > 0 ? '10px 0 0' : 0 }}>
                   {p}
                 </p>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Content */}
-          {scene.content.length > 0 && (
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {scene.content.map((p, i) => (
-                <div key={i} style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>{p}</p>
-                </div>
+        {/* Content */}
+        {scene.content.length > 0 && (
+          <div style={stack(10)}>
+            {scene.content.map((p, i) => (
+              <p key={i} style={{ fontSize: fs.base, color: c.text, lineHeight: 1.6 }}>{p}</p>
+            ))}
+          </div>
+        )}
+
+        {/* Branches */}
+        {scene.branches && scene.branches.length > 0 && (
+          <section>
+            <Kicker color={tone.topacio.fg} icon={<GitFork size={14} />}>Caminos posibles</Kicker>
+            <ul style={{ ...listReset, ...stack(8) }}>
+              {scene.branches.map((b, i) => (
+                <li key={i}>
+                  <Callout t={tone.topacio}>
+                    <p style={{ fontSize: fs.base, fontWeight: 650, color: tone.topacio.fg, marginBottom: 4 }}>{b.label}</p>
+                    <p style={bodyText}>{b.description}</p>
+                  </Callout>
+                </li>
               ))}
-            </div>
-          )}
+            </ul>
+          </section>
+        )}
 
-          {/* Branches */}
-          {scene.branches && scene.branches.length > 0 && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                Caminos posibles
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {scene.branches.map((b, i) => (
-                  <div key={i} style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', marginBottom: 4 }}>{b.label}</div>
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.55, margin: 0 }}>{b.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* DM tips */}
+        {scene.tips && scene.tips.length > 0 && (
+          <section>
+            <Kicker>Notas para la DJ</Kicker>
+            <LozengeList items={scene.tips} />
+          </section>
+        )}
 
-          {/* DM tips */}
-          {scene.tips && scene.tips.length > 0 && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                Notas para la DJ
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {scene.tips.map((t, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'var(--surface-2)' }}>
-                    <span style={{ color: CHAPTER_ACCENT, flexShrink: 0, marginTop: 1 }}>◆</span>
-                    <p style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.5, margin: 0 }}>{t}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Tables */}
-          {scene.tables && scene.tables.map((table, ti) => (
-            <div key={ti} style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                {table.title}
-              </div>
-              <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                {table.entries.map((e, ei) => (
-                  <div key={ei} style={{
-                    display: 'flex', gap: 10, padding: '8px 12px',
-                    background: ei % 2 === 0 ? 'var(--surface-2)' : 'var(--surface-1)',
-                    borderBottom: ei < table.entries.length - 1 ? '1px solid var(--border)' : 'none',
-                  }}>
-                    {e.roll && (
-                      <div style={{ fontSize: 10, fontWeight: 700, color: CHAPTER_ACCENT, flexShrink: 0, minWidth: 60 }}>{e.roll}</div>
-                    )}
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{e.text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+        {/* Tables */}
+        {scene.tables && scene.tables.map((table, ti) => (
+          <RollTable key={ti} table={table} t={CHAPTER} />
+        ))}
+      </div>
+    </Disclosure>
   )
 }
 
 // ── NPC card ──────────────────────────────────────────────────
 function NpcCard({ npc }: { npc: Npc }) {
-  const [open, setOpen] = useState(false)
-  const roleColor = NPC_ROLE_COLOR[npc.role]
+  const role = NPC_ROLE_META[npc.role]
+  const RoleIcon = role.icon
+  const tile: CSSProperties = { padding: '10px 12px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }
+  const dt: CSSProperties = { ...eyebrow, marginBottom: 4 }
 
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '12px 14px', textAlign: 'left', width: '100%',
-          background: 'var(--surface-1)', border: 'none', cursor: 'pointer',
-        }}
-      >
-        <div style={{
-          width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-          background: `${roleColor}14`, border: `1px solid ${roleColor}30`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <NpcRoleIcon role={npc.role} size={16} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{npc.name}</span>
-            <span style={{ fontSize: 9, color: 'var(--text-subtle)' }}>{npc.pronouns}</span>
+    <Disclosure
+      headingLevel={3}
+      accent={role.tone.fg}
+      icon={<IconTile t={role.tone}><RoleIcon size={18} aria-hidden /></IconTile>}
+      title={
+        <span style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '2px 8px' }}>
+          <span style={{ ...titleText, fontSize: fs.md }}>{npc.name}</span>
+          <span style={{ fontFamily: font.ui, fontSize: fs.xs, fontWeight: 500, color: c.subtle }}>{npc.pronouns}</span>
+        </span>
+      }
+      summary={
+        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+          <span style={pill(role.tone)}>{NPC_ROLE_LABEL[npc.role]}</span>
+          <span style={pill(tone.cuarzo)}>{npc.type}</span>
+        </span>
+      }
+    >
+      <div style={stack(12)}>
+        {/* Traits */}
+        {npc.traits.length > 0 && (
+          <ul aria-label="Rasgos" style={{ ...listReset, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {npc.traits.map((t) => (
+              <li key={t} style={{ ...pill(tone.cuarzo), background: c.s2, border: `1px solid ${c.border}`, color: c.muted }}>{t}</li>
+            ))}
+          </ul>
+        )}
+
+        <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+          {/* Goal */}
+          <div style={tile}>
+            <dt style={dt}>Meta</dt>
+            <dd style={bodyText}>{npc.goal}</dd>
           </div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            <span style={{
-              fontSize: 9, fontWeight: 700, color: roleColor, textTransform: 'uppercase',
-              letterSpacing: '0.06em', background: `${roleColor}14`, padding: '1px 6px', borderRadius: 6,
-            }}>
-              {NPC_ROLE_LABEL[npc.role]}
-            </span>
-            <span style={{
-              fontSize: 9, color: 'var(--text-subtle)', background: 'var(--surface-2)',
-              padding: '1px 6px', borderRadius: 6,
-            }}>
-              {npc.type}
-            </span>
+
+          {/* Appearance */}
+          <div style={tile}>
+            <dt style={dt}>Aspecto</dt>
+            <dd style={bodyText}>{npc.appearance}</dd>
           </div>
-        </div>
-        <div style={{
-          fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: 0.6,
-          transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
-        }}>›</div>
-      </button>
 
-      {open && (
-        <div style={{ padding: '0 14px 14px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10 }}>
-
-            {/* Traits */}
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {npc.traits.map((t) => (
-                <span key={t} style={{
-                  fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-2)',
-                  border: '1px solid var(--border)', padding: '2px 8px', borderRadius: 20,
-                }}>
-                  {t}
-                </span>
-              ))}
+          {/* Notes */}
+          {npc.notes && (
+            <div style={{ ...tile, gridColumn: '1 / -1', background: CHAPTER.bg, border: `1px solid ${CHAPTER.border}` }}>
+              <dt style={{ ...dt, color: CHAPTER.fg }}>Notas DJ</dt>
+              <dd style={bodyText}>{npc.notes}</dd>
             </div>
-
-            {/* Goal */}
-            <div style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Meta</div>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{npc.goal}</p>
-            </div>
-
-            {/* Appearance */}
-            <div style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Aspecto</div>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{npc.appearance}</p>
-            </div>
-
-            {/* Notes */}
-            {npc.notes && (
-              <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(217,119,6,0.06)', border: `1px solid ${CHAPTER_BORDER}` }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: CHAPTER_ACCENT, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Notas DJ</div>
-                <p style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.5, margin: 0 }}>{npc.notes}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+          )}
+        </dl>
+      </div>
+    </Disclosure>
   )
 }
 
 // ── Combat card ───────────────────────────────────────────────
 function CombatCard({ combat }: { combat: Combat }) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 16px', textAlign: 'left', width: '100%',
-          background: 'var(--surface-1)', border: 'none', cursor: 'pointer',
-        }}
-      >
-        <div style={{
-          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-          background: 'rgba(248,113,113,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Swords size={16} style={{ color: '#f87171' }} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 4 }}>{combat.title}</div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {combat.enemies.map((e, i) => (
-              <span key={i} style={{
-                fontSize: 9, fontWeight: 700, color: '#f87171',
-                background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.2)',
-                padding: '1px 6px', borderRadius: 6,
-              }}>
-                {e.count} {e.name}
-              </span>
-            ))}
-            {combat.mapRef && (
-              <span style={{
-                fontSize: 9, color: 'var(--text-subtle)', background: 'var(--surface-2)',
-                padding: '1px 6px', borderRadius: 6,
-              }}>
-                Mapa {combat.mapRef}
-              </span>
-            )}
-          </div>
-        </div>
-        <div style={{
-          fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: 0.6,
-          transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
-        }}>›</div>
-      </button>
+    <Disclosure
+      headingLevel={3}
+      accent={tone.rubi.fg}
+      icon={<IconTile t={tone.rubi}><Swords size={18} aria-hidden /></IconTile>}
+      title={combat.title}
+      summary={
+        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          {combat.enemies.map((e, i) => (
+            <span key={i} style={{ ...pill(tone.rubi), whiteSpace: 'normal', borderRadius: radius.sm }}>
+              {e.count} {e.name}
+            </span>
+          ))}
+          {combat.mapRef && (
+            <span style={pill(tone.cuarzo)}>
+              <MapIcon size={12} aria-hidden />
+              Mapa {combat.mapRef}
+            </span>
+          )}
+        </span>
+      }
+    >
+      <div style={stack(16)}>
+        {combat.duration && (
+          <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, fontStyle: 'italic' }}>
+            <Clock size={14} aria-hidden style={{ flexShrink: 0 }} />
+            Duración: {combat.duration}
+          </p>
+        )}
 
-      {open && (
-        <div style={{ padding: '0 16px 16px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10 }}>
+        <section>
+          <Kicker as="h4">Reglas especiales</Kicker>
+          <LozengeList items={combat.specialRules} color={tone.rubi.fg} />
+        </section>
 
-            {combat.duration && (
-              <div style={{ fontSize: 11, color: 'var(--text-subtle)', fontStyle: 'italic' }}>
-                Duración: {combat.duration}
-              </div>
-            )}
+        {combat.rewards && (
+          <Callout t={tone.esmeralda}>
+            <Kicker as="h4" color={tone.esmeralda.fg} style={{ marginBottom: 4 }}>Recompensas</Kicker>
+            <p style={bodyText}>{combat.rewards}</p>
+          </Callout>
+        )}
 
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                Reglas especiales
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {combat.specialRules.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'var(--surface-2)' }}>
-                    <span style={{ color: '#f87171', flexShrink: 0 }}>◆</span>
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{r}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {combat.rewards && (
-              <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.2)' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Recompensas</div>
-                <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{combat.rewards}</p>
-              </div>
-            )}
-
-            {combat.tables && combat.tables.map((table, ti) => (
-              <div key={ti}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-                  {table.title}
-                </div>
-                <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                  {table.entries.map((e, ei) => (
-                    <div key={ei} style={{
-                      display: 'flex', gap: 10, padding: '8px 12px',
-                      background: ei % 2 === 0 ? 'var(--surface-2)' : 'var(--surface-1)',
-                      borderBottom: ei < table.entries.length - 1 ? '1px solid var(--border)' : 'none',
-                    }}>
-                      {e.roll && <div style={{ fontSize: 10, fontWeight: 700, color: '#f87171', flexShrink: 0, minWidth: 60 }}>{e.roll}</div>}
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{e.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+        {combat.tables && combat.tables.map((table, ti) => (
+          <RollTable key={ti} table={table} t={tone.rubi} />
+        ))}
+      </div>
+    </Disclosure>
   )
 }
 
 // ── Map card ──────────────────────────────────────────────────
+const linkButton: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  minHeight: 44, padding: '0 16px', borderRadius: radius.md,
+  background: c.s2, color: c.text, border: `1px solid ${c.borderBright}`,
+  fontSize: fs.base - 1, fontWeight: 650, textDecoration: 'none', whiteSpace: 'nowrap',
+}
+
 function MapCard({ map }: { map: AdventureMap }) {
-  const [open, setOpen] = useState(false)
+  const [zoomed, setZoomed] = useState(false)
+  const alt = `Mapa ${map.id}: ${map.title}`
 
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '12px 14px', textAlign: 'left', width: '100%',
-          background: 'var(--surface-1)', border: 'none', cursor: 'pointer',
-        }}
-      >
-        <div style={{
-          width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-          background: 'rgba(96,165,250,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Map size={16} style={{ color: '#60a5fa' }} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'white', marginBottom: 2 }}>Mapa {map.id}: {map.title}</div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{map.scale}</span>
-            {map.pdfPage && (
-              <span style={{ fontSize: 9, color: '#60a5fa', background: 'rgba(96,165,250,0.1)', padding: '1px 5px', borderRadius: 4 }}>
-                pág. {map.pdfPage}
-              </span>
-            )}
-          </div>
-        </div>
-        <div style={{
-          fontSize: 16, color: 'var(--text-subtle)', opacity: 0.6,
-          transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
-        }}>›</div>
-      </button>
-
-      {open && (
-        <div style={{ background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
-
-          {/* Map image */}
-          {map.imagePath && (
-            <div style={{ padding: '12px 14px 0' }}>
-              <img
-                src={map.imagePath}
-                alt={map.title}
-                style={{
-                  width: '100%', borderRadius: 10,
-                  border: '1px solid rgba(96,165,250,0.3)',
-                  display: 'block',
-                }}
-              />
-            </div>
+    <Disclosure
+      headingLevel={3}
+      accent={tone.zafiro.fg}
+      icon={<IconTile t={tone.zafiro}><MapIcon size={18} aria-hidden /></IconTile>}
+      title={<>Mapa {map.id}: {map.title}</>}
+      summary={
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+          <span>{map.scale}</span>
+          {map.pdfPage && (
+            <span style={pill(tone.zafiro)}>pág. {map.pdfPage}</span>
           )}
+        </span>
+      }
+    >
+      <div style={stack(16)}>
+        {/* Map image: opens full size */}
+        {map.imagePath && (
+          <>
+            <button
+              type="button"
+              onClick={() => setZoomed(true)}
+              aria-haspopup="dialog"
+              aria-label={`Ampliar ${alt}`}
+              style={{
+                ...buttonReset, position: 'relative', display: 'block', width: '100%',
+                borderRadius: radius.md, overflow: 'hidden', border: `1px solid ${tone.zafiro.border}`,
+                background: c.s2, cursor: 'zoom-in',
+              }}
+            >
+              <img src={map.imagePath} alt={alt} loading="lazy" decoding="async" style={{ width: '100%', height: 'auto', display: 'block' }} />
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute', right: 8, bottom: 8,
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '6px 10px', borderRadius: radius.full,
+                  background: 'color-mix(in srgb, var(--surface-1) 88%, transparent)',
+                  border: `1px solid ${c.borderBright}`, color: c.text, boxShadow: shadow[2],
+                  fontSize: fs.xs, fontWeight: 650,
+                }}
+              >
+                <Maximize2 size={14} />
+                Ampliar
+              </span>
+            </button>
+            <Sheet
+              open={zoomed}
+              onClose={() => setZoomed(false)}
+              title={alt}
+              maxWidth={1100}
+              footer={
+                <>
+                  <a href={map.imagePath} target="_blank" rel="noopener noreferrer" className="ui-btn ui-btn--secondary" style={{ ...linkButton, flex: '1 1 auto' }}>
+                    <ExternalLink size={16} aria-hidden />
+                    Abrir en pestaña nueva
+                  </a>
+                  <Button variant="primary" onClick={() => setZoomed(false)} style={{ flex: '0 0 auto' }}>Cerrar</Button>
+                </>
+              }
+            >
+              {/* Focusable so keyboard users can scroll the full page of the book with the arrow keys */}
+              <div role="group" tabIndex={0} aria-label={`${alt}. Desplázate para ver la página completa`} style={{ borderRadius: radius.md }}>
+                <img src={map.imagePath} alt={alt} decoding="async" style={{ width: '100%', height: 'auto', display: 'block', borderRadius: radius.md, border: `1px solid ${c.border}` }} />
+              </div>
+            </Sheet>
+          </>
+        )}
 
-          <div style={{ padding: '10px 14px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                Ubicaciones clave
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {map.locations.map((loc, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, padding: '5px 8px', borderRadius: 7, background: 'var(--surface-2)' }}>
-                    <span style={{ color: '#60a5fa', flexShrink: 0, fontSize: 10 }}>▸</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{loc}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {map.notes && (
-              <p style={{ fontSize: 11, color: 'var(--text-subtle)', fontStyle: 'italic', lineHeight: 1.5, margin: 0 }}>{map.notes}</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+        <section>
+          <Kicker as="h4" color={tone.zafiro.fg}>Ubicaciones clave</Kicker>
+          <ul style={{ ...listReset, ...stack(6) }}>
+            {map.locations.map((loc, i) => (
+              <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <MapPin size={15} aria-hidden style={{ color: tone.zafiro.fg, flexShrink: 0, marginTop: 3 }} />
+                <span style={bodyText}>{loc}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        {map.notes && (
+          <p style={{ fontSize: fs.sm, color: c.muted, fontStyle: 'italic', lineHeight: 1.55 }}>{map.notes}</p>
+        )}
+      </div>
+    </Disclosure>
   )
 }
 
@@ -457,172 +481,193 @@ const DETAIL_TABS: { id: DetailTab; label: string }[] = [
 
 function ChapterDetail({ chapter, onBack }: { chapter: AdventureChapter; onBack: () => void }) {
   const [tab, setTab] = useState<DetailTab>('resumen')
+  const rootRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const idPrefix = `cap-${chapter.id}`
+
+  // Focus management: the new view starts at its top, with focus on its title
+  useEffect(() => {
+    const root = rootRef.current
+    const header = headerRef.current
+    if (root && header) {
+      const offset = parseFloat(getComputedStyle(header).top) || 0
+      const top = root.getBoundingClientRect().top + window.scrollY - offset
+      if (window.scrollY > top) window.scrollTo({ top })
+    }
+    headingRef.current?.focus({ preventScroll: true })
+  }, [])
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto' }}>
+    <div ref={rootRef} style={{ maxWidth: 680, margin: '0 auto' }}>
 
       {/* Sticky header */}
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 10,
-        background: 'var(--bg)', borderBottom: '1px solid var(--border)',
-        padding: '12px 20px 0',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <button
+      <div
+        ref={headerRef}
+        className="sticky-under-topbar glass"
+        style={{ borderBottom: `1px solid ${c.border}`, padding: '12px 16px' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <Button
+            variant="secondary"
             onClick={onBack}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px',
-              borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-1)',
-              cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, fontWeight: 600,
-            }}
+            icon={<ChevronLeft size={18} aria-hidden />}
+            style={{ flexShrink: 0, paddingLeft: 10 }}
           >
-            <ChevronLeft size={14} />
             Volver
-          </button>
+          </Button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: CHAPTER_ACCENT, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <p style={{ ...eyebrow, color: CHAPTER.fg, lineHeight: 1.4 }}>
               Capítulo {chapter.number}
-            </div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: 'white', letterSpacing: '-0.02em', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            </p>
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              style={{
+                ...titleText, fontSize: fs.lg, color: c.text, lineHeight: 1.2,
+                overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              }}
+            >
               {chapter.title}
-            </div>
+            </h1>
           </div>
-          <div style={{
-            padding: '4px 10px', borderRadius: 20, flexShrink: 0,
-            background: CHAPTER_BG, border: `1px solid ${CHAPTER_BORDER}`,
-            fontSize: 10, fontWeight: 700, color: CHAPTER_ACCENT,
-          }}>
-            Nv. {chapter.levelFrom}→{chapter.levelTo}
-          </div>
+          <span style={{ ...pill(CHAPTER), flexShrink: 0 }}>
+            <LevelRange from={chapter.levelFrom} to={chapter.levelTo} />
+          </span>
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0 }}>
-          {DETAIL_TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              style={{
-                flex: 1, padding: '8px 4px', border: 'none', background: 'transparent',
-                cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                color: tab === t.id ? CHAPTER_ACCENT : 'var(--text-muted)',
-                borderBottom: `2px solid ${tab === t.id ? CHAPTER_ACCENT : 'transparent'}`,
-                transition: 'all 0.15s',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <Tabs<DetailTab>
+          idPrefix={idPrefix}
+          ariaLabel={`Secciones del capítulo ${chapter.number}`}
+          tabs={DETAIL_TABS}
+          value={tab}
+          onChange={setTab}
+          stretch
+          size="sm"
+        />
       </div>
 
       {/* Tab content */}
-      <div style={{ padding: '20px 20px 48px' }}>
+      <TabPanel idPrefix={idPrefix} id={tab} style={{ padding: '20px 16px 48px' }}>
 
         {/* ── Resumen ── */}
         {tab === 'resumen' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={stack(28)}>
 
             {/* Summary */}
-            <div style={{ padding: '14px 16px', borderRadius: 14, background: CHAPTER_BG, border: `1px solid ${CHAPTER_BORDER}` }}>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.65, margin: 0 }}>{chapter.summary}</p>
-            </div>
+            <p
+              style={{
+                ...proseText, fontSize: fs.lg, lineHeight: 1.55,
+                padding: '16px 18px', borderRadius: radius.lg,
+                background: CHAPTER.bg, border: `1px solid ${CHAPTER.border}`,
+              }}
+            >
+              {chapter.summary}
+            </p>
 
             {/* Background */}
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: CHAPTER_ACCENT, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                Trasfondo del capítulo
-              </div>
-              <div style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.65, margin: 0 }}>{chapter.background}</p>
-              </div>
-            </div>
+            <section>
+              <SectionTitle>Trasfondo del capítulo</SectionTitle>
+              <p style={proseText}>{chapter.background}</p>
+            </section>
 
             {/* Prep checklist */}
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: CHAPTER_ACCENT, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                Lista de verificación DJ
+            <section>
+              <SectionTitle>Lista de verificación DJ</SectionTitle>
+              <div style={{ padding: '14px 16px', borderRadius: radius.lg, background: c.s1, border: `1px solid ${c.border}`, boxShadow: shadow[1] }}>
+                <LozengeList items={chapter.prepChecklist} />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {chapter.prepChecklist.map((item, i) => (
-                  <div key={i} style={{
-                    display: 'flex', gap: 10, alignItems: 'flex-start',
-                    padding: '10px 12px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid var(--border)',
-                  }}>
-                    <CheckSquare size={14} style={{ color: CHAPTER_ACCENT, flexShrink: 0, marginTop: 1 }} />
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{item}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            </section>
 
             {/* Progression */}
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: CHAPTER_ACCENT, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                Progresión de personajes
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <section>
+              <SectionTitle>Progresión de personajes</SectionTitle>
+              <ul style={{ ...listReset, ...stack(8) }}>
                 {chapter.progressionItems.map((item, i) => {
-                  const color = item.type === 'key' ? '#fbbf24' : item.type === 'spren' ? '#a78bfa' : 'var(--text-subtle)'
-                  const Icon = item.type === 'key' ? Zap : item.type === 'spren' ? Star : Info
+                  const meta = PROGRESSION_META[item.type]
+                  const Icon = meta.icon
                   return (
-                    <div key={i} style={{
-                      display: 'flex', gap: 10, alignItems: 'flex-start',
-                      padding: '9px 12px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid var(--border)',
-                    }}>
-                      <Icon size={13} style={{ color, flexShrink: 0, marginTop: 1 }} />
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>{item.text}</p>
-                    </div>
+                    <li
+                      key={i}
+                      className="rise"
+                      style={{
+                        ...riseIndex(i),
+                        display: 'flex', gap: 12, alignItems: 'flex-start',
+                        padding: '12px 14px', borderRadius: radius.md,
+                        background: c.s1, border: `1px solid ${c.border}`,
+                      }}
+                    >
+                      <span role="img" aria-label={meta.label} title={meta.label} style={{ display: 'flex', flexShrink: 0 }}>
+                        <IconTile t={meta.tone} size={30}><Icon size={15} aria-hidden /></IconTile>
+                      </span>
+                      <p style={{ ...bodyText, paddingTop: 4 }}>{item.text}</p>
+                    </li>
                   )
                 })}
-              </div>
-            </div>
+              </ul>
+            </section>
 
             {/* PDF reference */}
-            <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.5 }}>
+            <p
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 14px', borderRadius: radius.md,
+                background: c.s2, border: `1px solid ${c.border}`,
+                fontSize: fs.sm, color: c.muted, lineHeight: 1.5,
+              }}
+            >
+              <BookOpen size={16} aria-hidden style={{ color: CHAPTER.fg, flexShrink: 0 }} />
               Páginas del libro: {chapter.pdfPages.from}–{chapter.pdfPages.to}
-            </div>
+            </p>
           </div>
         )}
 
         {/* ── Escenas ── */}
         {tab === 'escenas' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={stack(16)}>
             {/* Legend */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+            <ul aria-label="Tipos de escena" style={{ ...listReset, display: 'flex', gap: '6px 14px', flexWrap: 'wrap' }}>
               {(Object.entries(SCENE_META) as [SceneType, typeof SCENE_META[SceneType]][]).map(([type, meta]) => (
-                <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <SceneIcon type={type} size={10} />
-                  <span style={{ fontSize: 9, color: 'var(--text-subtle)' }}>{meta.label}</span>
-                </div>
+                <li key={type} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <SceneIcon type={type} size={14} />
+                  <span style={{ fontSize: fs.xs, fontWeight: 550, color: c.muted }}>{meta.label}</span>
+                </li>
               ))}
-            </div>
-            {chapter.scenes.map((scene) => (
-              <SceneCard key={scene.id} scene={scene} />
-            ))}
+            </ul>
+            <ul style={{ ...listReset, ...stack(10) }}>
+              {chapter.scenes.map((scene, i) => (
+                <li key={scene.id} className="rise" style={riseIndex(i)}>
+                  <SceneCard scene={scene} />
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
         {/* ── PNJs ── */}
         {tab === 'pnjs' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={stack(28)}>
             {/* Group by role */}
             {(['special', 'ally', 'villain', 'neutral'] as NpcRole[]).map((role) => {
               const group = chapter.npcs.filter((n) => n.role === role)
               if (group.length === 0) return null
               return (
-                <div key={role}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                    <NpcRoleIcon role={role} size={12} />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: NPC_ROLE_COLOR[role], textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <section key={role}>
+                  <SectionTitle>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <NpcRoleIcon role={role} size={16} />
                       {NPC_ROLE_LABEL[role]}s
                     </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {group.map((npc) => <NpcCard key={npc.name} npc={npc} />)}
-                  </div>
-                  <div style={{ height: 10 }} />
-                </div>
+                  </SectionTitle>
+                  <ul style={{ ...listReset, ...stack(8) }}>
+                    {group.map((npc, i) => (
+                      <li key={npc.name} className="rise" style={riseIndex(i)}>
+                        <NpcCard npc={npc} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               )
             })}
           </div>
@@ -630,98 +675,126 @@ function ChapterDetail({ chapter, onBack }: { chapter: AdventureChapter; onBack:
 
         {/* ── Combates ── */}
         {tab === 'combates' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                Encuentros de combate
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {chapter.combats.map((c) => <CombatCard key={c.id} combat={c} />)}
-              </div>
-            </div>
+          <div style={stack(28)}>
+            <section>
+              <SectionTitle>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <Swords size={16} aria-hidden style={{ color: tone.rubi.fg }} />
+                  Encuentros de combate
+                </span>
+              </SectionTitle>
+              <ul style={{ ...listReset, ...stack(8) }}>
+                {chapter.combats.map((cb, i) => (
+                  <li key={cb.id} className="rise" style={riseIndex(i)}>
+                    <CombatCard combat={cb} />
+                  </li>
+                ))}
+              </ul>
+            </section>
 
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                Mapas del capítulo
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {chapter.maps.map((m) => <MapCard key={m.id} map={m} />)}
-              </div>
-            </div>
+            <section>
+              <SectionTitle>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <MapIcon size={16} aria-hidden style={{ color: tone.zafiro.fg }} />
+                  Mapas del capítulo
+                </span>
+              </SectionTitle>
+              <ul style={{ ...listReset, ...stack(8) }}>
+                {chapter.maps.map((m, i) => (
+                  <li key={m.id} className="rise" style={riseIndex(i)}>
+                    <MapCard map={m} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           </div>
         )}
 
-      </div>
+      </TabPanel>
     </div>
   )
 }
 
 // ── Chapter list card ─────────────────────────────────────────
-function ChapterCard({ chapter, onClick }: { chapter: AdventureChapter; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false)
-
+/** Chapter number inside the book's gold medallion */
+function Medallion({ n, muted = false }: { n: number; muted?: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <span
+      aria-hidden
       style={{
-        display: 'flex', alignItems: 'flex-start', gap: 14,
-        padding: '16px 18px', borderRadius: 16, textAlign: 'left', width: '100%',
-        background: hovered ? CHAPTER_BG : 'var(--surface-1)',
-        border: `1px solid ${hovered ? CHAPTER_BORDER : 'var(--border)'}`,
-        cursor: 'pointer', transition: 'all 0.15s',
-        transform: hovered ? 'translateX(3px)' : 'none',
+        position: 'relative', width: 52, height: 52, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        color: muted ? c.borderStrong : c.goldOrnament,
       }}
     >
-      {/* Chapter number badge */}
-      <div style={{
-        width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-        background: CHAPTER_BG, border: `1px solid ${CHAPTER_BORDER}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <span style={{ fontSize: 16, fontWeight: 900, color: CHAPTER_ACCENT, letterSpacing: '-0.04em' }}>
-          {String(chapter.number).padStart(2, '0')}
-        </span>
-      </div>
+      <CosmereIcon name="ornamento-medallon" size={52} square style={{ position: 'absolute', inset: 0 }} />
+      <span
+        style={{
+          position: 'relative', fontFamily: font.display, fontSize: fs.xl - 1, fontWeight: 600, lineHeight: 1,
+          fontVariantNumeric: 'lining-nums tabular-nums', color: muted ? c.subtle : CHAPTER.fg,
+        }}
+      >
+        {String(n).padStart(2, '0')}
+      </span>
+    </span>
+  )
+}
 
-      <div style={{ flex: 1, minWidth: 0 }}>
+const chapterCardId = (id: string) => `cap-card-${id}`
+
+function ChapterCard({ chapter, onClick }: { chapter: AdventureChapter; onClick: () => void }) {
+  return (
+    <button
+      id={chapterCardId(chapter.id)}
+      type="button"
+      onClick={onClick}
+      className="ui-card ui-card--interactive"
+      style={{
+        ...buttonReset,
+        display: 'flex', alignItems: 'center', gap: 16,
+        width: '100%', padding: 16, textAlign: 'left',
+        background: c.s1, border: `1px solid ${c.border}`, borderRadius: radius.lg, boxShadow: shadow[1],
+      }}
+    >
+      <Medallion n={chapter.number} />
+
+      <span style={{ display: 'block', flex: 1, minWidth: 0 }}>
+        <span className="sr-only">Capítulo {chapter.number}: </span>
         {/* Title */}
-        <div style={{ fontSize: 15, fontWeight: 800, color: 'white', marginBottom: 4, letterSpacing: '-0.02em' }}>
+        <span style={{ display: 'block', fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, lineHeight: 1.25, color: c.text }}>
           {chapter.title}
-        </div>
+        </span>
 
         {/* Summary */}
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 8,
-          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
-        }}>
+        <span
+          style={{
+            fontSize: fs.sm, color: c.muted, lineHeight: 1.5, marginTop: 4,
+            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+          }}
+        >
           {chapter.summary}
-        </div>
+        </span>
 
         {/* Stats row */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{
-            fontSize: 9, fontWeight: 700, color: CHAPTER_ACCENT, textTransform: 'uppercase',
-            letterSpacing: '0.06em', background: CHAPTER_BG, border: `1px solid ${CHAPTER_BORDER}`,
-            padding: '2px 7px', borderRadius: 20,
-          }}>
-            Nv. {chapter.levelFrom}→{chapter.levelTo}
+        <span style={{ display: 'flex', gap: '6px 12px', flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+          <span style={pill(CHAPTER)}>
+            <LevelRange from={chapter.levelFrom} to={chapter.levelTo} />
           </span>
           {[
             { icon: BookOpen, count: chapter.scenes.length, label: 'escenas' },
             { icon: Users, count: chapter.npcs.length, label: 'PNJs' },
             { icon: Swords, count: chapter.combats.length, label: 'combates' },
-            { icon: Map, count: chapter.maps.length, label: 'mapas' },
+            { icon: MapIcon, count: chapter.maps.length, label: 'mapas' },
           ].map(({ icon: Icon, count, label }) => (
-            <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: 'var(--text-subtle)' }}>
-              <Icon size={9} />
+            <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>
+              <Icon size={13} aria-hidden />
               {count} {label}
             </span>
           ))}
-        </div>
-      </div>
+        </span>
+      </span>
 
-      <div style={{ fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: hovered ? 1 : 0.4, alignSelf: 'center' }}>›</div>
+      <ChevronRight size={20} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
     </button>
   )
 }
@@ -729,51 +802,68 @@ function ChapterCard({ chapter, onClick }: { chapter: AdventureChapter; onClick:
 // ── Main page ─────────────────────────────────────────────────
 export function CaminapiedrasPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const lastOpenedRef = useRef<string | null>(null)
 
-  const selected = selectedId ? CHAPTERS.find((c) => c.id === selectedId) : null
+  const selected = selectedId ? CHAPTERS.find((ch) => ch.id === selectedId) : null
+
+  // Focus management: back from a chapter, focus returns to its card
+  useEffect(() => {
+    if (selectedId || !lastOpenedRef.current) return
+    document.getElementById(chapterCardId(lastOpenedRef.current))?.focus()
+    lastOpenedRef.current = null
+  }, [selectedId])
 
   if (selected) {
     return <ChapterDetail chapter={selected} onBack={() => setSelectedId(null)} />
   }
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
-        Caminapiedras
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>
-        Escenario de campaña — Guía para la Directora de Juego
-      </p>
+    <div style={{ ...page, paddingBottom: 48 }}>
+      <header style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+        <span aria-hidden style={{ display: 'flex', color: c.goldOrnament, flexShrink: 0 }}>
+          <CosmereIcon name="archivo-tormentas" size={56} />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ ...titleText, fontSize: fs['2xl'], color: c.text }}>
+            Caminapiedras
+          </h1>
+          <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 4 }}>
+            Escenario de campaña — Guía para la Directora de Juego
+          </p>
+        </div>
+      </header>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {CHAPTERS.map((chapter) => (
-          <ChapterCard key={chapter.id} chapter={chapter} onClick={() => setSelectedId(chapter.id)} />
+      <ul style={{ ...listReset, ...stack(10) }}>
+        {CHAPTERS.map((chapter, i) => (
+          <li key={chapter.id} className="rise" style={riseIndex(i)}>
+            <ChapterCard
+              chapter={chapter}
+              onClick={() => { lastOpenedRef.current = chapter.id; setSelectedId(chapter.id) }}
+            />
+          </li>
         ))}
 
         {/* Placeholder for upcoming chapters */}
-        {[2, 3, 4, 5, 6, 7].map((n) => (
-          <div key={n} style={{
-            display: 'flex', alignItems: 'center', gap: 14,
-            padding: '14px 18px', borderRadius: 16,
-            background: 'var(--surface-1)', border: '1px solid var(--border)',
-            opacity: 0.4,
-          }}>
-            <div style={{
-              width: 44, height: 44, borderRadius: 12,
-              background: 'var(--surface-2)', border: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--text-subtle)', letterSpacing: '-0.04em' }}>
-                {String(n).padStart(2, '0')}
-              </span>
-            </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>Capítulo {n}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-subtle)' }}>Próximamente</div>
-            </div>
-          </div>
+        {[2, 3, 4, 5, 6, 7].map((n, i) => (
+          <li
+            key={n}
+            className="rise"
+            style={{
+              ...riseIndex(CHAPTERS.length + i),
+              display: 'flex', alignItems: 'center', gap: 16,
+              padding: '12px 16px', borderRadius: radius.lg,
+              background: 'color-mix(in srgb, var(--surface-1) 55%, transparent)',
+              border: `1px dashed ${c.borderBright}`,
+            }}
+          >
+            <Medallion n={n} muted />
+            <span style={{ display: 'block' }}>
+              <span style={{ display: 'block', fontSize: fs.base, fontWeight: 600, color: c.muted }}>Capítulo {n}</span>
+              <span style={{ display: 'block', fontSize: fs.sm, color: c.subtle }}>Próximamente</span>
+            </span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   )
 }

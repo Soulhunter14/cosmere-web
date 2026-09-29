@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarDays, Users, Clock, MapPin } from 'lucide-react'
@@ -5,6 +6,10 @@ import { sessionsApi } from '../../api/sessions'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
 import type { Session } from '../../types'
+import { EmptyState, SectionTitle, Skeleton, StatTile } from '../../components/ui'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { cosmereImage } from '../../lib/cosmereAssets'
+import { c, card, eyebrow, font, fs, numeral, page, pill, radius, semantic, shadow, titleText, tone } from '../../theme'
 
 function isPast(date: Date) {
   const today = new Date()
@@ -19,12 +24,12 @@ export function HomeCampaignPage() {
   const cId = Number(campaignId)
   const { currentCampaign, isGm } = useCampaignStore()
 
-  const { data: sessions = [] } = useQuery({
+  const { data: sessions = [], isLoading: loadingSessions } = useQuery({
     queryKey: ['sessions', cId],
     queryFn: () => sessionsApi.getAll(cId),
   })
 
-  const { data: characters = [] } = useQuery({
+  const { data: characters = [], isLoading: loadingCharacters } = useQuery({
     queryKey: ['characters', cId],
     queryFn: () => charactersApi.getAll(cId),
   })
@@ -33,50 +38,56 @@ export function HomeCampaignPage() {
     .filter((s) => !isPast(new Date(s.date)))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
 
+  const roleTone = isGm ? semantic.gm : tone.brand
+
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
+    <div style={page}>
 
       {/* Campaign header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.02em', marginBottom: 8 }}>
+      <header className="rise" style={{ marginBottom: 28 }}>
+        <h1 style={{ ...titleText, fontSize: fs['2xl'], color: c.text }}>
           {currentCampaign?.name ?? 'Campaña'}
         </h1>
-        <span
-          style={
-            isGm
-              ? { fontSize: 10, padding: '3px 10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171', borderRadius: 20, fontWeight: 700, letterSpacing: '0.1em', display: 'inline-block' }
-              : { fontSize: 10, padding: '3px 10px', background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', color: 'var(--brand-light)', borderRadius: 20, fontWeight: 700, letterSpacing: '0.1em', display: 'inline-block' }
-          }
+        <p style={{ marginTop: 10 }}>
+          <span style={{ ...pill(roleTone), textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: roleTone.fg, boxShadow: `0 0 8px ${roleTone.fg}` }} />
+            {isGm ? 'Director' : 'Jugador'}
+          </span>
+        </p>
+      </header>
+
+      {/* Bento: next session (wide) + summary tiles (stacked beside it from ~560px, below it on phones) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: '28px 16px' }}>
+        <section
+          aria-labelledby="home-next"
+          className="rise"
+          style={{ '--i': 1, flex: '999 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column' } as CSSProperties}
         >
-          {isGm ? 'GAME MASTER' : 'JUGADOR'}
-        </span>
-      </div>
+          <SectionTitle id="home-next">Próxima sesión</SectionTitle>
+          {loadingSessions ? (
+            <Skeleton height={132} radius={radius.lg} style={{ flex: 1 }} />
+          ) : nextSession ? (
+            <NextSessionCard session={nextSession} />
+          ) : (
+            <EmptyState
+              icon={<CalendarDays size={22} />}
+              title="No hay sesiones planificadas"
+              style={{ flex: 1, padding: '28px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+            />
+          )}
+        </section>
 
-      {/* Next session */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-          PRÓXIMA SESIÓN
-        </div>
-        {nextSession ? (
-          <NextSessionCard session={nextSession} />
-        ) : (
-          <div style={{
-            background: 'var(--surface-1)', border: '1px solid var(--border)',
-            borderRadius: 14, padding: '20px', textAlign: 'center',
-            color: 'var(--text-subtle)', fontSize: 13,
-          }}>
-            No hay sesiones planificadas
+        <section
+          aria-labelledby="home-summary"
+          className="rise"
+          style={{ '--i': 2, flex: '1 1 200px', minWidth: 0, display: 'flex', flexDirection: 'column' } as CSSProperties}
+        >
+          <SectionTitle id="home-summary">Resumen</SectionTitle>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+            <StatCard icon={<Users size={15} />} label="Personajes" value={characters.length} loading={loadingCharacters} />
+            <StatCard icon={<CalendarDays size={15} />} label="Sesiones" value={sessions.length} loading={loadingSessions} />
           </div>
-        )}
-      </div>
-
-      {/* Stats */}
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-        RESUMEN
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 40 }}>
-        <StatCard icon={<Users size={16} />} label="Personajes" value={characters.length} />
-        <StatCard icon={<CalendarDays size={16} />} label="Sesiones" value={sessions.length} />
+        </section>
       </div>
 
     </div>
@@ -85,57 +96,95 @@ export function HomeCampaignPage() {
 
 function NextSessionCard({ session }: { session: Session }) {
   const date = new Date(session.date)
+  const fullDate = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const d20 = cosmereImage('dado-d20')
   return (
-    <div style={{
-      background: 'var(--surface-1)', border: '1px solid rgba(180,190,254,0.2)',
-      borderLeft: '3px solid var(--brand-light)',
-      borderRadius: 14, padding: '14px 16px',
-      display: 'flex', alignItems: 'center', gap: 14,
-    }}>
-      <div style={{
-        flexShrink: 0, textAlign: 'center',
-        background: 'rgba(180,190,254,0.08)', border: '1px solid rgba(180,190,254,0.2)',
-        borderRadius: 12, padding: '8px 12px', minWidth: 48,
-      }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--brand-light)', lineHeight: 1 }}>
-          {date.getDate()}
-        </div>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.04em', marginTop: 2 }}>
+    <article
+      aria-labelledby="home-next-title"
+      style={{
+        ...card,
+        flex: 1,
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 18,
+        minHeight: 132,
+        padding: '18px 20px',
+        borderColor: tone.brand.border,
+        boxShadow: `inset 3px 0 0 var(--brand), ${shadow[1]}`,
+      }}
+    >
+      {d20 && (
+        <img
+          src={d20}
+          alt=""
+          aria-hidden
+          style={{ position: 'absolute', right: -20, bottom: -26, width: 104, opacity: 0.16, transform: 'rotate(-14deg)', pointerEvents: 'none' }}
+        />
+      )}
+
+      {/* Date inside the gold chapter medallion */}
+      <time
+        dateTime={session.date}
+        style={{
+          position: 'relative', flexShrink: 0, width: 80, height: 80,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <CosmereIcon name="ornamento-medallon" size={80} square style={{ position: 'absolute', inset: 0, color: 'var(--gold-ornament)' }} />
+        <span className="sr-only">{fullDate}</span>
+        <span aria-hidden style={{ ...numeral, fontSize: fs.xl + 2, color: c.brandLight }}>{date.getDate()}</span>
+        <span aria-hidden style={{ ...eyebrow, color: c.gold, marginTop: 4, letterSpacing: '0.1em' }}>
           {MONTHS[date.getMonth()].toUpperCase()}
-        </div>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        </span>
+      </time>
+
+      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <h3
+          id="home-next-title"
+          style={{
+            fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, color: c.text, lineHeight: 1.25,
+            marginBottom: 8, overflow: 'hidden', overflowWrap: 'anywhere',
+            display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
+          }}
+          title={session.title}
+        >
           {session.title}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-subtle)' }}>
-            <Clock size={10} />
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px 14px', flexWrap: 'wrap', fontSize: fs.sm, color: c.muted }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Clock size={14} aria-hidden style={{ color: c.subtle }} />
             {date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
           </span>
           {session.location && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-subtle)' }}>
-              <MapPin size={10} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <MapPin size={14} aria-hidden style={{ color: c.subtle }} />
               {session.location}
             </span>
           )}
         </div>
       </div>
-    </div>
+    </article>
   )
 }
 
-function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: number; accent?: boolean }) {
+function StatCard({ icon, label, value, loading }: { icon: ReactNode; label: string; value: number; loading?: boolean }) {
   return (
-    <div style={{
-      background: 'var(--surface-1)',
-      border: `1px solid ${accent ? 'rgba(239,68,68,0.2)' : 'var(--border)'}`,
-      borderRadius: 14, padding: '14px 16px',
-      display: 'flex', flexDirection: 'column', gap: 6,
-    }}>
-      <div style={{ color: accent ? '#f87171' : 'var(--text-subtle)' }}>{icon}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: 'var(--text-subtle)', fontWeight: 600 }}>{label}</div>
-    </div>
+    <StatTile
+      icon={icon}
+      label={label}
+      value={
+        loading ? (
+          <>
+            <Skeleton height={26} width={44} />
+            <span className="sr-only">Cargando…</span>
+          </>
+        ) : (
+          value
+        )
+      }
+      style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '14px 16px', minHeight: 90 }}
+    />
   )
 }

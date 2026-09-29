@@ -1,101 +1,85 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Target, ArrowRight } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { Target, ChevronRight } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Spinner } from '../../components/ui'
+import { EmptyState, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { HeroicPathIcon } from '../../components/GameIcons'
+import { characterGradient } from '../../lib/avatar'
+import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, toneFrom } from '../../theme'
+import { onGem } from '../../lib/hero'
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg,#7c3aed,#6366f1)',
-  'linear-gradient(135deg,#0e7490,#0284c7)',
-  'linear-gradient(135deg,#9d174d,#be185d)',
-  'linear-gradient(135deg,#065f46,#0d9488)',
-  'linear-gradient(135deg,#92400e,#b45309)',
-  'linear-gradient(135deg,#4c1d95,#7c3aed)',
-]
+/* White initial on the deep character gradient (lib/avatar: ≥ 10:1 on every palette). */
+const ON_GEM = onGem
 
-// ─── Character selector card ───────────────────────────────────────────────
+// ─── Character selector card (same list-row look as TalentosPage, BolsaPage and CharacterListPage) ─
 
 function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
-  const [hovered, setHovered] = useState(false)
-  const gradient = AVATAR_GRADIENTS[character.id % AVATAR_GRADIENTS.length]
+  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
+  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
+  const hasPaths = !!(character.caminoHeroico || character.caminoRadiante) && !!(path || order)
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onSelect}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className="ui-card ui-card--interactive"
       style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '14px 16px', borderRadius: 16, cursor: 'pointer',
-        background: 'var(--surface-1)',
-        border: `1px solid ${hovered ? 'rgba(180,190,254,0.2)' : 'var(--border)'}`,
-        transform: hovered ? 'translateX(3px)' : 'translateX(0)',
-        boxShadow: hovered ? '0 4px 24px rgba(0,0,0,0.2)' : 'none',
-        transition: 'transform 0.18s cubic-bezier(.22,.68,0,1.2), box-shadow 0.18s ease, border-color 0.18s ease',
+        ...buttonReset,
+        ...card,
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        minHeight: 76,
+        padding: '14px 16px',
       }}
     >
-      <div style={{
-        width: 44, height: 44, borderRadius: 13, background: gradient, flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 18, fontWeight: 800, color: 'white',
-        boxShadow: hovered ? '0 4px 16px rgba(0,0,0,0.25)' : 'none',
-        transition: 'box-shadow 0.18s ease',
-      }}>
-        {character.name[0].toUpperCase()}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 2, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{character.name}</span>
-          <span style={{
-            fontSize: 10, fontWeight: 700, color: 'var(--brand-light)',
-            background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.15)',
-            borderRadius: 6, padding: '1px 6px',
-          }}>
-            Nv.{character.level}
-          </span>
-        </div>
-
-        {(character.caminoHeroico || character.caminoRadiante) && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
-            {(() => {
-              const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-              return path ? (
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: path.colorBg, border: `1px solid ${path.colorBorder}`, color: path.color }}>
-                  {path.icon} {path.name}
-                </span>
-              ) : null
-            })()}
-            {(() => {
-              const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-              return order ? (
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: order.colorBg, border: `1px solid ${order.colorBorder}`, color: order.color, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                  <RadiantOrderIcon orderId={order.id} size={10} />
-                  {order.name}
-                </span>
-              ) : null
-            })()}
-          </div>
-        )}
-      </div>
-
-      <ArrowRight
-        size={15}
+      {/* Identity tile: the character's gemstone gradient */}
+      <span
+        aria-hidden
         style={{
-          flexShrink: 0,
-          color: hovered ? 'var(--brand-light)' : 'var(--text-subtle)',
-          transform: hovered ? 'translateX(2px)' : 'translateX(0)',
-          transition: 'transform 0.18s cubic-bezier(.22,.68,0,1.2), color 0.15s',
+          ...titleText,
+          width: 48, height: 48, flexShrink: 0, borderRadius: radius.md,
+          background: characterGradient(character.id), boxShadow: shadow[1],
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: fs.xl, lineHeight: 1, color: ON_GEM,
         }}
-      />
-    </div>
+      >
+        {character.name.charAt(0).toUpperCase() || '?'}
+      </span>
+
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>{character.name}</span>
+
+        {hasPaths && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {path && (
+              <span style={pill(toneFrom(path.color))}>
+                <HeroicPathIcon id={path.id} size={13} />
+                {path.name}
+              </span>
+            )}
+            {order && (
+              <span style={{ ...pill(toneFrom(order.color)), paddingLeft: 4 }}>
+                <RadiantOrderIcon orderId={order.id} size={16} decorative />
+                {order.name}
+              </span>
+            )}
+          </span>
+        )}
+
+        <span style={{ fontSize: fs.sm, color: c.muted, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
+      </span>
+
+      <ChevronRight size={18} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
+    </button>
   )
 }
 
@@ -129,32 +113,23 @@ export function MetasPage({ detailBasePath = 'personajes/metas' }: { detailBaseP
   }
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
-          Metas
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-          Selecciona un personaje para ver sus metas
-        </p>
-      </div>
+    <div style={{ ...page, paddingBottom: 48 }}>
+      <PageHeader title="Metas" subtitle="Selecciona un personaje para ver sus metas" />
 
       {visibleCharacters.length === 0 ? (
-        <div style={{ border: '1.5px dashed var(--border-bright)', borderRadius: 20, padding: '52px 32px', textAlign: 'center', background: 'var(--surface-1)' }}>
-          <Target size={24} style={{ color: 'var(--text-subtle)', margin: '0 auto 14px', display: 'block' }} />
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Sin personajes</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-subtle)', margin: 0 }}>Crea un personaje primero para empezar a registrar metas.</p>
-        </div>
+        <EmptyState
+          icon={<Target size={22} aria-hidden />}
+          title="Sin personajes"
+          description="Crea un personaje primero para empezar a registrar metas."
+        />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {visibleCharacters.map((character) => (
-            <CharacterSelectCard
-              key={character.id}
-              character={character}
-              onSelect={() => goToDetail(character)}
-            />
+        <ul aria-label="Personajes" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {visibleCharacters.map((character, i) => (
+            <li key={character.id} className="rise" style={{ '--i': Math.min(i, 10) } as CSSProperties}>
+              <CharacterSelectCard character={character} onSelect={() => goToDetail(character)} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   )

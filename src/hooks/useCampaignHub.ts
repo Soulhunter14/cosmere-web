@@ -41,17 +41,30 @@ export function useCampaignHub(
       })
     })
 
-    connection
+    let disposed = false
+
+    // A new connection after an automatic reconnect is not in the campaign group any more: join it again
+    connection.onreconnected(() => {
+      connection.invoke('JoinCampaign', String(campaignId)).catch((err) => console.warn('[SignalR] rejoin error:', err))
+    })
+
+    const started = connection
       .start()
-      .then(() => connection.invoke('JoinCampaign', String(campaignId)))
-      .catch((err) => console.warn('[SignalR] connection error:', err))
+      .then(() => (disposed ? undefined : connection.invoke('JoinCampaign', String(campaignId))))
+      .catch((err) => { if (!disposed) console.warn('[SignalR] connection error:', err) })
 
     return () => {
-      connection
-        .invoke('LeaveCampaign', String(campaignId))
-        .catch(() => {})
-        .finally(() => connection.stop())
+      disposed = true
       connectionRef.current = null
+      // Stopping while start() is still negotiating logs an error (fast navigation, React StrictMode):
+      // wait for start to settle, then leave the group and stop.
+      started.finally(() => {
+        if (connection.state === signalR.HubConnectionState.Connected) {
+          connection.invoke('LeaveCampaign', String(campaignId)).catch(() => {}).finally(() => connection.stop())
+        } else {
+          connection.stop()
+        }
+      })
     }
   }, [campaignId, token]) // only reconnect if campaign or token changes
 }

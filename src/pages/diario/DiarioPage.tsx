@@ -1,36 +1,145 @@
-import { useState } from 'react'
+import { Fragment, useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+import { ChevronRight, Drama, Flag, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { diaryApi } from '../../api/diary'
-import { Spinner } from '../../components/ui'
+import { Button, EmptyState, PageHeader, SectionTitle, Sheet, Spinner } from '../../components/ui'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { buttonReset, c, eyebrow, font, fs, numeral, page, radius, shadow, titleText, tone, type Tone } from '../../theme'
 import type { DiaryEntry, DiaryMentionType } from '../../types'
 
-// ── Mention colours ────────────────────────────────────────────────────────
+// ── Mention types: gem tone + Lucide glyph (colour is never the only cue) ──
 
-const MENTION_STYLE: Record<DiaryMentionType, { color: string; bg: string; border: string }> = {
-  pj:      { color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)' },
-  npc:     { color: '#fb923c', bg: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.3)'  },
-  spren:   { color: '#34d399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)'  },
-  faction: { color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)' },
-  unknown: { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)',  border: 'rgba(148,163,184,0.2)' },
+const MENTION_STYLE: Record<DiaryMentionType, { tone: Tone; label: string; icon: LucideIcon | null }> = {
+  pj:      { tone: tone.amatista,  label: 'PJ',      icon: UserRound },
+  npc:     { tone: tone.heliodoro, label: 'NPC',     icon: Drama },
+  spren:   { tone: tone.esmeralda, label: 'Spren',   icon: Sparkles },
+  faction: { tone: tone.rubi,      label: 'Facción', icon: Flag },
+  unknown: { tone: tone.cuarzo,    label: '',        icon: null },
+}
+
+const LEGEND_LABELS: Record<string, string> = { pj: 'Personajes', npc: 'NPCs', spren: 'Spren', faction: 'Facciones' }
+
+/** Small chip for participant names and legend entries */
+const chip = (t: Tone): CSSProperties => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '2px 9px',
+  borderRadius: radius.full,
+  background: t.bg,
+  border: `1px solid ${t.border}`,
+  color: t.fg,
+  fontFamily: font.ui,
+  fontSize: fs.xs,
+  fontWeight: 600,
+  lineHeight: 1.45,
+  whiteSpace: 'nowrap',
+})
+
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
+
+/** Inline [[mention]] inside the chronicle text */
+function MentionChip({ type, display }: { type: DiaryMentionType; display: string }) {
+  const s = MENTION_STYLE[type]
+  const Icon = s.icon
+  return (
+    <span
+      style={{
+        display: 'inline',
+        padding: '1px 7px 2px',
+        borderRadius: radius.xs,
+        background: s.tone.bg,
+        border: `1px solid ${s.tone.border}`,
+        color: s.tone.fg,
+        fontFamily: font.ui,
+        fontSize: '0.8em',
+        fontWeight: 600,
+        letterSpacing: '0.005em',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {Icon && <Icon size="0.95em" aria-hidden style={{ display: 'inline-block', verticalAlign: '-0.12em', marginRight: 4 }} />}
+      {s.label && <span className="sr-only">{s.label}: </span>}
+      {display}
+    </span>
+  )
 }
 
 // ── Body renderer ──────────────────────────────────────────────────────────
+// Mention parsing is unchanged ([[pj - …]], [[npc - …]], [[spren - …]], [[facción - …]], anything else = unknown).
+// Lines are grouped into real blocks so the markup is valid: paragraphs (<p>, single line breaks kept as <br/>)
+// and '- ' bullet lines (<ul><li>).
 
-function renderBody(body: string) {
+function renderBody(body: string): ReactNode[] {
   const parts = body.split(/(\[\[[^\]]+\]\])/g)
 
-  return parts.map((part, i) => {
+  const blocks: ReactNode[] = []
+  let paragraph: ReactNode[][] = []
+  let list: ReactNode[][] = []
+  let line: ReactNode[] = []
+  let lineText = ''
+  let lineHasMention = false
+  let lineIsItem = false
+  let lineStarted = false
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return
+    const lines = paragraph
+    blocks.push(
+      <p key={`b${blocks.length}`}>
+        {lines.map((l, k) => <Fragment key={k}>{k > 0 && <br />}{l}</Fragment>)}
+      </p>,
+    )
+    paragraph = []
+  }
+  const flushList = () => {
+    if (list.length === 0) return
+    const items = list
+    blocks.push(
+      <ul key={`b${blocks.length}`} style={{ ...listReset, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.map((l, k) => (
+          <li key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 12, paddingLeft: 2 }}>
+            <CosmereIcon name="ornamento-rombo" size={8} style={{ color: c.goldOrnament }} />
+            <span style={{ minWidth: 0 }}>{l}</span>
+          </li>
+        ))}
+      </ul>,
+    )
+    list = []
+  }
+  const endLine = () => {
+    if (!lineHasMention && lineText.trim() === '') {
+      flushParagraph()
+      flushList()
+    } else if (lineIsItem) {
+      flushParagraph()
+      list.push(line)
+    } else {
+      flushList()
+      paragraph.push(line)
+    }
+    line = []
+    lineText = ''
+    lineHasMention = false
+    lineIsItem = false
+    lineStarted = false
+  }
+
+  parts.forEach((part, i) => {
     const match = part.match(/^\[\[([^\]]+)\]\]$/)
     if (!match) {
-      return part.split('\n').map((line, j) => {
-        if (line.startsWith('- ')) {
-          return <li key={`${i}-${j}`} style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginLeft: 4 }}>{line.slice(2)}</li>
+      part.split('\n').forEach((text, j) => {
+        if (j > 0) endLine()
+        let shown = text
+        if (!lineStarted && text.startsWith('- ')) {
+          lineIsItem = true
+          shown = text.slice(2)
         }
-        if (line.trim() === '') return <br key={`${i}-${j}`} />
-        return <span key={`${i}-${j}`}>{line}</span>
+        if (text !== '') lineStarted = true
+        lineText += text
+        if (shown) line.push(<Fragment key={`${i}-${j}`}>{shown}</Fragment>)
       })
+      return
     }
 
     const raw = match[1].trim()
@@ -43,203 +152,215 @@ function renderBody(body: string) {
     else if (lower.startsWith('spren -')) { type = 'spren'; display = raw.replace(/^spren\s*-\s*/i, '') }
     else if (/^facci[oó]n\s*-/i.test(lower)) { type = 'faction'; display = raw.replace(/^facci[oó]n\s*-\s*/i, '') }
 
-    const s = MENTION_STYLE[type]
-    return (
-      <span key={i} style={{
-        display: 'inline',
-        padding: '1px 6px', borderRadius: 10,
-        background: s.bg, border: `1px solid ${s.border}`, color: s.color,
-        fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
-        lineHeight: 1.8,
-      }}>
-        {display}
-      </span>
-    )
+    lineHasMention = true
+    lineStarted = true
+    line.push(<MentionChip key={i} type={type} display={display} />)
   })
+  endLine()
+  flushParagraph()
+  flushList()
+  return blocks
 }
 
-// ── Session detail sheet ───────────────────────────────────────────────────
+// ── Session number inside the book's gold medallion ────────────────────────
 
-function SessionSheet({ entry, onClose }: { entry: DiaryEntry; onClose: () => void }) {
+function SessionMedallion({ n, size = 44 }: { n: number; size?: number }) {
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-      />
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 61,
-        background: 'var(--surface-1)',
-        borderRadius: '20px 20px 0 0',
-        border: '1px solid var(--border-bright)',
-        borderBottom: 'none',
-        maxHeight: '88vh',
-        overflowY: 'auto',
-        paddingBottom: 'calc(24px + var(--sab, 0px))',
-      }}>
-        {/* Drag handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-        </div>
-
-        {/* Header */}
-        <div style={{ padding: '16px 20px 20px', borderBottom: '1px solid var(--border)', position: 'relative' }}>
-          <button
-            onClick={onClose}
-            style={{ position: 'absolute', top: 14, right: 16, background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--text-subtle)', borderRadius: 8 }}
-          >
-            <X size={18} />
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingRight: 32 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-              background: 'rgba(180,190,254,0.08)', border: '1px solid rgba(180,190,254,0.2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 800, color: 'var(--brand-light)', letterSpacing: '-0.02em',
-            }}>
-              {String(entry.number).padStart(2, '0')}
-            </div>
-            <div>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 3 }}>
-                SESIÓN {entry.number}
-              </p>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>
-                {entry.title}
-              </h2>
-            </div>
-          </div>
-
-          {/* Participants */}
-          {entry.participants.length > 0 && (
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 14 }}>
-              {entry.participants.map((p) => (
-                <span key={p} style={{
-                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                  background: MENTION_STYLE.pj.bg, border: `1px solid ${MENTION_STYLE.pj.border}`,
-                  color: MENTION_STYLE.pj.color,
-                }}>
-                  {p}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: '20px 20px 0' }}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.8 }}>
-            {renderBody(entry.body)}
-          </p>
-        </div>
-
-        {/* Mention legend */}
-        {entry.mentions.length > 0 && (
-          <div style={{ margin: '20px 20px 0', padding: '14px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-              EN ESTA SESIÓN
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(['pj', 'npc', 'spren', 'faction'] as DiaryMentionType[]).map((type) => {
-                const items = entry.mentions.filter(m => m.type === type)
-                if (items.length === 0) return null
-                const labels: Record<string, string> = { pj: 'Personajes', npc: 'NPCs', spren: 'Spren', faction: 'Facciones' }
-                const s = MENTION_STYLE[type]
-                return (
-                  <div key={type} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: s.color, minWidth: 72, paddingTop: 1 }}>
-                      {labels[type]}
-                    </span>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {items.map(m => (
-                        <span key={m.raw} style={{
-                          fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20,
-                          background: s.bg, border: `1px solid ${s.border}`, color: s.color,
-                        }}>
-                          {m.display}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+    <span
+      aria-hidden
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: size,
+        height: size,
+        flexShrink: 0,
+        borderRadius: '50%',
+        background: 'radial-gradient(circle at 50% 35%, var(--gold-bg), transparent 70%)',
+        color: c.goldOrnament,
+      }}
+    >
+      <CosmereIcon name="ornamento-medallon" size={size} square style={{ position: 'absolute', inset: 0 }} />
+      <span style={{ ...numeral, position: 'relative', fontSize: Math.round(size * 0.34), letterSpacing: 0, color: c.text }}>
+        {String(n).padStart(2, '0')}
+      </span>
+    </span>
   )
 }
 
-// ── Session card ───────────────────────────────────────────────────────────
+// ── Diary entry sheet ──────────────────────────────────────────────────────
 
-function SessionCard({ entry, onClick }: { entry: DiaryEntry; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false)
+function DiaryEntrySheet({ entry, onClose }: { entry: DiaryEntry; onClose: () => void }) {
+  const legendId = useId()
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      maxWidth={620}
+      title={
+        <span style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <SessionMedallion n={entry.number} size={52} />
+          <span style={{ display: 'block', minWidth: 0 }}>
+            <span style={{ ...eyebrow, display: 'block', color: c.gold, marginBottom: 4 }}>Sesión {entry.number}</span>
+            <span style={{ ...titleText, display: 'block', fontSize: fs.xl, color: c.text }}>{entry.title}</span>
+          </span>
+        </span>
+      }
+      footer={
+        <Button variant="secondary" size="lg" fullWidth onClick={onClose}>
+          Cerrar
+        </Button>
+      }
+    >
+      {/* Participants */}
+      {entry.participants.length > 0 && (
+        <ul aria-label="Participantes" style={{ ...listReset, display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+          {entry.participants.map((p) => (
+            <li key={p} style={chip(MENTION_STYLE.pj.tone)}>{p}</li>
+          ))}
+        </ul>
+      )}
+
+      {/* Full-width gold filete under the left-aligned header: height follows the ornament's own proportions */}
+      <CosmereIcon
+        name="ornamento-filete"
+        size={5}
+        style={{ display: 'flex', width: '100%', height: 'auto', aspectRatio: '384.77 / 5.2', color: c.goldOrnament, marginBottom: 20 }}
+      />
+
+      {/* Body: long-form reading. Focusable (and focused first) so the keyboard can scroll a long chronicle. */}
+      <article
+        tabIndex={0}
+        aria-label={`Crónica de la sesión ${entry.number}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.8em',
+          maxWidth: '62ch',
+          fontFamily: font.display,
+          fontSize: fs.lg,
+          lineHeight: 1.65,
+          color: c.text,
+          overflowWrap: 'break-word',
+        }}
+      >
+        {renderBody(entry.body)}
+      </article>
+
+      {/* Mention legend */}
+      {entry.mentions.length > 0 && (
+        <section
+          aria-labelledby={legendId}
+          style={{ marginTop: 28, padding: '14px 16px 16px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}
+        >
+          <SectionTitle as="h3" id={legendId} style={{ marginBottom: 12 }}>En esta sesión</SectionTitle>
+          <dl style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: 0 }}>
+            {(['pj', 'npc', 'spren', 'faction'] as DiaryMentionType[]).map((type) => {
+              const items = entry.mentions.filter(m => m.type === type)
+              if (items.length === 0) return null
+              const s = MENTION_STYLE[type]
+              const Icon = s.icon
+              return (
+                <div key={type} style={{ display: 'grid', gridTemplateColumns: '104px minmax(0, 1fr)', gap: 10, alignItems: 'start' }}>
+                  <dt style={{ ...eyebrow, color: s.tone.fg, display: 'flex', alignItems: 'center', gap: 6, minHeight: 24 }}>
+                    {Icon && <Icon size={14} aria-hidden />}
+                    {LEGEND_LABELS[type]}
+                  </dt>
+                  <dd style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: 0 }}>
+                    {items.map(m => (
+                      <span key={m.raw} style={chip(s.tone)}>{m.display}</span>
+                    ))}
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
+        </section>
+      )}
+    </Sheet>
+  )
+}
+
+// ── Diary entry card ───────────────────────────────────────────────────────
+
+function DiaryEntryCard({ entry, index, onClick }: { entry: DiaryEntry; index: number; onClick: () => void }) {
+  const id = useId()
 
   const cleanPreview = entry.preview.replace(/\[\[([^\]]+)\]\]/g, (_, raw) => {
     return raw.replace(/^(pj|npc|spren|facci[oó]n)\s*-\s*/i, '').trim()
   })
 
+  const hasParticipants = entry.participants.length > 0
+  const describedBy = [hasParticipants && `${id}-p`, `${id}-x`].filter(Boolean).join(' ')
+
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 16px',
-        borderRadius: 14, textAlign: 'left', width: '100%',
-        background: hovered ? 'rgba(180,190,254,0.04)' : 'var(--surface-1)',
-        border: `1px solid ${hovered ? 'rgba(180,190,254,0.2)' : 'var(--border)'}`,
-        cursor: 'pointer', transition: 'all 0.15s',
-        transform: hovered ? 'translateX(3px)' : 'none',
-      }}
-    >
-      {/* Number badge */}
-      <div style={{
-        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-        background: 'rgba(180,190,254,0.08)', border: '1px solid rgba(180,190,254,0.15)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 12, fontWeight: 800, color: 'var(--brand-light)', letterSpacing: '-0.02em',
-      }}>
-        {String(entry.number).padStart(2, '0')}
-      </div>
+    <li className="rise" style={{ '--i': index } as CSSProperties}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-haspopup="dialog"
+        aria-labelledby={`${id}-n ${id}-t`}
+        aria-describedby={describedBy}
+        className="ui-card ui-card--interactive"
+        style={{
+          ...buttonReset,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 14,
+          width: '100%',
+          padding: '16px 14px 16px 16px',
+          textAlign: 'left',
+          background: c.s1,
+          border: `1px solid ${c.border}`,
+          borderRadius: radius.lg,
+          boxShadow: shadow[1],
+        }}
+      >
+        <SessionMedallion n={entry.number} />
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 4 }}>
-          {entry.title}
-        </div>
+        <span style={{ display: 'block', flex: 1, minWidth: 0 }}>
+          <span id={`${id}-n`} className="sr-only">Sesión {entry.number}</span>
+          <span id={`${id}-t`} style={{ display: 'block', fontFamily: font.display, fontSize: 19, fontWeight: 600, lineHeight: 1.25, color: c.text }}>
+            {entry.title}
+          </span>
 
-        {/* Participants */}
-        {entry.participants.length > 0 && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
-            {entry.participants.slice(0, 5).map((p) => (
-              <span key={p} style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20,
-                background: MENTION_STYLE.pj.bg, border: `1px solid ${MENTION_STYLE.pj.border}`,
-                color: MENTION_STYLE.pj.color,
-              }}>
-                {p}
-              </span>
-            ))}
-            {entry.participants.length > 5 && (
-              <span style={{ fontSize: 9, color: 'var(--text-subtle)', alignSelf: 'center' }}>
-                +{entry.participants.length - 5}
-              </span>
-            )}
-          </div>
-        )}
+          {/* Participants */}
+          {hasParticipants && (
+            <span id={`${id}-p`} style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
+              <span className="sr-only">Participantes:</span>
+              {entry.participants.slice(0, 5).map((p) => (
+                <span key={p} style={chip(MENTION_STYLE.pj.tone)}>{p}</span>
+              ))}
+              {entry.participants.length > 5 && (
+                <span style={{ fontSize: fs.xs, fontWeight: 600, color: c.subtle, alignSelf: 'center', paddingLeft: 2 }}>
+                  +{entry.participants.length - 5}
+                </span>
+              )}
+            </span>
+          )}
 
-        <p style={{
-          fontSize: 12, color: 'var(--text-subtle)', lineHeight: 1.5,
-          overflow: 'hidden', display: '-webkit-box',
-          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        } as React.CSSProperties}>
-          {cleanPreview}
-        </p>
-      </div>
+          <span
+            id={`${id}-x`}
+            style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              marginTop: 8,
+              fontFamily: font.display,
+              fontSize: fs.md,
+              lineHeight: 1.45,
+              color: c.muted,
+            }}
+          >
+            {cleanPreview}
+          </span>
+        </span>
 
-      <div style={{ fontSize: 16, color: hovered ? 'var(--brand-light)' : 'var(--text-subtle)', flexShrink: 0, opacity: hovered ? 1 : 0.4, alignSelf: 'center' }}>›</div>
-    </button>
+        <ChevronRight size={18} aria-hidden style={{ color: c.subtle, alignSelf: 'center', flexShrink: 0 }} />
+      </button>
+    </li>
   )
 }
 
@@ -258,21 +379,27 @@ export function DiarioPage() {
   if (isLoading) return <Spinner />
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
-        Diario de campaña
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24 }}>
-        {entries.length} sesión{entries.length !== 1 ? 'es' : ''}
-      </p>
+    <div style={page}>
+      <PageHeader
+        title="Diario de campaña"
+        subtitle={`${entries.length} ${entries.length !== 1 ? 'sesiones' : 'sesión'}`}
+      />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {entries.map((e) => (
-          <SessionCard key={e.slug} entry={e} onClick={() => setSelected(e)} />
-        ))}
-      </div>
+      {entries.length === 0 ? (
+        <EmptyState
+          icon={<CosmereIcon name="archivo-tormentas" size={28} />}
+          title="El diario está vacío"
+          description="Las crónicas de cada sesión aparecerán aquí."
+        />
+      ) : (
+        <ul style={{ ...listReset, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {entries.map((e, i) => (
+            <DiaryEntryCard key={e.slug} entry={e} index={i} onClick={() => setSelected(e)} />
+          ))}
+        </ul>
+      )}
 
-      {selected && <SessionSheet entry={selected} onClose={() => setSelected(null)} />}
+      {selected && <DiaryEntrySheet entry={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

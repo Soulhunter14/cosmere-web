@@ -7,16 +7,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- Identity -->
-    <title>Cosmere RPG</title>
-    <meta name="description" content="Cosmere RPG Companion — gestiona campañas, personajes y sesiones" />
-    <meta name="application-name" content="Cosmere RPG" />
+    <title>Cosmere · Compañero de campaña</title>
+    <meta name="description" content="Cosmere RPG — el compañero de mesa para campañas, personajes y sesiones" />
+    <meta name="application-name" content="Cosmere" />
 
-    <!-- Theme -->
-    <meta name="theme-color" content="#1e1e2e" />
-    <meta name="color-scheme" content="dark" />
+    <!-- Theme: follows the system unless the user picked one (localStorage "cosmere-theme") -->
+    <meta name="theme-color" content="#e8ecf1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0e15" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('cosmere-theme');
+          var mode = raw ? (JSON.parse(raw).state || {}).mode : 'system';
+          if (mode === 'light' || mode === 'dark') document.documentElement.setAttribute('data-theme', mode);
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Fonts (free equivalents of the rulebook's): Marcellus ≈ Penumbra (titles) · Crimson Pro ≈ Plantin (headings)
+         · Geist ≈ Laski Sans (UI, numbers) · Geist Mono (dice) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400..700;1,400..600&family=Geist:wght@400..800&family=Geist+Mono:wght@500..700&family=Marcellus&display=swap"
+    />
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
@@ -25,7 +44,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Cosmere" />
-    <link rel="apple-touch-icon" href="/icon-192.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Safe area insets for notch / home indicator -->
     <style>
@@ -35,6 +54,9 @@
         --sal: env(safe-area-inset-left, 0px);
         --sar: env(safe-area-inset-right, 0px);
       }
+      html, body { background: #0a0e15; }
+      @media (prefers-color-scheme: light) { html:not([data-theme='dark']), html:not([data-theme='dark']) body { background: #e8ecf1; } }
+      html[data-theme='light'], html[data-theme='light'] body { background: #e8ecf1; }
     </style>
   </head>
   <body>

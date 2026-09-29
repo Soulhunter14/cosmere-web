@@ -1,27 +1,29 @@
-import { useState } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Target, ArrowRight, BookOpen, Sparkles, ShoppingBag } from 'lucide-react'
+import { Target, BookOpen, Sparkles, ShoppingBag, ChevronRight, Users } from 'lucide-react'
 import { CharacterListPage } from '../characters/CharacterListPage'
 import { MetasPage } from './MetasPage'
 import { TalentosPage } from './TalentosPage'
 import { BolsaPage } from './BolsaPage'
-import { Spinner } from '../../components/ui'
+import { EmptyState, PageHeader, Spinner, TabPanel, Tabs, type TabItem } from '../../components/ui'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { charactersApi } from '../../api/characters'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { HeroicPathIcon } from '../../components/GameIcons'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { CharacterHero } from '../../components/CharacterHero'
+import { heroPill, onGem, onGemSoft } from '../../lib/hero'
+import { characterGradient } from '../../lib/avatar'
+import { cosmereImage } from '../../lib/cosmereAssets'
+import { buttonReset, c, card, eyebrow, font, fs, page, radius, shadow, titleText, tone, type Tone } from '../../theme'
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg,#7c3aed,#6366f1)',
-  'linear-gradient(135deg,#0e7490,#0284c7)',
-  'linear-gradient(135deg,#9d174d,#be185d)',
-  'linear-gradient(135deg,#065f46,#0d9488)',
-  'linear-gradient(135deg,#92400e,#b45309)',
-  'linear-gradient(135deg,#4c1d95,#7c3aed)',
-]
+/* Text on the CharacterHero / character gradient (lib/avatar + CharacterHero: ≥ 7:1 on every palette) */
+const HERO_TEXT = onGem
+const HERO_TEXT_SOFT = onGemSoft
 
 const GM_TABS = [
   { id: 'characters', label: 'Personajes' },
@@ -32,48 +34,109 @@ const GM_TABS = [
 
 type GmTab = typeof GM_TABS[number]['id']
 
+const GM_TAB_ICONS: Record<GmTab, typeof Users> = {
+  characters: Users,
+  metas: Target,
+  talentos: Sparkles,
+  bolsa: ShoppingBag,
+}
+
+const TABS_ID = 'personajes'
+
 // ─── GM view: full character list + metas tabs ─────────────────────────────
 
 function GmPersonajesView() {
   const [activeTab, setActiveTab] = useState<GmTab>('characters')
 
+  const tabs: TabItem<GmTab>[] = GM_TABS.map((tab) => {
+    const Icon = GM_TAB_ICONS[tab.id]
+    return {
+      id: tab.id,
+      label: tab.label,
+      // Icons from tablet up; on phones the four labels need the whole width
+      icon: <span aria-hidden className="hide-mobile" style={{ lineHeight: 0 }}><Icon size={15} /></span>,
+    }
+  })
+
   return (
     <div>
-      <div style={{
-        display: 'flex', gap: 4,
-        padding: '12px 16px 0',
-        maxWidth: 680, margin: '0 auto',
-      }}>
-        {GM_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '7px 16px',
-              borderRadius: 10,
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 700,
-              transition: 'all 0.15s',
-              background: activeTab === tab.id ? 'rgba(180,190,254,0.12)' : 'transparent',
-              color: activeTab === tab.id ? 'var(--brand-light)' : 'var(--text-subtle)',
-              outline: activeTab === tab.id ? '1px solid rgba(180,190,254,0.2)' : '1px solid transparent',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '16px 16px 0' }}>
+        <Tabs<GmTab>
+          tabs={tabs}
+          value={activeTab}
+          onChange={setActiveTab}
+          ariaLabel="Secciones de personajes"
+          idPrefix={TABS_ID}
+          size="sm"
+          stretch
+        />
       </div>
-      {activeTab === 'characters' && <CharacterListPage />}
-      {activeTab === 'metas'     && <MetasPage />}
-      {activeTab === 'talentos'  && <TalentosPage />}
-      {activeTab === 'bolsa'     && <BolsaPage />}
+      <TabPanel idPrefix={TABS_ID} id={activeTab}>
+        {activeTab === 'characters' && <CharacterListPage />}
+        {activeTab === 'metas'     && <MetasPage />}
+        {activeTab === 'talentos'  && <TalentosPage />}
+        {activeTab === 'bolsa'     && <BolsaPage />}
+      </TabPanel>
     </div>
   )
 }
 
 // ─── Player view: personal landing with direct access ──────────────────────
+
+function ActionCard({
+  title,
+  subtitle,
+  tile,
+  onClick,
+  index,
+}: {
+  title: string
+  subtitle: string
+  tile: ReactNode
+  onClick: () => void
+  index: number
+}) {
+  return (
+    <li className="rise" style={{ '--i': index + 1, display: 'flex' } as CSSProperties}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="ui-card ui-card--interactive"
+        style={{
+          ...buttonReset,
+          ...card,
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          padding: '16px 14px 16px 16px',
+          minHeight: 84,
+        }}
+      >
+        {tile}
+        <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, lineHeight: 1.2, color: c.text }}>{title}</span>
+          <span style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.4 }}>{subtitle}</span>
+        </span>
+        <ChevronRight size={18} aria-hidden style={{ color: c.subtle }} />
+      </button>
+    </li>
+  )
+}
+
+const tileBase: CSSProperties = {
+  width: 48, height: 48, flexShrink: 0, borderRadius: radius.md,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+}
+
+function ToneTile({ t, children }: { t: Tone; children: ReactNode }) {
+  return (
+    <span aria-hidden style={{ ...tileBase, background: t.bg, border: `1px solid ${t.border}`, color: t.fg }}>
+      {children}
+    </span>
+  )
+}
 
 function PlayerPersonajesPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
@@ -92,162 +155,129 @@ function PlayerPersonajesPage() {
 
   if (!character) {
     return (
-      <div style={{ padding: '20px 16px 48px', maxWidth: 680, margin: '0 auto' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
-          Mi personaje
-        </h1>
-        <div style={{
-          border: '1.5px dashed var(--border-bright)', borderRadius: 20,
-          padding: '52px 32px', textAlign: 'center', background: 'var(--surface-1)', marginTop: 24,
-        }}>
-          <p style={{ fontSize: 13, color: 'var(--text-subtle)', margin: 0 }}>
-            El GM aún no te ha asignado un personaje.
-          </p>
-        </div>
+      <div style={{ ...page, paddingBottom: 48 }}>
+        <PageHeader title="Mi personaje" />
+        <EmptyState
+          icon={<Users size={22} aria-hidden />}
+          title="Sin personaje asignado"
+          description="El GM aún no te ha asignado un personaje."
+        />
       </div>
     )
   }
 
-  const gradient = AVATAR_GRADIENTS[character.id % AVATAR_GRADIENTS.length]
   const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
   const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
 
   const activeMetas = character.metas?.filter((m) => m.estado === 'activa').length ?? 0
+  const sphere = cosmereImage('esfera-broam-esmeralda')
+
+  const actions: { key: string; title: string; subtitle: string; to: string; tile: ReactNode }[] = [
+    {
+      key: 'ficha',
+      title: 'Mi ficha',
+      subtitle: 'Atributos, habilidades, equipo y más',
+      to: `/campaigns/${cId}/characters/${character.id}`,
+      tile: (
+        <span aria-hidden style={{ ...tileBase, background: characterGradient(character.id), boxShadow: shadow[1], color: HERO_TEXT }}>
+          <BookOpen size={20} />
+        </span>
+      ),
+    },
+    {
+      key: 'metas',
+      title: 'Metas',
+      subtitle: activeMetas > 0 ? `${activeMetas} meta${activeMetas !== 1 ? 's' : ''} activa${activeMetas !== 1 ? 's' : ''}` : 'Objetivos de tu personaje',
+      to: `/campaigns/${cId}/personajes/metas/${character.id}`,
+      tile: <ToneTile t={tone.brand}><Target size={20} /></ToneTile>,
+    },
+    {
+      key: 'talentos',
+      title: 'Talentos',
+      subtitle: 'Habilidades especiales de tu personaje',
+      to: `/campaigns/${cId}/personajes/talentos/${character.id}`,
+      tile: <ToneTile t={tone.topacio}><Sparkles size={20} /></ToneTile>,
+    },
+    {
+      key: 'bolsa',
+      title: 'Bolsa',
+      subtitle: 'Inventario, marcos y equipo',
+      to: `/campaigns/${cId}/personajes/bolsa/${character.id}`,
+      tile: (
+        <ToneTile t={tone.esmeralda}>
+          {sphere ? <img src={sphere} alt="" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /> : <ShoppingBag size={20} />}
+        </ToneTile>
+      ),
+    },
+  ]
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
+    <div style={{ ...page, paddingBottom: 48 }}>
       {/* Character identity block */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-        <div style={{
-          width: 52, height: 52, borderRadius: 16, background: gradient, flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 22, fontWeight: 800, color: 'white',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-        }}>
-          {character.name[0].toUpperCase()}
-        </div>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em', marginBottom: 2 }}>
-            {character.name}
-          </h1>
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--brand-light)', background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.15)', borderRadius: 6, padding: '1px 6px' }}>
-              Nv.{character.level}
+      <CharacterHero
+        characterId={character.id}
+        padding="22px 20px"
+        style={{
+          borderRadius: radius.xl,
+          borderBottom: 'none',
+          boxShadow: `0 0 0 1px var(--border-bright), ${shadow[2]}`,
+          marginBottom: 24,
+        }}
+      >
+        <div className="fade-in" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* Initial inside the official gold medallion */}
+          <span
+            aria-hidden
+            style={{
+              position: 'relative', width: 68, height: 68, flexShrink: 0, borderRadius: '50%',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              background: heroPill.background,
+            }}
+          >
+            <CosmereIcon name="ornamento-medallon" size={68} square style={{ position: 'absolute', inset: 0, color: 'var(--gold-ornament)' }} />
+            <span style={{ ...titleText, fontSize: fs['2xl'], lineHeight: 1, color: HERO_TEXT }}>
+              {character.name.charAt(0).toUpperCase() || '?'}
             </span>
-            {path && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: path.colorBg, border: `1px solid ${path.colorBorder}`, color: path.color }}>
-                {path.icon} {path.name}
-              </span>
-            )}
-            {order && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: order.colorBg, border: `1px solid ${order.colorBorder}`, color: order.color, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <RadiantOrderIcon orderId={order.id} size={10} />
-                {order.name}
-              </span>
-            )}
+          </span>
+
+          <div style={{ minWidth: 0 }}>
+            <p style={{ ...eyebrow, color: HERO_TEXT_SOFT, marginBottom: 4 }}>Mi personaje</p>
+            <h1 style={{ ...titleText, fontSize: fs['2xl'], color: HERO_TEXT, marginBottom: 10, overflowWrap: 'anywhere' }}>
+              {character.name}
+            </h1>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
+              {path && (
+                <span style={heroPill}>
+                  <HeroicPathIcon id={path.id} size={13} />
+                  {path.name}
+                </span>
+              )}
+              {order && (
+                <span style={heroPill}>
+                  <RadiantOrderIcon orderId={order.id} size={16} decorative />
+                  {order.name}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </CharacterHero>
 
       {/* Action cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {/* Character sheet card */}
-        <button
-          onClick={() => navigate(`/campaigns/${cId}/characters/${character.id}`)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
-            background: 'var(--surface-1)', border: '1px solid var(--border)',
-            textAlign: 'left', width: '100%',
-            transition: 'border-color 0.15s, box-shadow 0.15s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(180,190,254,0.25)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
-        >
-          <div style={{
-            width: 40, height: 40, borderRadius: 12, background: gradient, flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <BookOpen size={18} style={{ color: 'white' }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: '0 0 2px' }}>Mi ficha</p>
-            <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0 }}>Atributos, habilidades, equipo y más</p>
-          </div>
-          <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
-        </button>
-
-        {/* Metas card */}
-        <button
-          onClick={() => navigate(`/campaigns/${cId}/personajes/metas/${character.id}`)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
-            background: 'var(--surface-1)', border: '1px solid var(--border)',
-            textAlign: 'left', width: '100%',
-            transition: 'border-color 0.15s, box-shadow 0.15s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(180,190,254,0.25)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Target size={18} style={{ color: 'var(--brand-light)' }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: '0 0 2px' }}>Metas</p>
-            <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0 }}>
-              {activeMetas > 0 ? `${activeMetas} meta${activeMetas !== 1 ? 's' : ''} activa${activeMetas !== 1 ? 's' : ''}` : 'Objetivos de tu personaje'}
-            </p>
-          </div>
-          <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
-        </button>
-
-        {/* Talentos card */}
-        <button
-          onClick={() => navigate(`/campaigns/${cId}/personajes/talentos/${character.id}`)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
-            background: 'var(--surface-1)', border: '1px solid var(--border)',
-            textAlign: 'left', width: '100%',
-            transition: 'border-color 0.15s, box-shadow 0.15s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(251,191,36,0.25)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Sparkles size={18} style={{ color: '#fbbf24' }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: '0 0 2px' }}>Talentos</p>
-            <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0 }}>Habilidades especiales de tu personaje</p>
-          </div>
-          <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
-        </button>
-
-        {/* Bolsa card */}
-        <button
-          onClick={() => navigate(`/campaigns/${cId}/personajes/bolsa/${character.id}`)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 16,
-            padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
-            background: 'var(--surface-1)', border: '1px solid var(--border)',
-            textAlign: 'left', width: '100%',
-            transition: 'border-color 0.15s, box-shadow 0.15s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(52,211,153,0.25)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.2)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ShoppingBag size={18} style={{ color: '#34d399' }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: '0 0 2px' }}>Bolsa</p>
-            <p style={{ fontSize: 12, color: 'var(--text-subtle)', margin: 0 }}>Inventario, marcos y equipo</p>
-          </div>
-          <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
-        </button>
-      </div>
+      <ul
+        role="list"
+        style={{
+          listStyle: 'none',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+          gap: 12,
+        }}
+      >
+        {actions.map((a, i) => (
+          <ActionCard key={a.key} index={i} title={a.title} subtitle={a.subtitle} tile={a.tile} onClick={() => navigate(a.to)} />
+        ))}
+      </ul>
     </div>
   )
 }

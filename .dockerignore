@@ -1,0 +1,11 @@
+# Keep the Docker build context small and platform-clean:
+# dependencies are installed inside the image with `npm ci`.
+node_modules
+dist
+dist-ssr
+.git
+.idea
+.vscode
+.claude
+*.log
+*.local

@@ -54,7 +54,7 @@ export interface AdventureMap {
   id: string
   title: string
   pdfPage?: number
-  imagePath?: string   // path relative to /public, e.g. "/maps/map_p32.png"
+  imagePath?: string   // path relative to /public, e.g. "/maps/map_p32.webp"
   scale: string
   locations: string[]
   notes?: string
@@ -440,7 +440,7 @@ const CHAPTER_1: AdventureChapter = {
       id: '1.1',
       title: 'Carro atrapado en el crem',
       pdfPage: 29,
-      imagePath: '/maps/map_p29.png',
+      imagePath: '/maps/map_p29.webp',
       scale: '1 casilla = 1,5 m',
       locations: [
         'Carro de Tet Rebin (atascado)',
@@ -455,7 +455,7 @@ const CHAPTER_1: AdventureChapter = {
       id: '1.2',
       title: 'La caravana en la Encrucijada',
       pdfPage: 32,
-      imagePath: '/maps/map_p32.png',
+      imagePath: '/maps/map_p32.webp',
       scale: '1 casilla = 3 m',
       locations: [
         'Muro protector de la Piedra del Concilio (norte)',
@@ -473,7 +473,7 @@ const CHAPTER_1: AdventureChapter = {
       id: '1.3',
       title: 'Batalla con Veth',
       pdfPage: 34,
-      imagePath: '/maps/map_p34.png',
+      imagePath: '/maps/map_p34.webp',
       scale: '1 casilla = 1,5 m',
       locations: [
         'Pared de la formación rocosa (cobertura, este)',
@@ -905,7 +905,7 @@ const CHAPTER_2: AdventureChapter = {
       id: '2.1',
       title: 'Campamento de guerra de los Kholin',
       pdfPage: 41,
-      imagePath: '/maps/map_p41.png',
+      imagePath: '/maps/map_p41.webp',
       scale: 'Vista general (sin escala por casillas)',
       locations: [
         'El Chull Gruñón (taberna)',
@@ -927,7 +927,7 @@ const CHAPTER_2: AdventureChapter = {
       id: '2.2',
       title: 'El complejo del templo',
       pdfPage: 57,
-      imagePath: '/maps/map_p57.png',
+      imagePath: '/maps/map_p57.webp',
       scale: 'Vista general',
       locations: [
         'Templo principal',
@@ -943,7 +943,7 @@ const CHAPTER_2: AdventureChapter = {
       id: '2.3',
       title: 'Interior del monasterio',
       pdfPage: 59,
-      imagePath: '/maps/map_p59.png',
+      imagePath: '/maps/map_p59.webp',
       scale: '1 casilla = 1,5 m',
       locations: [
         'Celda de Taln',
@@ -1329,7 +1329,7 @@ const CHAPTER_3: AdventureChapter = {
       id: 'map-3-1',
       title: 'Mapa 3.1 — La ciudad de Rathalas',
       pdfPage: 65,
-      imagePath: '/maps/map_p65.png',
+      imagePath: '/maps/map_p65.webp',
       scale: 'Visión general del cañón con zonas A1-A8',
       locations: ['A1 Suelo del cañón', 'A2 Puesto de vigilancia', 'A3 Pared del risco', 'A4 Taller de carpintería', 'A5 El devotario', 'A6 Laberinto de puentes', 'A7 La prisión', 'A8 El corazón de la fortaleza'],
       notes: 'Mapa principal del capítulo. Mostrar a los jugadores solo las zonas que ya han visitado.',
@@ -1338,7 +1338,7 @@ const CHAPTER_3: AdventureChapter = {
       id: 'map-3-2',
       title: 'Mapa 3.2 — El suelo del cañón',
       pdfPage: 66,
-      imagePath: '/maps/map_p66.png',
+      imagePath: '/maps/map_p66.webp',
       scale: 'Detalle del suelo del cañón (zona A1)',
       locations: ['Entrada norte', 'Nidos de khornaks', 'Ruinas de edificios bajos', 'Acceso a la red de puentes'],
       notes: 'Mapa táctico para el combate con los khornaks. También útil para infiltraciones discretas.',
@@ -1347,7 +1347,7 @@ const CHAPTER_3: AdventureChapter = {
       id: 'map-3-3',
       title: 'Mapa 3.3 — La prisión de Rathalas',
       pdfPage: 70,
-      imagePath: '/maps/map_p70.png',
+      imagePath: '/maps/map_p70.webp',
       scale: 'Planta de la prisión con zonas P1-P4',
       locations: ['P1 Entrada con Tuxli', 'P2 Sala de guardias', 'P3 Celdas principales (Kaiana, Teryn)', 'P4 Celda de aislamiento'],
       notes: 'Mapa táctico para la liberación de los prisioneros. Indicar salidas alternativas si los PJs buscan rutas discretas.',
@@ -1356,7 +1356,7 @@ const CHAPTER_3: AdventureChapter = {
       id: 'map-3-4',
       title: 'Mapa 3.4 — El salón y la plataforma',
       pdfPage: 76,
-      imagePath: '/maps/map_p76.png',
+      imagePath: '/maps/map_p76.webp',
       scale: 'Interior del salón principal de la fortaleza',
       locations: ['Entrada al salón', 'Columnas de piedra', 'Plataforma central (estable)', 'Salida posterior'],
       notes: 'Mapa táctico para la batalla inicial. Usar junto con el mapa 3.5 para mostrar el colapso progresivo.',
@@ -1365,7 +1365,7 @@ const CHAPTER_3: AdventureChapter = {
       id: 'map-3-5',
       title: 'Mapa 3.5 — El salón y la plataforma caída',
       pdfPage: 77,
-      imagePath: '/maps/map_p77.png',
+      imagePath: '/maps/map_p77.webp',
       scale: 'Interior del salón principal tras el colapso',
       locations: ['Entrada al salón', 'Columnas de piedra', 'Escombros de la plataforma', 'Nivel inferior expuesto'],
       notes: 'Estado del salón tras el colapso de la plataforma (Round 4+). Cambiar a este mapa cuando ocurra el colapso.',
@@ -1769,7 +1769,7 @@ const CHAPTER_4: AdventureChapter = {
       id: 'map-4-1',
       title: 'Mapa 4.1 — Zanjas de Hexi',
       pdfPage: 87,
-      imagePath: '/maps/map_p87.png',
+      imagePath: '/maps/map_p87.webp',
       scale: '1 casilla = 1,5 m',
       locations: ['Tienda de Axoq (extremo oeste)', 'Zanjas profundas (cobertura)', 'Lados con liquen resbaladizo (este)', 'Puntos de emboscada de los Ojos de Pala'],
       notes: 'Mapa táctico para el combate con la retaguardia de Ylt. Las zanjas ofrecen cobertura y el liquen resbaladizo complica el movimiento.',
@@ -1778,7 +1778,7 @@ const CHAPTER_4: AdventureChapter = {
       id: 'map-4-2',
       title: 'Mapa 4.2 — El valle de Cultivación',
       pdfPage: 93,
-      imagePath: '/maps/map_p93.png',
+      imagePath: '/maps/map_p93.webp',
       scale: '1 casilla = 1,5 m (1 square = 5 ft)',
       locations: ['Arboleda central (Ylt y Kaiana)', 'Cuchillo de raysio (centro)', 'Túneles de enredaderas (perímetro cambiante)', 'Posición inicial de los PJs (15m del centro)'],
       notes: 'Mapa táctico para la batalla final del capítulo. Los túneles del perímetro cambian cada ronda — marcarlos con fichas o dados para trackear su posición.',

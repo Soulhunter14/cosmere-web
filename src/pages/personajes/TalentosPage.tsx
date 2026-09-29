@@ -1,16 +1,23 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Sparkles, ArrowRight } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { Sparkles, ChevronRight, TriangleAlert } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Spinner } from '../../components/ui'
+import { EmptyState, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { FORMA_ACTIVA_PREFIX } from '../../data/cantores'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { HeroicPathIcon } from '../../components/GameIcons'
+import { characterGradient } from '../../lib/avatar'
+import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, tone, toneFrom } from '../../theme'
+import { onGem } from '../../lib/hero'
+
+/* White initial on the deep character gradient (lib/avatar: >= 10:1 on every palette), as in MetasPage/BolsaPage. */
+const ON_GEM = onGem
 
 // ── Talent allowance per level ────────────────────────────────────────────────
 function getTalentosPermitidos(level: number, ascendencia: string): number {
@@ -23,18 +30,7 @@ function getTalentosPermitidos(level: number, ascendencia: string): number {
   return total
 }
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg,#7c3aed,#6366f1)',
-  'linear-gradient(135deg,#0e7490,#0284c7)',
-  'linear-gradient(135deg,#9d174d,#be185d)',
-  'linear-gradient(135deg,#065f46,#0d9488)',
-  'linear-gradient(135deg,#92400e,#b45309)',
-  'linear-gradient(135deg,#4c1d95,#7c3aed)',
-]
-
 function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
-  const [hovered, setHovered] = useState(false)
-  const gradient = AVATAR_GRADIENTS[character.id % AVATAR_GRADIENTS.length]
   const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
   const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
   const selected: string[] = (() => { try { return JSON.parse(character.talentos || '[]') } catch { return [] } })()
@@ -48,64 +44,86 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
   const counted = selected.filter((t) => !t.startsWith(FORMA_ACTIVA_PREFIX) && !talentosLibres.has(t))
   const permitidos = getTalentosPermitidos(character.level, character.ascendencia)
   const exceso = counted.length - permitidos
+  const excesoDetalle = `${counted.length} talentos contabilizados, máximo ${permitidos} a nivel ${character.level}`
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onSelect}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className="ui-card ui-card--interactive"
       style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '14px 16px', borderRadius: 16, cursor: 'pointer',
-        background: 'var(--surface-1)',
-        border: `1px solid ${hovered ? 'rgba(180,190,254,0.2)' : 'var(--border)'}`,
-        transform: hovered ? 'translateX(3px)' : 'translateX(0)',
-        boxShadow: hovered ? '0 4px 24px rgba(0,0,0,0.2)' : 'none',
-        transition: 'transform 0.18s cubic-bezier(.22,.68,0,1.2), box-shadow 0.18s ease, border-color 0.18s ease',
+        ...buttonReset,
+        ...card,
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        minHeight: 76,
+        padding: '14px 16px',
       }}
     >
-      <div style={{
-        width: 44, height: 44, borderRadius: 13, background: gradient, flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 18, fontWeight: 800, color: 'white',
-      }}>
-        {character.name[0].toUpperCase()}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>{character.name}</span>
-          {path && (
-            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: path.colorBg, border: `1px solid ${path.colorBorder}`, color: path.color }}>
-              {path.icon} {path.name}
-            </span>
-          )}
-          {order && (
-            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: order.colorBg, border: `1px solid ${order.colorBorder}`, color: order.color, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-              <RadiantOrderIcon orderId={order.id} size={10} />
-              {order.name}
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
+      {/* Identity tile: same gemstone gradient as the character hero */}
+      <span
+        aria-hidden
+        style={{
+          ...titleText,
+          width: 48,
+          height: 48,
+          flexShrink: 0,
+          borderRadius: radius.md,
+          background: characterGradient(character.id),
+          boxShadow: shadow[1],
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: fs.xl,
+          lineHeight: 1,
+          color: ON_GEM,
+        }}
+      >
+        {(character.name[0] ?? '?').toUpperCase()}
+      </span>
+
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>
+          {character.name}
+        </span>
+
+        {(path || order) && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {path && (
+              <span style={pill(toneFrom(path.color))}>
+                <HeroicPathIcon id={path.id} size={13} />
+                {path.name}
+              </span>
+            )}
+            {order && (
+              <span style={{ ...pill(toneFrom(order.color)), paddingLeft: 4 }}>
+                <RadiantOrderIcon orderId={order.id} size={16} decorative />
+                {order.name}
+              </span>
+            )}
+          </span>
+        )}
+
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: fs.sm, color: c.muted, fontVariantNumeric: 'tabular-nums' }}>
+            Nv. {character.level}
+            <span aria-hidden style={{ margin: '0 6px', color: c.subtle }}>·</span>
             {selected.length} talento{selected.length !== 1 ? 's' : ''}
           </span>
           {exceso > 0 && (
-            <span
-              title={`${counted.length} talentos contabilizados, máximo ${permitidos} a nivel ${character.level}`}
-              style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
-                background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)',
-                color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: 3,
-              }}
-            >
-              ⚠️ +{exceso} talento{exceso > 1 ? 's' : ''}
+            <span title={excesoDetalle} style={pill(tone.topacio)}>
+              <TriangleAlert size={13} aria-hidden />
+              +{exceso} talento{exceso > 1 ? 's' : ''}
+              <span className="sr-only"> de más: {excesoDetalle}</span>
             </span>
           )}
-        </div>
-      </div>
-      <ArrowRight size={15} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
-    </div>
+        </span>
+      </span>
+
+      <ChevronRight size={18} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
+    </button>
   )
 }
 
@@ -134,28 +152,23 @@ export function TalentosPage({ detailBasePath = 'personajes/talentos' }: { detai
   }
 
   return (
-    <div style={{ padding: '20px 16px 48px', maxWidth: 680, margin: '0 auto' }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
-          Talentos
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-          Selecciona un personaje para ver sus talentos
-        </p>
-      </div>
+    <div style={{ ...page, paddingBottom: 48 }}>
+      <PageHeader title="Talentos" subtitle="Selecciona un personaje para ver sus talentos" />
 
       {visible.length === 0 ? (
-        <div style={{ border: '1.5px dashed var(--border-bright)', borderRadius: 20, padding: '52px 32px', textAlign: 'center', background: 'var(--surface-1)' }}>
-          <Sparkles size={24} style={{ color: 'var(--text-subtle)', margin: '0 auto 14px', display: 'block' }} />
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Sin personajes</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-subtle)', margin: 0 }}>Crea un personaje primero.</p>
-        </div>
+        <EmptyState
+          icon={<Sparkles size={24} aria-hidden />}
+          title="Sin personajes"
+          description="Crea un personaje primero."
+        />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {visible.map((c) => (
-            <CharacterSelectCard key={c.id} character={c} onSelect={() => goToDetail(c)} />
+        <ul aria-label="Personajes" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {visible.map((ch, i) => (
+            <li key={ch.id} className="rise" style={{ '--i': Math.min(i, 10) } as CSSProperties}>
+              <CharacterSelectCard character={ch} onSelect={() => goToDetail(ch)} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   )

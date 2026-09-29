@@ -1,27 +1,107 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useId, type CSSProperties, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, Edit2, Trash2, Share2, BookUser, ChevronRight, Clock } from 'lucide-react'
 import { npcNotesApi } from '../../api/npcNotes'
 import { globalNpcsApi } from '../../api/global-npcs'
 import { useCampaignStore } from '../../store/campaignStore'
-import { Spinner, ConfirmDialog } from '../../components/ui'
+import { Button, ConfirmDialog, EmptyState, ErrorMessage, Field, IconButton, Input, PageHeader, SectionTitle, Sheet, Spinner, Switch, Textarea } from '../../components/ui'
+import { c, card, eyebrow, font, fs, page, pill, radius, tint, titleText, tone, type Tone, type ToneName } from '../../theme'
 import type { NpcNote } from '../../types'
 
-const AVATAR_COLORS = [
-  '#f87171', '#fb923c', '#fbbf24', '#4ade80', '#34d399',
-  '#60a5fa', '#a78bfa', '#f472b6', '#94a3b8', '#2dd4bf',
+/* Per-NPC identity colour, chosen by a name hash. The ten slots are the gem tones that replace the old
+   hard-coded palette (red, orange, amber, green, emerald, blue, violet, pink, slate, teal), in the same order,
+   so every NPC keeps its colour family and the tones stay AA in both themes. */
+const AVATAR_TONES: ToneName[] = [
+  'rubi', 'heliodoro', 'topacio', 'esmeralda', 'esmeralda',
+  'zafiro', 'amatista', 'granate', 'cuarzo', 'circon',
 ]
 
-function avatarColor(name: string) {
+function avatarTone(name: string): Tone {
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff
-  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+  return tone[AVATAR_TONES[h % AVATAR_TONES.length]]
 }
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+const shared = tone.zafiro
+
+// ─── Local pieces ──────────────────────────────────────────────────────────────
+
+/** Initial-letter tile in the NPC's identity colour (decorative: the name is always next to it) */
+function NpcInitial({ name, size }: { name: string; size: number }) {
+  const t = avatarTone(name)
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size, height: size, borderRadius: size >= 44 ? radius.md : radius.sm, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: `radial-gradient(120% 120% at 30% 20%, ${tint(t.fg, 22)}, ${tint(t.fg, 8)})`,
+        border: `1px solid ${tint(t.fg, 40)}`,
+        ...titleText, fontSize: Math.round(size * 0.46), color: t.fg,
+      }}
+    >
+      {name[0]?.toUpperCase() ?? '?'}
+    </span>
+  )
+}
+
+/** Close button pinned to the sheet's top-right corner (it does not scroll with the content) */
+function SheetClose({ onClose }: { onClose: () => void }) {
+  return (
+    <IconButton label="Cerrar" size={44} onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, zIndex: 1 }}>
+      <X size={20} aria-hidden />
+    </IconButton>
+  )
+}
+
+/** "Compartir con jugadores" row: the whole row is the label of a real switch */
+function ShareSwitch({ checked, onToggle, description }: { checked: boolean; onToggle: () => void; description: ReactNode }) {
+  const id = useId()
+  return (
+    <label
+      htmlFor={id}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', minHeight: 56,
+        borderRadius: radius.md, cursor: 'pointer',
+        border: `1px solid ${checked ? shared.border : c.border}`,
+        background: checked ? shared.bg : c.s2,
+        transition: 'background var(--dur-2), border-color var(--dur-2)',
+      }}
+    >
+      <Share2 size={18} aria-hidden style={{ color: checked ? shared.fg : c.subtle, flexShrink: 0 }} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: fs.sm + 1, fontWeight: 650, color: checked ? shared.fg : c.text }}>
+          Compartir con jugadores
+        </span>
+        <span style={{ display: 'block', fontSize: fs.xs, color: c.muted, marginTop: 2, lineHeight: 1.4 }}>
+          {description}
+        </span>
+      </span>
+      <Switch id={id} checked={checked} onChange={onToggle} label="Compartir con jugadores" />
+    </label>
+  )
+}
+
+function NoteDate({ iso }: { iso: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+      <Clock size={12} aria-hidden style={{ color: c.subtle }} />
+      <time dateTime={iso} style={{ fontSize: fs.xs, color: c.subtle }}>{formatDate(iso)}</time>
+    </div>
+  )
+}
+
+const noteCard: CSSProperties = {
+  background: c.s2, borderRadius: radius.md, padding: '12px 14px',
+  border: `1px solid ${c.border}`,
+}
+const noteText: CSSProperties = { fontSize: fs.base, color: c.text, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }
 
 // ─── NPC Detail Sheet ────────────────────────────────────────────────────────
 
@@ -49,241 +129,150 @@ function NpcDetailSheet({
   const ownNotes = notes.filter((n) => n.isOwn)
   const othersNotes = notes.filter((n) => !n.isOwn)
   const isShared = ownNotes[0]?.isShared ?? false
-  const color = avatarColor(npcName)
 
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-        background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-        border: '1px solid var(--border-bright)', borderBottom: 'none',
-        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-        paddingBottom: 'calc(16px + var(--sab, 0px))',
-      }}>
-        {/* Drag handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-        </div>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px 0', flexShrink: 0 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: `${color}22`, border: `1px solid ${color}44`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 800, color,
-          }}>
-            {npcName[0]?.toUpperCase() ?? '?'}
-          </div>
-          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+    <Sheet
+      open
+      onClose={onClose}
+      maxWidth={560}
+      title={
+        <span style={{ display: 'flex', alignItems: 'center', gap: 12, paddingRight: 44, minWidth: 0 }}>
+          <NpcInitial name={npcName} size={40} />
+          {/* The name is the key information: it wraps instead of being cut */}
+          <span style={{ ...titleText, fontSize: fs.xl, color: c.text, minWidth: 0, overflowWrap: 'anywhere' }}>
             {npcName}
           </span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
-            <X size={18} />
-          </button>
-        </div>
+        </span>
+      }
+    >
+      <SheetClose onClose={onClose} />
 
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Shared toggle — only if player has own notes */}
         {ownNotes.length > 0 && (
-          <div style={{ padding: '12px 20px 0', flexShrink: 0 }}>
-            <button
-              onClick={onToggleShared}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                borderRadius: 10, border: `1px solid ${isShared ? 'rgba(96,165,250,0.35)' : 'var(--border)'}`,
-                background: isShared ? 'rgba(96,165,250,0.08)' : 'var(--surface-2)',
-                cursor: 'pointer', width: '100%', textAlign: 'left',
-              }}
-            >
-              <Share2 size={14} style={{ color: isShared ? '#60a5fa' : 'var(--text-subtle)', flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: isShared ? '#60a5fa' : 'var(--text)' }}>
-                  Compartir con jugadores
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
-                  {isShared ? 'Todos pueden ver las notas de este NPC' : 'Solo tú puedes ver estas notas'}
-                </div>
-              </div>
-              <div style={{
-                width: 32, height: 18, borderRadius: 9, flexShrink: 0, transition: 'background 0.2s',
-                background: isShared ? '#60a5fa' : 'rgba(255,255,255,0.12)', position: 'relative',
-              }}>
-                <div style={{
-                  position: 'absolute', top: 2, left: isShared ? 16 : 2,
-                  width: 14, height: 14, borderRadius: '50%', background: 'white', transition: 'left 0.2s',
-                }} />
-              </div>
-            </button>
-          </div>
+          <ShareSwitch
+            checked={isShared}
+            onToggle={onToggleShared}
+            description={isShared ? 'Todos pueden ver las notas de este NPC' : 'Solo tú puedes ver estas notas'}
+          />
         )}
 
-        {/* Notes list */}
-        <div style={{ overflowY: 'auto', padding: '12px 20px 0', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-
-          {/* Own notes */}
-          {ownNotes.map((note) => (
-            <div key={note.id} style={{
-              background: 'var(--surface-2)', borderRadius: 12, padding: '12px 14px',
-              border: '1px solid var(--border)',
-            }}>
-              {editingId === note.id ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <textarea
-                    value={editText}
-                    onChange={(e) => setEditText(e.target.value)}
-                    rows={4}
-                    autoFocus
-                    style={{
-                      width: '100%', background: 'var(--surface-1)', border: '1px solid var(--border-bright)',
-                      borderRadius: 8, padding: '8px 10px', color: 'var(--text)', fontSize: 13,
-                      resize: 'vertical' as const, outline: 'none', boxSizing: 'border-box' as const, lineHeight: 1.6,
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => { onEdit(note, editText); setEditingId(null) }}
-                      disabled={!editText.trim() || editingSaving}
-                      style={{
-                        flex: 1, padding: '8px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                        background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', color: 'white',
-                        fontSize: 12, fontWeight: 600, opacity: !editText.trim() || editingSaving ? 0.5 : 1,
-                      }}
-                    >
-                      {editingSaving ? 'Guardando...' : 'Guardar'}
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      style={{
-                        padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
-                        cursor: 'pointer', background: 'var(--surface-1)', color: 'var(--text-subtle)', fontSize: 12,
-                      }}
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                    <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, margin: 0, flex: 1, whiteSpace: 'pre-wrap' }}>
-                      {note.notes || <em style={{ color: 'var(--text-subtle)' }}>Sin texto</em>}
-                    </p>
-                    <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                      <button
-                        onClick={() => { setEditingId(note.id); setEditText(note.notes) }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5, color: 'var(--text-subtle)', borderRadius: 6, display: 'flex' }}
+        {/* Own notes */}
+        {ownNotes.length > 0 && (
+          <ul style={listReset}>
+            {ownNotes.map((note) => (
+              <li key={note.id} style={noteCard}>
+                {editingId === note.id ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Textarea
+                      aria-label="Editar nota"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      rows={4}
+                      autoFocus
+                      style={{ lineHeight: 1.6, background: c.s1 }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Button
+                        onClick={() => { onEdit(note, editText); setEditingId(null) }}
+                        disabled={!editText.trim() || editingSaving}
+                        style={{ flex: 1 }}
                       >
-                        <Edit2 size={12} />
-                      </button>
-                      <button
-                        onClick={() => onDelete(note.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 5, color: 'var(--text-subtle)', borderRadius: 6, display: 'flex' }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                        {editingSaving ? 'Guardando...' : 'Guardar'}
+                      </Button>
+                      <Button variant="secondary" onClick={() => setEditingId(null)}>
+                        Cancelar
+                      </Button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                    <Clock size={10} style={{ color: 'var(--text-subtle)' }} />
-                    <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{formatDate(note.updatedAt)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <p style={{ ...noteText, flex: 1, paddingTop: 4 }}>
+                        {note.notes || <em style={{ color: c.subtle }}>Sin texto</em>}
+                      </p>
+                      <div style={{ display: 'flex', gap: 2, flexShrink: 0, margin: '-4px -6px 0 0' }}>
+                        <IconButton label="Editar nota" onClick={() => { setEditingId(note.id); setEditText(note.notes) }}>
+                          <Edit2 size={16} aria-hidden />
+                        </IconButton>
+                        <IconButton label="Eliminar nota" variant="danger" onClick={() => onDelete(note.id)}>
+                          <Trash2 size={16} aria-hidden />
+                        </IconButton>
+                      </div>
+                    </div>
+                    <NoteDate iso={note.updatedAt} />
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
 
-          {/* Others' notes */}
-          {othersNotes.length > 0 && (
-            <>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginTop: 4 }}>
-                DE OTROS JUGADORES
-              </div>
+        {/* Others' notes */}
+        {othersNotes.length > 0 && (
+          <section aria-labelledby="npc-others-notes" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+            <h3 id="npc-others-notes" style={{ ...eyebrow, fontFamily: font.ui, color: 'var(--gold)' }}>
+              DE OTROS JUGADORES
+            </h3>
+            <ul style={listReset}>
               {othersNotes.map((note) => (
-                <div key={note.id} style={{
-                  background: 'var(--surface-2)', borderRadius: 12, padding: '12px 14px',
-                  border: '1px solid rgba(96,165,250,0.15)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa', flex: 1 }}>
+                <li key={note.id} style={{ ...noteCard, border: `1px solid ${shared.border}`, boxShadow: `inset 3px 0 0 ${shared.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, minHeight: isGm ? 40 : undefined }}>
+                    <span style={{ fontSize: fs.xs, fontWeight: 700, color: shared.fg, flex: 1, minWidth: 0 }}>
                       por {note.authorName}
                     </span>
                     {isGm && (
-                      <button
-                        onClick={() => onDelete(note.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--text-subtle)', borderRadius: 4, display: 'flex' }}
-                      >
-                        <Trash2 size={11} />
-                      </button>
+                      <IconButton label={`Eliminar nota de ${note.authorName}`} variant="danger" onClick={() => onDelete(note.id)} style={{ margin: '-4px -6px -4px 0' }}>
+                        <Trash2 size={16} aria-hidden />
+                      </IconButton>
                     )}
                   </div>
-                  <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{note.notes}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                    <Clock size={10} style={{ color: 'var(--text-subtle)' }} />
-                    <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{formatDate(note.updatedAt)}</span>
-                  </div>
-                </div>
+                  <p style={noteText}>{note.notes}</p>
+                  <NoteDate iso={note.updatedAt} />
+                </li>
               ))}
-            </>
-          )}
+            </ul>
+          </section>
+        )}
 
-          {/* Add note inline */}
-          {addOpen ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
-              <textarea
-                value={addText}
-                onChange={(e) => setAddText(e.target.value)}
-                placeholder="Escribe la nota..."
-                rows={4}
-                autoFocus
-                style={{
-                  width: '100%', background: 'var(--surface-2)', border: '1px solid var(--border-bright)',
-                  borderRadius: 10, padding: '10px 12px', color: 'var(--text)', fontSize: 13,
-                  resize: 'vertical' as const, outline: 'none', boxSizing: 'border-box' as const, lineHeight: 1.6,
-                }}
-              />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => { onAdd(addText); setAddText(''); setAddOpen(false) }}
-                  disabled={!addText.trim() || addingSaving}
-                  style={{
-                    flex: 1, padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                    background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)', color: 'white',
-                    fontSize: 13, fontWeight: 600, opacity: !addText.trim() || addingSaving ? 0.5 : 1,
-                    boxShadow: '0 2px 10px rgba(139,92,246,0.3)',
-                  }}
-                >
-                  {addingSaving ? 'Guardando...' : 'Guardar nota'}
-                </button>
-                <button
-                  onClick={() => { setAddOpen(false); setAddText('') }}
-                  style={{
-                    padding: '10px 16px', borderRadius: 10, border: '1px solid var(--border)',
-                    cursor: 'pointer', background: 'var(--surface-2)', color: 'var(--text-subtle)', fontSize: 13,
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
+        {/* Add note inline */}
+        {addOpen ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4 }}>
+            <Textarea
+              aria-label="Nueva nota"
+              value={addText}
+              onChange={(e) => setAddText(e.target.value)}
+              placeholder="Escribe la nota..."
+              rows={4}
+              autoFocus
+              style={{ lineHeight: 1.6 }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button
+                onClick={() => { onAdd(addText); setAddText(''); setAddOpen(false) }}
+                disabled={!addText.trim() || addingSaving}
+                style={{ flex: 1 }}
+              >
+                {addingSaving ? 'Guardando...' : 'Guardar nota'}
+              </Button>
+              <Button variant="secondary" onClick={() => { setAddOpen(false); setAddText('') }}>
+                Cancelar
+              </Button>
             </div>
-          ) : (
-            <button
-              onClick={() => setAddOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 7, padding: '10px 14px',
-                borderRadius: 10, border: '1.5px dashed var(--border-bright)',
-                background: 'transparent', cursor: 'pointer', color: 'var(--text-subtle)',
-                fontSize: 13, width: '100%',
-              }}
-            >
-              <Plus size={14} />
-              Añadir nota
-            </button>
-          )}
-          <div style={{ height: 8 }} />
-        </div>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            icon={<Plus size={16} aria-hidden />}
+            onClick={() => setAddOpen(true)}
+            fullWidth
+            style={{ justifyContent: 'flex-start', border: '1.5px dashed var(--border-strong)', color: c.muted }}
+          >
+            Añadir nota
+          </Button>
+        )}
       </div>
-    </>
+    </Sheet>
   )
 }
 
@@ -300,171 +289,113 @@ function CreateNpcSheet({
   const [form, setForm] = useState({ npcName: '', notes: '', isShared: false })
 
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-        background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-        border: '1px solid var(--border-bright)', borderBottom: 'none',
-        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
-        paddingBottom: 'calc(16px + var(--sab, 0px))',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0', flexShrink: 0 }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px 16px', flexShrink: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Nueva nota de NPC</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-subtle)' }}>
-            <X size={18} />
-          </button>
-        </div>
+    <Sheet
+      open
+      onClose={onClose}
+      maxWidth={520}
+      title={<span style={{ display: 'block', paddingRight: 44 }}>Nueva nota de NPC</span>}
+      footer={
+        <Button
+          size="lg"
+          fullWidth
+          onClick={() => onSave(form)}
+          disabled={!form.npcName.trim() || saving}
+        >
+          {saving ? 'Guardando...' : 'Crear nota'}
+        </Button>
+      }
+    >
+      <SheetClose onClose={onClose} />
 
-        <div style={{ overflowY: 'auto', padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* NPC Name with autocomplete */}
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
-              NOMBRE DEL NPC
-            </label>
-            <input
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
+        {/* NPC Name with autocomplete */}
+        <div>
+          <Field label="NOMBRE DEL NPC">
+            <Input
               list="npc-names-list"
               placeholder="Nombre del NPC..."
               value={form.npcName}
               onChange={(e) => setForm((p) => ({ ...p, npcName: e.target.value }))}
-              autoFocus
-              style={{
-                width: '100%', background: 'var(--surface-2)', border: '1px solid var(--border)',
-                borderRadius: 10, padding: '10px 12px', color: 'var(--text)', fontSize: 15,
-                fontWeight: 600, outline: 'none', boxSizing: 'border-box' as const,
-              }}
+              data-autofocus
+              style={{ fontWeight: 600 }}
             />
-            <datalist id="npc-names-list">
-              {npcNames.map((name) => <option key={name} value={name} />)}
-            </datalist>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
-              NOTA
-            </label>
-            <textarea
-              placeholder="Escribe tu primera nota sobre este NPC..."
-              value={form.notes}
-              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-              rows={5}
-              style={{
-                width: '100%', background: 'var(--surface-2)', border: '1px solid var(--border)',
-                borderRadius: 10, padding: '10px 12px', color: 'var(--text)', fontSize: 13,
-                resize: 'vertical' as const, outline: 'none', boxSizing: 'border-box' as const, lineHeight: 1.6,
-              }}
-            />
-          </div>
-
-          {/* Shared toggle */}
-          <button
-            onClick={() => setForm((p) => ({ ...p, isShared: !p.isShared }))}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-              borderRadius: 12, border: `1px solid ${form.isShared ? 'rgba(96,165,250,0.35)' : 'var(--border)'}`,
-              background: form.isShared ? 'rgba(96,165,250,0.08)' : 'var(--surface-2)',
-              cursor: 'pointer', textAlign: 'left',
-            }}
-          >
-            <Share2 size={16} style={{ color: form.isShared ? '#60a5fa' : 'var(--text-subtle)', flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: form.isShared ? '#60a5fa' : 'var(--text)' }}>
-                Compartir con jugadores
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 1 }}>
-                {form.isShared ? 'Todos los jugadores pueden ver las notas de este NPC' : 'Solo tú puedes ver estas notas'}
-              </div>
-            </div>
-            <div style={{
-              width: 36, height: 20, borderRadius: 10, flexShrink: 0, transition: 'background 0.2s',
-              background: form.isShared ? '#60a5fa' : 'rgba(255,255,255,0.12)', position: 'relative',
-            }}>
-              <div style={{
-                position: 'absolute', top: 2, left: form.isShared ? 18 : 2,
-                width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s',
-              }} />
-            </div>
-          </button>
-
-          {/* Save */}
-          <button
-            onClick={() => onSave(form)}
-            disabled={!form.npcName.trim() || saving}
-            style={{
-              padding: '13px', borderRadius: 12, border: 'none', cursor: 'pointer',
-              background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-              color: 'white', fontSize: 14, fontWeight: 700,
-              opacity: !form.npcName.trim() || saving ? 0.5 : 1,
-              boxShadow: '0 2px 12px rgba(139,92,246,0.35)',
-            }}
-          >
-            {saving ? 'Guardando...' : 'Crear nota'}
-          </button>
-          <div style={{ height: 4 }} />
+          </Field>
+          <datalist id="npc-names-list">
+            {npcNames.map((name) => <option key={name} value={name} />)}
+          </datalist>
         </div>
+
+        {/* Notes */}
+        <Field label="NOTA">
+          <Textarea
+            placeholder="Escribe tu primera nota sobre este NPC..."
+            value={form.notes}
+            onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+            rows={5}
+            style={{ lineHeight: 1.6 }}
+          />
+        </Field>
+
+        {/* Shared toggle */}
+        <ShareSwitch
+          checked={form.isShared}
+          onToggle={() => setForm((p) => ({ ...p, isShared: !p.isShared }))}
+          description={form.isShared ? 'Todos los jugadores pueden ver las notas de este NPC' : 'Solo tú puedes ver estas notas'}
+        />
       </div>
-    </>
+    </Sheet>
   )
 }
 
 // ─── NPC Group Card ───────────────────────────────────────────────────────────
 
 function NpcGroupCard({ npcName, notes, onClick }: { npcName: string; notes: NpcNote[]; onClick: () => void }) {
-  const color = avatarColor(npcName)
+  const accent = avatarTone(npcName).fg
   const ownNotes = notes.filter((n) => n.isOwn)
   const othersNotes = notes.filter((n) => !n.isOwn)
   const isShared = ownNotes.some((n) => n.isShared)
 
   return (
     <button
+      type="button"
       onClick={onClick}
+      className="ui-card ui-card--interactive"
       style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        background: 'var(--surface-1)', border: '1px solid var(--border)',
-        borderLeft: `3px solid ${color}`,
-        borderRadius: 16, padding: '14px 16px',
-        cursor: 'pointer', textAlign: 'left', width: '100%',
+        ...card,
+        display: 'flex', alignItems: 'center', gap: 14,
+        boxShadow: `inset 3px 0 0 ${accent}, var(--shadow-1)`,
+        padding: '14px 14px 14px 18px', minHeight: 76,
+        cursor: 'pointer', textAlign: 'left', width: '100%', color: 'inherit', font: 'inherit',
       }}
     >
-      <div style={{
-        width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-        background: `${color}22`, border: `1px solid ${color}44`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 16, fontWeight: 800, color,
-      }}>
-        {npcName[0]?.toUpperCase() ?? '?'}
-      </div>
+      <NpcInitial name={npcName} size={44} />
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 4 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{npcName}</span>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, lineHeight: 1.2, color: c.text }}>{npcName}</span>
           {isShared && (
-            <span style={{
-              fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 20, letterSpacing: '0.06em',
-              background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', color: '#60a5fa',
-            }}>COMPARTIDA</span>
+            <span style={{ ...pill(shared), padding: '1px 8px', fontSize: fs.eyebrow, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              <Share2 size={11} aria-hidden />
+              COMPARTIDA
+            </span>
           )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{
-            fontSize: 11, color: 'var(--text-subtle)',
-            background: 'var(--surface-2)', borderRadius: 6, padding: '1px 7px',
+            fontSize: fs.xs, fontWeight: 600, color: c.muted,
+            background: c.s2, border: `1px solid ${c.border}`, borderRadius: radius.full, padding: '1px 9px',
           }}>
             {notes.length} nota{notes.length !== 1 ? 's' : ''}
           </span>
           {othersNotes.length > 0 && ownNotes.length === 0 && (
-            <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
+            <span style={{ fontSize: fs.xs, color: c.muted }}>
               · de {[...new Set(othersNotes.map((n) => n.authorName))].join(', ')}
             </span>
           )}
-        </div>
-      </div>
+        </span>
+      </span>
 
-      <ChevronRight size={16} style={{ color: 'var(--text-subtle)', flexShrink: 0 }} />
+      <ChevronRight size={18} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
     </button>
   )
 }
@@ -481,7 +412,7 @@ export function NpcNotesPage() {
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
 
-  const { data: notes = [], isLoading } = useQuery({
+  const { data: notes = [], isLoading, isError } = useQuery({
     queryKey: ['npc-notes', cId],
     queryFn: () => npcNotesApi.getAll(cId),
   })
@@ -575,96 +506,69 @@ export function NpcNotesPage() {
   if (isLoading) return <Spinner />
 
   return (
-    <div style={{ padding: '20px 16px 80px', maxWidth: 680, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
-            Notas de NPCs
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {ownGroups.length
-              ? `${ownGroups.length} NPC${ownGroups.length !== 1 ? 's' : ''} anotado${ownGroups.length !== 1 ? 's' : ''}`
-              : 'Sin notas todavía'}
-          </p>
-        </div>
-        <button
-          onClick={() => setCreating(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-            color: 'white', border: 'none', borderRadius: 10, padding: '8px 14px',
-            fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
-            boxShadow: '0 2px 10px rgba(139,92,246,0.35)',
-          }}
-        >
-          <Plus size={14} /> Nueva nota
-        </button>
-      </div>
+    <div style={{ ...page, paddingBottom: 80 }}>
+      <PageHeader
+        title="Notas de NPCs"
+        subtitle={ownGroups.length
+          ? `${ownGroups.length} NPC${ownGroups.length !== 1 ? 's' : ''} anotado${ownGroups.length !== 1 ? 's' : ''}`
+          : 'Sin notas todavía'}
+        actions={
+          <Button icon={<Plus size={16} aria-hidden />} onClick={() => setCreating(true)}>
+            Nueva nota
+          </Button>
+        }
+      />
+
+      {/* Load error (otherwise a failed fetch looks like an empty list) */}
+      {isError && (
+        <ErrorMessage message="No se pudieron cargar las notas. Inténtalo de nuevo." style={{ marginBottom: 16 }} />
+      )}
 
       {/* Empty state */}
       {notes.length === 0 && (
-        <div style={{
-          border: '1.5px dashed var(--border-bright)', borderRadius: 20,
-          padding: '52px 32px', textAlign: 'center', background: 'var(--surface-1)',
-        }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 14, margin: '0 auto 16px',
-            background: 'var(--surface-2)', border: '1px solid var(--border-bright)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <BookUser size={20} style={{ color: 'var(--text-subtle)' }} />
-          </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Sin notas todavía</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-subtle)', marginBottom: 24 }}>
-            Registra lo que sabes sobre los NPCs que encuentres en tu aventura.
-          </p>
-          <button
-            onClick={() => setCreating(true)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-              color: 'white', border: 'none', borderRadius: 10, padding: '8px 20px',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              boxShadow: '0 2px 10px rgba(139,92,246,0.3)',
-            }}
-          >
-            <Plus size={13} /> Nueva nota
-          </button>
-        </div>
+        <EmptyState
+          icon={<BookUser size={22} aria-hidden />}
+          title="Sin notas todavía"
+          description="Registra lo que sabes sobre los NPCs que encuentres en tu aventura."
+          action={
+            <Button icon={<Plus size={16} aria-hidden />} onClick={() => setCreating(true)}>
+              Nueva nota
+            </Button>
+          }
+        />
       )}
 
       {/* Own NPC groups */}
       {ownGroups.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: othersGroups.length > 0 ? 28 : 0 }}>
-          {ownGroups.map((name) => (
-            <NpcGroupCard
-              key={name}
-              npcName={name}
-              notes={grouped.get(name) ?? []}
-              onClick={() => setSelectedNpc(name)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Others' NPC groups */}
-      {othersGroups.length > 0 && (
-        <>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-            COMPARTIDAS POR OTROS JUGADORES
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {othersGroups.map((name) => (
+        <ul style={{ ...listReset, marginBottom: othersGroups.length > 0 ? 32 : 0 }}>
+          {ownGroups.map((name, i) => (
+            <li key={name} className="rise" style={{ '--i': Math.min(i, 12) } as CSSProperties}>
               <NpcGroupCard
-                key={name}
                 npcName={name}
                 notes={grouped.get(name) ?? []}
                 onClick={() => setSelectedNpc(name)}
               />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Others' NPC groups */}
+      {othersGroups.length > 0 && (
+        <section aria-labelledby="npc-others-groups">
+          <SectionTitle id="npc-others-groups">COMPARTIDAS POR OTROS JUGADORES</SectionTitle>
+          <ul style={listReset}>
+            {othersGroups.map((name, i) => (
+              <li key={name} className="rise" style={{ '--i': Math.min(ownGroups.length + i, 12) } as CSSProperties}>
+                <NpcGroupCard
+                  npcName={name}
+                  notes={grouped.get(name) ?? []}
+                  onClick={() => setSelectedNpc(name)}
+                />
+              </li>
             ))}
-          </div>
-        </>
+          </ul>
+        </section>
       )}
 
       {/* NPC detail sheet */}

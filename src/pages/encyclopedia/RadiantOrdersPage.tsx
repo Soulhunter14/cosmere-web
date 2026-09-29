@@ -1,49 +1,90 @@
-import { useState } from 'react'
-import { X, Zap } from 'lucide-react'
-import { RADIANT_ORDERS, RADIANT_REGLAS, PRIMER_IDEAL, type RadiantOrder, type RadiantRegla } from '../../data/radiantOrders'
+import { useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronDown, ChevronRight, X } from 'lucide-react'
+import { RADIANT_ORDERS, RADIANT_REGLAS, PRIMER_IDEAL, type RadiantOrder } from '../../data/radiantOrders'
+import type { Talento } from '../../data/potencias'
 import { RadiantOrderIcon, RadiantOrderPlacard } from '../../components/RadiantOrderIcon'
 import { TalentActivation } from '../../components/TalentActivation'
+import { SurgeIcon } from '../../components/GameIcons'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { Disclosure, IconButton, PageHeader, SectionTitle, Tabs, TabPanel, type TabItem } from '../../components/ui'
+import { useDialogA11y } from '../../hooks/useDialogA11y'
+import { hasCosmereIcon } from '../../lib/cosmereAssets'
+import { c, eyebrow, font, fs, ink, page, pill, radius, shadow, tint, titleText, toneFrom } from '../../theme'
 
-const TABS = [
+type TabId = 'reglas' | 'ordenes'
+const TABS: TabItem<TabId>[] = [
   { id: 'reglas', label: 'Reglas' },
   { id: 'ordenes', label: 'Órdenes' },
 ]
 
-// ── Reglas tab ───────────────────────────────────────────────
-function ReglaCard({ regla }: { regla: RadiantRegla }) {
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+
+// ── Rule details (label + text, with the book's gold diamond bullet) ──
+function RuleDetails({ details }: { details: { label: string; text: string }[] }) {
+  return (
+    <dl style={stack(0)}>
+      {details.map((d, i) => (
+        <div key={d.label} style={{ padding: '12px 0', borderTop: i === 0 ? 'none' : `1px solid ${c.border}`, paddingTop: i === 0 ? 0 : 12 }}>
+          <dt style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.base - 1, fontWeight: 650, color: c.text, lineHeight: 1.35, marginBottom: 4 }}>
+            <CosmereIcon name="ornamento-rombo" size={8} style={{ color: 'var(--gold-ornament)' }} />
+            {d.label}
+          </dt>
+          <dd style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6, paddingLeft: 16 }}>{d.text}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+// ── Talent row (inside the order sheet): header button + sibling panel ──
+function TalentoRow({ talento }: { talento: Talento }) {
   const [open, setOpen] = useState(false)
+  const id = useId()
 
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 16px', textAlign: 'left', width: '100%',
-          background: 'var(--surface-1)', border: 'none', cursor: 'pointer',
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 3 }}>{regla.title}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{regla.summary}</div>
-        </div>
-        <div style={{
-          fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: 0.6,
-          transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s',
-        }}>›</div>
-      </button>
-
+    <div
+      style={{
+        borderRadius: radius.md,
+        background: c.s2,
+        border: `1px solid ${open ? c.borderBright : c.border}`,
+        transition: 'border-color var(--dur-2)',
+      }}
+    >
+      <h4 style={{ margin: 0, fontFamily: font.ui, fontSize: 'inherit', fontWeight: 'inherit', letterSpacing: 0 }}>
+        <button
+          type="button"
+          id={`${id}-btn`}
+          aria-expanded={open}
+          aria-controls={`${id}-panel`}
+          onClick={() => setOpen(!open)}
+          className="ui-row"
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 48,
+            padding: '10px 12px', background: 'none', border: 'none', borderRadius: radius.md,
+            cursor: 'pointer', textAlign: 'left', color: c.text,
+          }}
+        >
+          <TalentActivation type={talento.cost} compact />
+          <span style={{ flex: 1, minWidth: 0, fontSize: fs.base - 1, fontWeight: 650, lineHeight: 1.3 }}>{talento.name}</span>
+          <ChevronDown
+            size={16}
+            aria-hidden
+            style={{ color: c.subtle, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-2) var(--ease-out)' }}
+          />
+        </button>
+      </h4>
       {open && (
-        <div style={{ padding: '0 16px 16px', background: 'var(--surface-1)', borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 12 }}>
-            {regla.details.map((d) => (
-              <div key={d.label} style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                  {d.label}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{d.text}</div>
-              </div>
-            ))}
+        <div id={`${id}-panel`} className="fade-in" style={{ padding: '0 12px 12px' }}>
+          <div style={{ ...stack(6), paddingTop: 10, borderTop: `1px solid ${c.border}` }}>
+            {talento.prereq && (
+              <p style={{ fontSize: fs.sm, color: c.subtle, fontStyle: 'italic' }}>
+                Prerrequisito: {talento.prereq}
+              </p>
+            )}
+            <p style={{ fontSize: fs.base - 1, color: c.muted, lineHeight: 1.6 }}>
+              {talento.description}
+            </p>
           </div>
         </div>
       )}
@@ -51,259 +92,255 @@ function ReglaCard({ regla }: { regla: RadiantRegla }) {
   )
 }
 
-// ── Talent row (inside order sheet) ─────────────────────────
-function TalentoRow({ talento }: { talento: import('../../data/potencias').Talento }) {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <button
-      onClick={() => setOpen(!open)}
-      style={{
-        display: 'flex', flexDirection: 'column',
-        padding: '10px 12px', borderRadius: 10, textAlign: 'left', width: '100%',
-        background: 'var(--surface-2)', border: '1px solid var(--border)',
-        cursor: 'pointer', transition: 'border-color 0.15s',
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(180,190,254,0.25)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <TalentActivation type={talento.cost} compact />
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'white', flex: 1 }}>{talento.name}</div>
-        <div style={{ fontSize: 13, color: 'var(--text-subtle)', opacity: 0.6 }}>{open ? '▾' : '›'}</div>
-      </div>
-      {open && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {talento.prereq && (
-            <div style={{ fontSize: 10, color: 'var(--text-subtle)', fontStyle: 'italic' }}>
-              Prerrequisito: {talento.prereq}
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            {talento.description}
-          </div>
+// ── Local sheet with a hero header (dialog named by the visible title) ──
+function HeroSheet({ open, onClose, labelledBy, children, maxWidth = 600 }: {
+  open: boolean
+  onClose: () => void
+  labelledBy: string
+  children: ReactNode
+  maxWidth?: number
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useDialogA11y(ref, open, onClose)
+  if (!open) return null
+  return createPortal(
+    <div className="ui-sheet-wrap">
+      <div
+        className="fade-in"
+        onClick={onClose}
+        aria-hidden
+        style={{ position: 'absolute', inset: 0, background: c.overlay, backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+      />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        tabIndex={-1}
+        className="ui-sheet"
+        style={{ maxWidth, overflow: 'hidden' }}
+      >
+        <IconButton
+          label="Cerrar"
+          variant="surface"
+          size={44}
+          onClick={onClose}
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 1, borderRadius: radius.full }}
+        >
+          <X size={18} aria-hidden />
+        </IconButton>
+        {/* Focusable scroller: keyboard users can scroll a sheet that has no controls of its own */}
+        <div
+          role="region"
+          aria-labelledby={labelledBy}
+          tabIndex={0}
+          style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 'calc(24px + var(--sab))', outlineOffset: -3 }}
+        >
+          {children}
         </div>
-      )}
-    </button>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
-// ── Detail sheet ─────────────────────────────────────────────
-function OrderDetailSheet({ order, onClose }: { order: RadiantOrder; onClose: () => void }) {
+// ── Detail sheet content ─────────────────────────────────────
+function InfoList({ rows }: { rows: { label: string; value: string }[] }) {
+  return (
+    <dl style={{ borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}`, overflow: 'hidden' }}>
+      {rows.map((r, i) => (
+        <div key={r.label} style={{ padding: '12px 14px', borderTop: i === 0 ? 'none' : `1px solid ${c.border}` }}>
+          <dt style={{ ...eyebrow, marginBottom: 4 }}>{r.label}</dt>
+          <dd style={{ fontSize: fs.base - 1, color: c.text, lineHeight: 1.55 }}>{r.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function OrderDetail({ order, titleId }: { order: RadiantOrder; titleId: string }) {
+  const t = toneFrom(order.color)
+
   return (
     <>
+      {/* Hero */}
       <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-      />
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 61,
-        background: 'var(--surface-1)',
-        borderRadius: '20px 20px 0 0',
-        border: '1px solid var(--border-bright)',
-        borderBottom: 'none',
-        maxHeight: '88vh',
-        overflowY: 'auto',
-        padding: `0 0 calc(24px + var(--sab, 0px))`,
-      }}>
-        {/* Drag handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-        </div>
-
-        {/* Hero header */}
-        <div style={{
-          padding: '20px 20px 24px',
-          background: order.colorBg,
-          borderBottom: `1px solid ${order.colorBorder}`,
-          position: 'relative',
-        }}>
-          <button
-            onClick={onClose}
+        style={{
+          padding: '16px 20px 20px',
+          background: `linear-gradient(180deg, ${tint(order.color, 18)}, ${tint(order.color, 4)})`,
+          borderBottom: `1px solid ${t.border}`,
+        }}
+      >
+        <div aria-hidden className="ui-sheet-handle" style={{ marginTop: -6 }} />
+        <div style={{ paddingRight: 52 }}>
+          {/* aspect-ratio reserves the placard's space (all placards are 850×300) so the title
+              does not jump down when the lazy image arrives */}
+          <div
             style={{
-              position: 'absolute', top: 16, right: 16,
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 6, color: 'var(--text-subtle)', borderRadius: 8,
+              maxWidth: 400, aspectRatio: '85 / 30', borderRadius: radius.md, overflow: 'hidden',
+              border: '1px solid var(--gold-border)', boxShadow: shadow[1], background: c.s2,
             }}
           >
-            <X size={18} />
-          </button>
+            <RadiantOrderPlacard orderId={order.id} maxWidth={400} />
+          </div>
+        </div>
 
-          <RadiantOrderPlacard orderId={order.id} maxWidth={400} />
+        <h2 id={titleId} style={{ ...titleText, fontSize: fs['2xl'] - 2, color: c.text, marginTop: 18 }}>
+          {order.name}
+        </h2>
+        <ul aria-label="Potencias" style={{ listStyle: 'none', display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          {order.surges.map((s) => (
+            <li key={s} style={{ ...pill(t), fontSize: fs.sm, padding: '4px 12px 4px 8px' }}>
+              <SurgeIcon surge={s} size={16} />
+              {s}
+            </li>
+          ))}
+        </ul>
 
-          <div style={{ marginTop: 14 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: 'white', letterSpacing: '-0.02em', marginBottom: 8 }}>
-              {order.name}
-            </h2>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {order.surges.map((s) => (
-                <span key={s} style={{
-                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                  background: order.colorBg, border: `1px solid ${order.colorBorder}`,
-                  color: order.color,
-                }}>
-                  <Zap size={8} style={{ display: 'inline', marginRight: 3 }} />{s}
-                </span>
+        {/* Order motto. figcaption stays the figure's first child (valid HTML); the grid puts the
+            ornament on the left and the caption above the quote. */}
+        <figure
+          style={{
+            display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', columnGap: 12, rowGap: 4, alignItems: 'start',
+            marginTop: 18, padding: '14px 16px', borderRadius: radius.md,
+            background: t.bg, border: `1px solid ${t.border}`,
+          }}
+        >
+          <figcaption style={{ ...eyebrow, color: t.fg, gridColumn: 2, gridRow: 1 }}>Ideal de la orden</figcaption>
+          <CosmereIcon name="ornamento-cita" size={44} style={{ color: 'var(--gold-ornament)', gridColumn: 1, gridRow: '1 / span 2' }} />
+          <blockquote style={{ gridColumn: 2, gridRow: 2, fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, fontStyle: 'italic', color: t.fg, lineHeight: 1.35 }}>
+            "{order.ideal}"
+          </blockquote>
+        </figure>
+
+        {/* Primer Ideal (universal) */}
+        <figure
+          style={{
+            marginTop: 8, padding: '12px 16px', borderRadius: radius.md,
+            background: 'color-mix(in srgb, var(--surface-1) 72%, transparent)', border: `1px solid ${c.border}`,
+          }}
+        >
+          <figcaption style={{ ...eyebrow, marginBottom: 4 }}>Primer Ideal (universal)</figcaption>
+          <blockquote style={{ fontFamily: font.display, fontSize: fs.md, fontStyle: 'italic', color: c.muted, lineHeight: 1.5 }}>
+            "{PRIMER_IDEAL}"
+          </blockquote>
+        </figure>
+      </div>
+
+      {/* Body */}
+      <div style={{ ...stack(24), padding: '24px 20px 0' }}>
+        <section>
+          <SectionTitle as="h3">Descripción de la orden</SectionTitle>
+          <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: c.muted, lineHeight: 1.6 }}>
+            {order.definition}
+          </p>
+        </section>
+
+        <section>
+          <SectionTitle as="h3">Spren vinculado</SectionTitle>
+          <InfoList
+            rows={[
+              { label: 'Nombre', value: order.sprenName },
+              { label: 'Forma', value: order.sprenForm },
+              { label: 'Apariencia', value: order.sprenAppearance },
+              { label: 'Comportamiento', value: order.sprenBehavior },
+              { label: 'Filosofía', value: order.sprenPhilosophy },
+            ]}
+          />
+        </section>
+
+        <section>
+          <SectionTitle as="h3">Personalidad e ideales</SectionTitle>
+          <InfoList
+            rows={[
+              { label: 'Personalidad', value: order.personality },
+              { label: 'Ideales', value: order.ideals },
+            ]}
+          />
+        </section>
+
+        {order.talentos.length > 0 && (
+          <section>
+            <SectionTitle as="h3">Árbol de talentos</SectionTitle>
+            <div style={stack(6)}>
+              {order.talentos.map((tal) => (
+                <TalentoRow key={tal.name} talento={tal} />
               ))}
             </div>
-          </div>
+          </section>
+        )}
 
-          {/* Order motto */}
-          <div style={{
-            marginTop: 16, padding: '10px 14px', borderRadius: 10,
-            background: order.colorBg, border: `1px solid ${order.colorBorder}`,
-          }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: order.color, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-              Ideal de la orden
-            </div>
-            <p style={{ fontSize: 15, fontWeight: 800, fontStyle: 'italic', color: order.color, lineHeight: 1.4, margin: 0 }}>
-              "{order.ideal}"
+        {order.talentos.length === 0 && (
+          <section>
+            <SectionTitle as="h3">Árbol de talentos</SectionTitle>
+            <p style={{ padding: '12px 16px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}`, fontSize: fs.base - 1, color: c.muted, lineHeight: 1.55 }}>
+              Los Forjadores de Vínculos tienen reglas únicas. Solo pueden existir tres simultáneamente. Consulta el capítulo 5 del libro para sus reglas completas.
             </p>
-          </div>
-
-          {/* Primer Ideal (universal) */}
-          <div style={{
-            marginTop: 8, padding: '10px 14px', borderRadius: 10,
-            background: 'rgba(0,0,0,0.2)', border: `1px solid rgba(255,255,255,0.08)`,
-          }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-              Primer Ideal (universal)
-            </div>
-            <p style={{ fontSize: 12, fontStyle: 'italic', color: 'var(--text-subtle)', lineHeight: 1.5, margin: 0 }}>
-              "{PRIMER_IDEAL}"
-            </p>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: '20px 20px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-          {/* Descripción */}
-          <Section label="Descripción de la orden" color={order.color}>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
-              {order.definition}
-            </p>
-          </Section>
-
-          {/* Spren */}
-          <Section label="Spren vinculado" color={order.color}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <InfoRow label="Nombre" value={order.sprenName} />
-              <InfoRow label="Forma" value={order.sprenForm} />
-              <InfoRow label="Apariencia" value={order.sprenAppearance} />
-              <InfoRow label="Comportamiento" value={order.sprenBehavior} />
-              <InfoRow label="Filosofía" value={order.sprenPhilosophy} />
-            </div>
-          </Section>
-
-          {/* Personalidad e ideales */}
-          <Section label="Personalidad e ideales" color={order.color}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <InfoRow label="Personalidad" value={order.personality} />
-              <InfoRow label="Ideales" value={order.ideals} />
-            </div>
-          </Section>
-
-          {/* Talentos */}
-          {order.talentos.length > 0 && (
-            <Section label="Árbol de talentos" color={order.color}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {order.talentos.map((t) => (
-                  <TalentoRow key={t.name} talento={t} />
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {order.talentos.length === 0 && (
-            <Section label="Árbol de talentos" color={order.color}>
-              <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-subtle)', lineHeight: 1.5 }}>
-                Los Forjadores de Vínculos tienen reglas únicas. Solo pueden existir tres simultáneamente. Consulta el capítulo 5 del libro para sus reglas completas.
-              </div>
-            </Section>
-          )}
-
-          <div style={{ height: 4 }} />
-        </div>
+          </section>
+        )}
       </div>
     </>
   )
 }
 
-function Section({ label, color, children }: { label: string; color: string; children: React.ReactNode }) {
+/**
+ * Official order glyph in its identity colour. Same look as the shared RadiantOrderIcon, but the colour
+ * goes through ink() so the glyph stays readable on the light "pergamino" paper too
+ * (RadiantOrderIcon paints the raw data colour). Falls back to RadiantOrderIcon (placard crop).
+ */
+function OrderGlyph({ order, size }: { order: RadiantOrder; size: number }) {
+  const glyph = `orden-${order.id}`
+  if (!hasCosmereIcon(glyph)) return <RadiantOrderIcon orderId={order.id} size={size} decorative />
   return (
-    <div>
-      <div style={{
-        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
-        color, marginBottom: 10,
-      }}>
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{
-      padding: '10px 12px', borderRadius: 10,
-      background: 'var(--surface-2)', border: '1px solid var(--border)',
-    }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>{value}</div>
-    </div>
+    <span
+      aria-hidden
+      style={{
+        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: `radial-gradient(circle at 50% 35%, ${tint(order.color, 26)}, ${tint(order.color, 8)})`,
+        boxShadow: `inset 0 0 0 1px ${tint(ink(order.color), 40)}`,
+        color: ink(order.color),
+      }}
+    >
+      <CosmereIcon name={glyph} size={Math.round(size * 0.62)} square />
+    </span>
   )
 }
 
 // ── Order card ───────────────────────────────────────────────
 function OrderCard({ order, onClick }: { order: RadiantOrder; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false)
+  const t = toneFrom(order.color)
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      aria-haspopup="dialog"
+      className="ui-card ui-card--interactive"
       style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '14px 16px', borderRadius: 14, textAlign: 'left', width: '100%',
-        background: hovered ? order.colorBg : 'var(--surface-1)',
-        border: `1px solid ${hovered ? order.colorBorder : 'var(--border)'}`,
-        cursor: 'pointer', transition: 'all 0.15s',
-        transform: hovered ? 'translateX(3px)' : 'none',
+        width: '100%', height: '100%', display: 'flex', alignItems: 'center', gap: 14,
+        padding: '14px 14px 14px 16px', minHeight: 84, textAlign: 'left', cursor: 'pointer',
+        background: c.s1, border: `1px solid ${c.border}`, borderRadius: radius.lg, boxShadow: shadow[1],
+        color: c.text, font: 'inherit',
       }}
     >
-      {/* Icon */}
-      <div style={{
-        width: 40, height: 40, borderRadius: 11, flexShrink: 0,
-        background: order.colorBg, border: `1px solid ${order.colorBorder}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: order.color,
-      }}>
-        <RadiantOrderIcon orderId={order.id} size={22} />
-      </div>
+      <OrderGlyph order={order} size={48} />
 
-      {/* Name + surges */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'white', marginBottom: 4 }}>{order.name}</div>
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, lineHeight: 1.2, color: c.text }}>
+          {order.name}
+        </span>
+        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {order.surges.map((s) => (
-            <span key={s} style={{
-              fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 20,
-              background: order.colorBg, border: `1px solid ${order.colorBorder}`,
-              color: order.color,
-            }}>
+            <span key={s} style={{ ...pill(t), padding: '2px 9px 2px 6px', gap: 5 }}>
+              <SurgeIcon surge={s} size={14} />
               {s}
             </span>
           ))}
-        </div>
-      </div>
+        </span>
+      </span>
 
-      {/* Chevron */}
-      <div style={{ fontSize: 16, color: 'var(--text-subtle)', flexShrink: 0, opacity: hovered ? 1 : 0.4 }}>›</div>
+      <ChevronRight size={18} aria-hidden style={{ color: c.subtle }} />
     </button>
   )
 }
@@ -311,56 +348,53 @@ function OrderCard({ order, onClick }: { order: RadiantOrder; onClick: () => voi
 // ── Main page ────────────────────────────────────────────────
 export function RadiantOrdersPage() {
   const [selected, setSelected] = useState<RadiantOrder | null>(null)
-  const [tab, setTab] = useState('reglas')
+  const [tab, setTab] = useState<TabId>('reglas')
+  const sheetTitleId = useId()
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 20px 48px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: 4 }}>
-        Órdenes Radiantes
-      </h1>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-        Las diez órdenes de los Caballeros Radiantes: reglas de Investidura e ideales
-      </p>
+    <div style={page}>
+      <PageHeader
+        title="Órdenes Radiantes"
+        subtitle="Las diez órdenes de los Caballeros Radiantes: reglas de Investidura e ideales"
+      />
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+      <Tabs tabs={TABS} value={tab} onChange={setTab} ariaLabel="Secciones de Órdenes Radiantes" idPrefix="radiant" style={{ marginBottom: 20 }} />
+
+      {tab === 'reglas' && (
+        <TabPanel idPrefix="radiant" id="reglas">
+          <div style={stack(10)}>
+            {RADIANT_REGLAS.map((r, i) => (
+              <div key={r.id} className="rise" style={{ '--i': i } as CSSProperties}>
+                <Disclosure title={r.title} summary={r.summary} headingLevel={2} accent="var(--amatista)">
+                  <RuleDetails details={r.details} />
+                </Disclosure>
+              </div>
+            ))}
+          </div>
+        </TabPanel>
+      )}
+
+      {tab === 'ordenes' && (
+        <TabPanel idPrefix="radiant" id="ordenes">
+          <ul
+            aria-label="Órdenes"
             style={{
-              padding: '7px 16px', borderRadius: 10, fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', border: 'none',
-              background: tab === t.id ? 'rgba(180,190,254,0.12)' : 'transparent',
-              outline: `1px solid ${tab === t.id ? 'rgba(180,190,254,0.2)' : 'transparent'}`,
-              color: tab === t.id ? 'var(--brand-light)' : 'var(--text-subtle)',
-              transition: 'all 0.15s',
+              listStyle: 'none', display: 'grid', gap: 10,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))',
             }}
           >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Reglas tab */}
-      {tab === 'reglas' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {RADIANT_REGLAS.map((r) => (
-            <ReglaCard key={r.id} regla={r} />
-          ))}
-        </div>
+            {RADIANT_ORDERS.map((order, i) => (
+              <li key={order.id} className="rise" style={{ '--i': i } as CSSProperties}>
+                <OrderCard order={order} onClick={() => setSelected(order)} />
+              </li>
+            ))}
+          </ul>
+        </TabPanel>
       )}
 
-      {/* Órdenes tab */}
-      {tab === 'ordenes' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {RADIANT_ORDERS.map((order) => (
-            <OrderCard key={order.id} order={order} onClick={() => setSelected(order)} />
-          ))}
-        </div>
-      )}
-
-      {selected && <OrderDetailSheet order={selected} onClose={() => setSelected(null)} />}
+      <HeroSheet open={!!selected} onClose={() => setSelected(null)} labelledBy={sheetTitleId}>
+        {selected && <OrderDetail order={selected} titleId={sheetTitleId} />}
+      </HeroSheet>
     </div>
   )
 }

@@ -1,46 +1,97 @@
-import { useState } from 'react'
+import { useId, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { CalendarClock, Check, Plus, X } from 'lucide-react'
 import { proposalsApi } from '../../api/proposals'
 import { useCampaignStore } from '../../store/campaignStore'
-import { Input, Spinner, ConfirmDialog } from '../../components/ui'
+import {
+  Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, PageHeader, SectionTitle, Sheet, Spinner,
+} from '../../components/ui'
+import { c, eyebrow, font, fs, page, pill, radius, tone, type Tone } from '../../theme'
 import type { ProposalResponse, ProposalDateResponse } from '../../types'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+// (Public helpers kept here because other modules may import them; they are plain functions, not components.)
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatDate(iso: string) {
   const d = new Date(iso)
   return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function todayStr() {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+/** 'domingo, 11 de octubre' → 'Domingo, 11 de octubre' (display only) */
+const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  Pending: { label: 'Abierta', tone: tone.brand },
+  Promoted: { label: 'Confirmada', tone: tone.esmeralda },
+  Rejected: { label: 'Rechazada', tone: tone.rubi },
+}
+
+/** Tinted gem-tone button (Promover = esmeralda). Local until Button gets a `success` variant. */
+const toneButton = (t: Tone): CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  minHeight: 44, padding: '0 14px', borderRadius: radius.md,
+  background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
+  fontSize: fs.sm + 1, fontWeight: 650, cursor: 'pointer', whiteSpace: 'nowrap',
+})
+
+const cardList: CSSProperties = { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }
+
 // ─── sub-components ─────────────────────────────────────────────────────────
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    Pending: { label: 'Abierta', color: 'var(--brand-light)', bg: 'rgba(180,190,254,0.1)', border: 'rgba(180,190,254,0.25)' },
-    Promoted: { label: 'Confirmada', color: '#86efac', bg: 'rgba(134,239,172,0.1)', border: 'rgba(134,239,172,0.25)' },
-    Rejected: { label: 'Rechazada', color: '#fb7185', bg: 'rgba(251,113,133,0.1)', border: 'rgba(251,113,133,0.25)' },
-  }
-  const s = map[status] ?? map.Pending
+  const s = STATUS[status] ?? STATUS.Pending
   return (
     <span style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
-      color: s.color, background: s.bg, border: `1px solid ${s.border}`,
-      borderRadius: 5, padding: '2px 6px',
+      ...pill(s.tone),
+      fontFamily: font.ui, fontSize: fs.eyebrow, fontWeight: 700, letterSpacing: '0.08em',
+      padding: '2px 8px', flexShrink: 0,
     }}>
       {s.label.toUpperCase()}
     </span>
+  )
+}
+
+/** Toggle button for a vote ("Puedo" / "No puedo"): aria-pressed + gem tone + icon when chosen */
+function VoteButton({
+  pressed,
+  t,
+  icon,
+  children,
+  ...props
+}: { pressed: boolean; t: Tone; icon: ReactNode; children: ReactNode } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      className={pressed ? 'ui-btn' : 'ui-btn ui-btn--secondary'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        minHeight: 44, padding: '0 12px', borderRadius: radius.md, cursor: 'pointer',
+        fontSize: fs.sm + 1, fontWeight: 650,
+        background: pressed ? t.bg : c.s2,
+        border: `1px solid ${pressed ? t.fg : c.borderBright}`,
+        boxShadow: pressed ? `inset 0 0 0 1px ${t.fg}` : 'none',
+        color: pressed ? t.fg : c.muted,
+      }}
+      {...props}
+    >
+      {pressed && icon}
+      {children}
+    </button>
   )
 }
 
@@ -54,68 +105,56 @@ export function VoteBar({ date, isPending, onVote }: {
   const cannotPct = total > 0 ? (date.cannotCount / total) * 100 : 0
 
   const myVote = date.currentUserVote // null | true | false
+  const dateLabel = sentenceCase(formatDate(date.proposedDate))
+  const time = formatTime(date.proposedDate)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div role="group" aria-label={`${dateLabel}, ${time}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {/* Date label */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', textTransform: 'capitalize' }}>
-            {formatDate(date.proposedDate)}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <p style={{ minWidth: 0 }}>
+          <span style={{ fontSize: fs.base, fontWeight: 650, color: c.text }}>
+            {dateLabel}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--text-subtle)', marginLeft: 8 }}>
-            {formatTime(date.proposedDate)}
+          <span style={{ fontSize: fs.sm, fontWeight: 550, color: c.muted, marginLeft: 8, fontVariantNumeric: 'tabular-nums' }}>
+            {time}
           </span>
-        </div>
-        <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
+        </p>
+        <span style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>
           {date.canCount + date.cannotCount === 0
             ? 'Sin votos'
             : `${date.canCount} sí · ${date.cannotCount} no`}
         </span>
       </div>
 
-      {/* Vote bar */}
+      {/* Vote bar (the counts above carry the same data for screen readers) */}
       {total > 0 && (
-        <div style={{ display: 'flex', height: 5, borderRadius: 3, overflow: 'hidden', background: 'var(--surface-3)' }}>
-          <div style={{ width: `${canPct}%`, background: '#86efac', transition: 'width 0.3s' }} />
-          <div style={{ width: `${cannotPct}%`, background: '#fb7185', transition: 'width 0.3s' }} />
+        <div aria-hidden style={{ display: 'flex', height: 6, borderRadius: radius.full, overflow: 'hidden', background: c.track }}>
+          <div style={{ width: `${canPct}%`, background: tone.esmeralda.fg, transition: 'width 0.3s var(--ease-out)' }} />
+          <div style={{ width: `${cannotPct}%`, background: tone.rubi.fg, transition: 'width 0.3s var(--ease-out)' }} />
         </div>
       )}
 
       {/* Vote buttons */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <VoteButton
+          pressed={myVote === true}
+          t={tone.esmeralda}
+          icon={<Check size={16} aria-hidden />}
           onClick={() => onVote(date.id, true)}
           disabled={isPending}
-          style={{
-            flex: 1, padding: '7px 0', borderRadius: 8, cursor: 'pointer',
-            fontSize: 12, fontWeight: 700,
-            border: myVote === true ? '1.5px solid #86efac' : '1px solid var(--border)',
-            background: myVote === true ? 'rgba(134,239,172,0.12)' : 'var(--surface-2)',
-            color: myVote === true ? '#86efac' : 'var(--text-muted)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            transition: 'all 0.15s',
-          }}
         >
-          {myVote === true && <Check size={11} />}
           Puedo
-        </button>
-        <button
+        </VoteButton>
+        <VoteButton
+          pressed={myVote === false}
+          t={tone.rubi}
+          icon={<X size={16} aria-hidden />}
           onClick={() => onVote(date.id, false)}
           disabled={isPending}
-          style={{
-            flex: 1, padding: '7px 0', borderRadius: 8, cursor: 'pointer',
-            fontSize: 12, fontWeight: 700,
-            border: myVote === false ? '1.5px solid #fb7185' : '1px solid var(--border)',
-            background: myVote === false ? 'rgba(251,113,133,0.1)' : 'var(--surface-2)',
-            color: myVote === false ? '#fb7185' : 'var(--text-muted)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            transition: 'all 0.15s',
-          }}
         >
-          {myVote === false && <X size={11} />}
           No puedo
-        </button>
+        </VoteButton>
       </div>
     </div>
   )
@@ -136,83 +175,55 @@ function ProposalCard({
   onVote: (proposalId: number, dateId: number, canAttend: boolean) => void
   votePending: boolean
 }) {
-  const [expanded, setExpanded] = useState(proposal.status === 'Pending')
   const isPending = proposal.status === 'Pending'
+  const accent = (STATUS[proposal.status] ?? STATUS.Pending).tone.fg
+  const n = proposal.dates.length
 
   return (
-    <div style={{
-      background: 'var(--surface-1)', border: '1px solid var(--border)',
-      borderRadius: 14, overflow: 'hidden',
-      borderLeft: `3px solid ${isPending ? 'var(--brand-light)' : proposal.status === 'Promoted' ? '#86efac' : '#fb7185'}`,
-    }}>
-      {/* Card header */}
-      <div
-        onClick={() => setExpanded((e) => !e)}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 14px', cursor: 'pointer' }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{proposal.title}</span>
-            <StatusBadge status={proposal.status} />
+    <Disclosure
+      defaultOpen={proposal.status === 'Pending'}
+      accent={accent}
+      style={{ boxShadow: `inset 3px 0 0 ${accent}` }}
+      title={
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {proposal.title}
+          <StatusBadge status={proposal.status} />
+        </span>
+      }
+      summary={
+        <>
+          {proposal.notes && <span style={{ display: 'block' }}>{proposal.notes}</span>}
+          <span style={{ display: 'block', fontSize: fs.xs, color: c.subtle, marginTop: 2 }}>
+            {n} fecha{n !== 1 ? 's' : ''} propuesta{n !== 1 ? 's' : ''}
+          </span>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {proposal.dates.map((d, idx) => (
+          <div key={d.id}>
+            {idx > 0 && <div aria-hidden style={{ height: 1, background: c.border, marginBottom: 16 }} />}
+            <VoteBar
+              date={d}
+              isPending={votePending || !isPending}
+              onVote={(dateId, canAttend) => onVote(proposal.id, dateId, canAttend)}
+            />
           </div>
-          {proposal.notes && (
-            <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 3, lineHeight: 1.4 }}>
-              {proposal.notes}
-            </p>
-          )}
-          <div style={{ fontSize: 10, color: 'var(--text-subtle)', marginTop: 4 }}>
-            {proposal.dates.length} fecha{proposal.dates.length !== 1 ? 's' : ''} propuesta{proposal.dates.length !== 1 ? 's' : ''}
+        ))}
+
+        {/* GM actions */}
+        {isGm && isPending && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+            <button type="button" className="ui-btn" onClick={() => onPromote(proposal)} style={toneButton(tone.esmeralda)}>
+              Promover sesión
+            </button>
+            <Button variant="danger" onClick={() => onReject(proposal)}>
+              Rechazar
+            </Button>
           </div>
-        </div>
-        <div style={{ color: 'var(--text-subtle)', flexShrink: 0 }}>
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </div>
+        )}
       </div>
-
-      {/* Expanded dates */}
-      {expanded && (
-        <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {proposal.dates.map((d, idx) => (
-            <div key={d.id}>
-              {idx > 0 && <div style={{ height: 1, background: 'var(--border)', marginBottom: 16 }} />}
-              <VoteBar
-                date={d}
-                isPending={votePending || !isPending}
-                onVote={(dateId, canAttend) => onVote(proposal.id, dateId, canAttend)}
-              />
-            </div>
-          ))}
-
-          {/* GM actions */}
-          {isGm && isPending && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <button
-                onClick={() => onPromote(proposal)}
-                style={{
-                  flex: 1, padding: '8px 0', borderRadius: 9, cursor: 'pointer',
-                  fontSize: 12, fontWeight: 700,
-                  background: 'rgba(134,239,172,0.12)', border: '1.5px solid rgba(134,239,172,0.3)',
-                  color: '#86efac',
-                }}
-              >
-                Promover sesión
-              </button>
-              <button
-                onClick={() => onReject(proposal)}
-                style={{
-                  flex: 1, padding: '8px 0', borderRadius: 9, cursor: 'pointer',
-                  fontSize: 12, fontWeight: 700,
-                  background: 'rgba(251,113,133,0.08)', border: '1.5px solid rgba(251,113,133,0.2)',
-                  color: '#fb7185',
-                }}
-              >
-                Rechazar
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    </Disclosure>
   )
 }
 
@@ -240,110 +251,137 @@ export function PromoteDialog({
     title: proposal.title,
     location: '',
   })
+  const groupLabelId = useId()
+  const radios = useRef<(HTMLButtonElement | null)[]>([])
 
   const canSubmit = form.proposalDateId !== null && form.title.trim().length > 0
 
+  const selectedIdx = proposal.dates.findIndex((d) => d.id === form.proposalDateId)
+  const tabStop = selectedIdx >= 0 ? selectedIdx : 0
+  const choose = (i: number) => setForm((f) => ({ ...f, proposalDateId: proposal.dates[i].id }))
+  const onRadioKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    if (e.key === 'Tab') {
+      // The radios are the first tab stop of the sheet. The shared focus trap counts the roving
+      // tabindex=-1 radios as focusable, so Shift+Tab from a later selected radio would leave the modal:
+      // wrap to the last control here instead.
+      if (!e.shiftKey || e.defaultPrevented) return
+      const dialog = e.currentTarget.closest<HTMLElement>('[role="dialog"]')
+      if (!dialog) return
+      const tabbables = Array.from(dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]'))
+        .filter((el) => el.tabIndex >= 0 && !el.matches(':disabled') && el.offsetParent !== null)
+      if (tabbables[0] !== e.currentTarget) return
+      e.preventDefault()
+      tabbables[tabbables.length - 1]?.focus()
+      return
+    }
+    const count = proposal.dates.length
+    let next = -1
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (i + 1) % count
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (i - 1 + count) % count
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = count - 1
+    if (next < 0) return
+    e.preventDefault()
+    choose(next)
+    radios.current[next]?.focus()
+  }
+
   return (
-    <>
-      <div
-        onClick={onCancel}
-        style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-      />
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 81,
-        background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-        border: '1px solid var(--border-bright)', borderBottom: 'none',
-        paddingBottom: 'calc(20px + var(--sab, 0px))',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 16px' }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Promover propuesta</span>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)' }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Date selection */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 8 }}>
-              SELECCIONA LA FECHA CONFIRMADA
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {proposal.dates.map((d) => {
-                const selected = form.proposalDateId === d.id
-                return (
-                  <button
-                    key={d.id}
-                    onClick={() => setForm((f) => ({ ...f, proposalDateId: d.id }))}
-                    style={{
-                      width: '100%', padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
-                      textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
-                      border: selected ? '1.5px solid var(--brand-light)' : '1px solid var(--border)',
-                      background: selected ? 'rgba(180,190,254,0.1)' : 'var(--surface-2)',
-                    }}
-                  >
-                    <div style={{
-                      width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                      border: selected ? '5px solid var(--brand-light)' : '1.5px solid var(--border)',
-                      background: selected ? 'var(--brand-light)' : 'transparent',
-                      transition: 'all 0.15s',
-                    }} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', textTransform: 'capitalize' }}>
-                        {formatDate(d.proposedDate)}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
-                        {formatTime(d.proposedDate)} · {d.canCount} pueden, {d.cannotCount} no pueden
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Title */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>
-              TÍTULO DE LA SESIÓN
-            </div>
-            <Input
-              placeholder="Nombre de la sesión..."
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            />
-          </div>
-
-          {/* Location */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>
-              LUGAR (opcional)
-            </div>
-            <Input
-              placeholder="Lugar de la sesión..."
-              value={form.location}
-              onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-            />
-          </div>
-
-          <button
+    <Sheet
+      open
+      onClose={onCancel}
+      title="Promover propuesta"
+      footer={
+        <>
+          <Button variant="secondary" size="lg" onClick={onCancel} style={{ flex: 1 }}>
+            Cancelar
+          </Button>
+          <Button
+            size="lg"
             onClick={() => canSubmit && onConfirm(form)}
             disabled={!canSubmit || isPending}
-            style={{
-              background: 'var(--brand)', border: 'none', borderRadius: 12,
-              color: 'white', fontSize: 14, fontWeight: 700,
-              padding: '13px', cursor: canSubmit ? 'pointer' : 'default', marginTop: 4,
-              opacity: !canSubmit ? 0.5 : 1,
-            }}
+            loading={isPending}
+            style={{ flex: 1.4 }}
           >
             {isPending ? 'Confirmando...' : 'Confirmar sesión'}
-          </button>
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Date selection */}
+        <div>
+          <p id={groupLabelId} style={{ ...eyebrow, marginBottom: 8 }}>
+            Selecciona la fecha confirmada
+          </p>
+          <div role="radiogroup" aria-labelledby={groupLabelId} aria-required="true" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {proposal.dates.map((d, i) => {
+              const selected = form.proposalDateId === d.id
+              return (
+                <button
+                  key={d.id}
+                  ref={(el) => { radios.current[i] = el }}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={i === tabStop ? 0 : -1}
+                  onClick={() => choose(i)}
+                  onKeyDown={(e) => onRadioKey(e, i)}
+                  className={selected ? 'ui-btn' : 'ui-btn ui-btn--secondary'}
+                  style={{
+                    width: '100%', minHeight: 60, padding: '10px 14px', borderRadius: radius.md, cursor: 'pointer',
+                    textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
+                    border: `1px solid ${selected ? c.brand : c.borderBright}`,
+                    boxShadow: selected ? `inset 0 0 0 1px ${c.brand}` : 'none',
+                    background: selected ? 'var(--brand-bg)' : c.s2,
+                    color: c.text,
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      border: `2px solid ${selected ? c.brand : c.borderStrong}`,
+                      background: c.s1,
+                      transition: 'border-color var(--dur-1)',
+                    }}
+                  >
+                    {selected && <span style={{ width: 10, height: 10, borderRadius: '50%', background: c.brand }} />}
+                  </span>
+                  <span style={{ display: 'block', minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: fs.base, fontWeight: 650, color: c.text }}>
+                      {sentenceCase(formatDate(d.proposedDate))}
+                    </span>
+                    <span style={{ display: 'block', fontSize: fs.sm, color: c.muted, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                      {formatTime(d.proposedDate)} · {d.canCount} pueden, {d.cannotCount} no pueden
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
+
+        {/* Title */}
+        <Field label="Título de la sesión">
+          <Input
+            placeholder="Nombre de la sesión..."
+            value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+          />
+        </Field>
+
+        {/* Location */}
+        <Field label="Lugar (opcional)">
+          <Input
+            placeholder="Lugar de la sesión..."
+            value={form.location}
+            onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+          />
+        </Field>
       </div>
-    </>
+    </Sheet>
   )
 }
 
@@ -389,116 +427,103 @@ export function CreateProposalSheet({
     setForm((f) => { const t = [...f.times]; t[idx] = val; return { ...f, times: t } })
 
   const canSubmit = form.title.trim().length > 0 && form.dates.every((d) => d.length > 0)
+  const removable = form.dates.length > 1
 
   return (
-    <>
-      <div
-        onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-      />
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-        background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-        border: '1px solid var(--border-bright)', borderBottom: 'none',
-        maxHeight: '92vh', overflow: 'auto',
-        paddingBottom: 'calc(20px + var(--sab, 0px))',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 16px' }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Nueva propuesta</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)' }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Title */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>TÍTULO</div>
-            <Input
-              placeholder="Ej: ¿Cuándo jugamos en mayo?"
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>NOTAS (opcional)</div>
-            <Input
-              placeholder="Información adicional..."
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            />
-          </div>
-
-          {/* Proposed dates */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 8 }}>
-              FECHAS PROPUESTAS
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {form.dates.map((d, idx) => (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ flex: 2 }}>
-                    <Input
-                      type="date"
-                      value={d}
-                      onChange={(e) => setDate(idx, e.target.value)}
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <Input
-                      type="time"
-                      value={form.times[idx]}
-                      onChange={(e) => setTime(idx, e.target.value)}
-                    />
-                  </div>
-                  {form.dates.length > 1 && (
-                    <button
-                      onClick={() => removeDate(idx)}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: 'var(--text-subtle)', padding: 4, flexShrink: 0,
-                      }}
-                    >
-                      <X size={15} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={addDate}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: 'none', border: '1px dashed var(--border)',
-                borderRadius: 8, color: 'var(--text-subtle)',
-                fontSize: 12, fontWeight: 600, padding: '8px 14px',
-                cursor: 'pointer', marginTop: 8, width: '100%', justifyContent: 'center',
-              }}
-            >
-              <Plus size={13} /> Añadir fecha
-            </button>
-          </div>
-
-          <button
+    <Sheet
+      open
+      onClose={onClose}
+      title="Nueva propuesta"
+      footer={
+        <>
+          <Button variant="secondary" size="lg" onClick={onClose} style={{ flex: 1 }}>
+            Cancelar
+          </Button>
+          <Button
+            size="lg"
             onClick={() => canSubmit && onSubmit(form)}
             disabled={!canSubmit || isPending}
-            style={{
-              background: 'var(--brand)', border: 'none', borderRadius: 12,
-              color: 'white', fontSize: 14, fontWeight: 700,
-              padding: '13px', cursor: canSubmit ? 'pointer' : 'default', marginTop: 4,
-              opacity: !canSubmit ? 0.5 : 1,
-            }}
+            loading={isPending}
+            style={{ flex: 1.4 }}
           >
             {isPending ? 'Creando...' : 'Crear propuesta'}
+          </Button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* Title */}
+        <Field label="Título">
+          <Input
+            placeholder="Ej: ¿Cuándo jugamos en mayo?"
+            value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+          />
+        </Field>
+
+        {/* Notes */}
+        <Field label="Notas (opcional)">
+          <Input
+            placeholder="Información adicional..."
+            value={form.notes}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+        </Field>
+
+        {/* Proposed dates */}
+        <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+          <legend style={{ ...eyebrow, padding: 0, marginBottom: 8 }}>
+            Fechas propuestas
+          </legend>
+          <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {form.dates.map((d, idx) => (
+              <li
+                key={idx}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: removable ? 'minmax(0, 1.7fr) minmax(0, 1fr) 44px' : 'minmax(0, 1.7fr) minmax(0, 1fr)',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <Input
+                  type="date"
+                  aria-label={`Fecha ${idx + 1}`}
+                  value={d}
+                  onChange={(e) => setDate(idx, e.target.value)}
+                  style={{ colorScheme: 'inherit', fontVariantNumeric: 'tabular-nums' }}
+                />
+                <Input
+                  type="time"
+                  aria-label={`Hora ${idx + 1}`}
+                  value={form.times[idx]}
+                  onChange={(e) => setTime(idx, e.target.value)}
+                  style={{ colorScheme: 'inherit', fontVariantNumeric: 'tabular-nums' }}
+                />
+                {removable && (
+                  <IconButton label={`Quitar fecha ${idx + 1}`} size={44} variant="danger" onClick={() => removeDate(idx)}>
+                    <X size={18} aria-hidden />
+                  </IconButton>
+                )}
+              </li>
+            ))}
+          </ol>
+          <button
+            type="button"
+            onClick={addDate}
+            className="ui-btn ui-btn--ghost"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              width: '100%', minHeight: 44, marginTop: 8,
+              background: 'transparent', border: `1px dashed ${c.borderStrong}`, borderRadius: radius.md,
+              color: c.brand, fontSize: fs.sm + 1, fontWeight: 650, cursor: 'pointer',
+            }}
+          >
+            <Plus size={16} aria-hidden /> Añadir fecha
           </button>
-        </div>
+        </fieldset>
       </div>
-    </>
+    </Sheet>
   )
 }
 
@@ -509,6 +534,8 @@ export function ProposalsPage() {
   const cId = Number(campaignId)
   const qc = useQueryClient()
   const { isGm } = useCampaignStore()
+  const openId = useId()
+  const resolvedId = useId()
 
   const [showCreate, setShowCreate] = useState(false)
   const [confirmReject, setConfirmReject] = useState<ProposalResponse | null>(null)
@@ -568,87 +595,61 @@ export function ProposalsPage() {
 
   if (isLoading) return <Spinner />
 
+  const renderCards = (list: ProposalResponse[]) => (
+    <ul style={cardList}>
+      {list.map((p, i) => (
+        <li key={p.id} className="rise" style={{ '--i': i } as CSSProperties}>
+          <ProposalCard
+            proposal={p}
+            isGm={isGm}
+            onReject={setConfirmReject}
+            onPromote={setPromoteTarget}
+            onVote={(proposalId, dateId, canAttend) =>
+              voteMutation.mutate({ proposalId, dateId, canAttend })
+            }
+            votePending={voteMutation.isPending}
+          />
+        </li>
+      ))}
+    </ul>
+  )
+
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
+    <div style={page}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em' }}>
-          Propuestas
-        </h1>
-        {isGm && (
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: 'var(--brand)', border: 'none', borderRadius: 10,
-              color: 'white', fontSize: 12, fontWeight: 700,
-              padding: '8px 14px', cursor: 'pointer',
-            }}
-          >
-            <Plus size={13} />
+      <PageHeader
+        title="Propuestas"
+        actions={isGm && (
+          <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowCreate(true)}>
             Nueva propuesta
-          </button>
+          </Button>
         )}
-      </div>
+      />
 
       {proposals.length === 0 ? (
-        <div style={{
-          background: 'var(--surface-1)', border: '1px solid var(--border)',
-          borderRadius: 14, padding: '40px 20px', textAlign: 'center',
-          color: 'var(--text-subtle)', fontSize: 13,
-        }}>
-          {isGm
+        <EmptyState
+          icon={<CalendarClock size={22} aria-hidden />}
+          title="Sin propuestas"
+          description={isGm
             ? 'Crea una propuesta de fecha para que los jugadores voten.'
             : 'No hay propuestas de fecha todavía.'}
-        </div>
+        />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
           {pending.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                ABIERTAS
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {pending.map((p) => (
-                  <ProposalCard
-                    key={p.id}
-                    proposal={p}
-                    isGm={isGm}
-                    onReject={setConfirmReject}
-                    onPromote={setPromoteTarget}
-                    onVote={(proposalId, dateId, canAttend) =>
-                      voteMutation.mutate({ proposalId, dateId, canAttend })
-                    }
-                    votePending={voteMutation.isPending}
-                  />
-                ))}
-              </div>
-            </div>
+            <section aria-labelledby={openId}>
+              <SectionTitle id={openId}>Abiertas</SectionTitle>
+              {renderCards(pending)}
+            </section>
           )}
 
           {resolved.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                RESUELTAS
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {resolved.map((p) => (
-                  <ProposalCard
-                    key={p.id}
-                    proposal={p}
-                    isGm={isGm}
-                    onReject={setConfirmReject}
-                    onPromote={setPromoteTarget}
-                    onVote={(proposalId, dateId, canAttend) =>
-                      voteMutation.mutate({ proposalId, dateId, canAttend })
-                    }
-                    votePending={voteMutation.isPending}
-                  />
-                ))}
-              </div>
-            </div>
+            <section aria-labelledby={resolvedId}>
+              <SectionTitle id={resolvedId}>Resueltas</SectionTitle>
+              {renderCards(resolved)}
+            </section>
           )}
         </div>
       )}
@@ -658,6 +659,7 @@ export function ProposalsPage() {
         open={!!confirmReject}
         title={`¿Rechazar "${confirmReject?.title}"?`}
         message="La propuesta se cerrará y los jugadores no podrán votar más."
+        confirmLabel="Rechazar"
         onConfirm={() => {
           if (confirmReject) rejectMutation.mutate(confirmReject.id)
           setConfirmReject(null)

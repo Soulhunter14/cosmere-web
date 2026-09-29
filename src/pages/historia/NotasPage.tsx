@@ -1,13 +1,115 @@
+import { useId, type CSSProperties } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, CheckCheck } from 'lucide-react'
 import { notesApi } from '../../api/notes'
-import { Spinner } from '../../components/ui'
+import { Avatar, Button, Card, EmptyState, PageHeader, SectionTitle, Spinner } from '../../components/ui'
+import { c, font, fs, page, shadow } from '../../theme'
+import type { Note } from '../../types'
+
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }
+
+const formatNoteDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+/** One private message from the GM. Unread ones carry the Stormlight rail and the mark-as-read action. */
+function NoteCard({
+  note,
+  index,
+  unread,
+  onMarkRead,
+  markPending,
+  marking,
+}: {
+  note: Note
+  index: number
+  unread: boolean
+  onMarkRead?: () => void
+  markPending?: boolean
+  marking?: boolean
+}) {
+  const id = useId()
+  return (
+    <Card
+      as="li"
+      padding={0}
+      className="rise"
+      style={{
+        '--i': index,
+        overflow: 'hidden',
+        borderColor: unread ? 'var(--brand-border)' : c.border,
+        background: unread ? c.s1 : 'color-mix(in srgb, var(--surface-1) 55%, transparent)',
+        boxShadow: unread ? `inset 3px 0 0 var(--brand), ${shadow[1]}` : 'none',
+      } as CSSProperties}
+    >
+      <article aria-labelledby={`${id}-from`} style={{ padding: unread ? '16px 16px 16px 19px' : 16 }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <Avatar name={note.fromDisplayName} size={36} tone="rubi" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3
+              id={`${id}-from`}
+              style={{
+                fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, lineHeight: 1.2,
+                color: unread ? c.text : c.muted,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
+              {note.fromDisplayName}
+              {unread && <span className="sr-only"> (no leído)</span>}
+            </h3>
+            <time dateTime={note.createdAt} style={{ display: 'block', fontSize: fs.xs, color: c.subtle, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+              {formatNoteDate(note.createdAt)}
+            </time>
+          </div>
+          {unread ? (
+            <span
+              aria-hidden
+              style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: c.brand, boxShadow: '0 0 10px var(--brand-glow)' }}
+            />
+          ) : (
+            <CheckCheck size={16} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
+          )}
+        </header>
+
+        <p
+          style={{
+            fontFamily: font.display,
+            fontSize: unread ? fs.lg : fs.md + 1,
+            lineHeight: 1.55,
+            color: unread ? c.text : c.muted,
+            whiteSpace: 'pre-wrap',
+            overflowWrap: 'break-word',
+            margin: 0,
+          }}
+        >
+          {note.content}
+        </p>
+
+        {unread && onMarkRead && (
+          <div style={{ marginTop: 16 }}>
+            <Button
+              variant="secondary"
+              icon={<CheckCheck size={16} aria-hidden style={{ color: c.brand }} />}
+              onClick={onMarkRead}
+              disabled={markPending}
+              loading={marking}
+              aria-label={`Marcar como leída: mensaje de ${note.fromDisplayName}`}
+            >
+              Marcar como leída
+            </Button>
+          </div>
+        )}
+      </article>
+    </Card>
+  )
+}
 
 export function NotasPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
   const cId = Number(campaignId)
   const qc = useQueryClient()
+  const unreadId = useId()
+  const readId = useId()
 
   const { data: notes = [], isLoading } = useQuery({
     queryKey: ['notes', cId],
@@ -25,121 +127,55 @@ export function NotasPage() {
   const read = notes.filter((n) => n.isRead)
 
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
-
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: 4 }}>
-          Mensajes
-        </h1>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          {unread.length > 0
+    <div style={page}>
+      <PageHeader
+        title="Mensajes"
+        subtitle={
+          unread.length > 0
             ? `${unread.length} mensaje${unread.length !== 1 ? 's' : ''} sin leer`
-            : 'Todo al día'}
-        </p>
-      </div>
+            : 'Todo al día'
+        }
+      />
 
       {notes.length === 0 ? (
-        <div style={{
-          border: '1.5px dashed var(--border-bright)', borderRadius: 20,
-          padding: '52px 32px', textAlign: 'center', background: 'var(--surface-1)',
-        }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 14, margin: '0 auto 16px',
-            background: 'var(--surface-2)', border: '1px solid var(--border-bright)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Bell size={20} style={{ color: 'var(--text-subtle)' }} />
-          </div>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>
-            Sin mensajes todavía
-          </h3>
-          <p style={{ fontSize: 13, color: 'var(--text-subtle)' }}>
-            El GM puede enviarte mensajes privados aquí.
-          </p>
-        </div>
+        <EmptyState
+          icon={<Bell size={22} aria-hidden />}
+          title="Sin mensajes todavía"
+          description="El GM puede enviarte mensajes privados aquí."
+        />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
           {/* Unread */}
           {unread.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--brand-light)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                SIN LEER
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {unread.map((note) => (
-                  <div
+            <section aria-labelledby={unreadId}>
+              <SectionTitle id={unreadId}>Sin leer</SectionTitle>
+              <ul style={listReset}>
+                {unread.map((note, i) => (
+                  <NoteCard
                     key={note.id}
-                    style={{
-                      background: 'var(--surface-1)',
-                      border: '1px solid rgba(180,190,254,0.2)',
-                      borderLeft: '3px solid var(--brand-light)',
-                      borderRadius: 14, padding: '14px 16px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-light)' }}>
-                        {note.fromDisplayName}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
-                        {new Date(note.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.5, margin: '0 0 12px' }}>
-                      {note.content}
-                    </p>
-                    <button
-                      onClick={() => markReadMutation.mutate(note.id)}
-                      disabled={markReadMutation.isPending}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
-                        background: 'rgba(180,190,254,0.1)', border: '1px solid rgba(180,190,254,0.2)',
-                        color: 'var(--brand-light)', fontSize: 12, fontWeight: 600,
-                        transition: 'opacity 0.15s',
-                        opacity: markReadMutation.isPending ? 0.5 : 1,
-                      }}
-                    >
-                      <CheckCheck size={12} />
-                      Marcar como leída
-                    </button>
-                  </div>
+                    note={note}
+                    index={i}
+                    unread
+                    onMarkRead={() => markReadMutation.mutate(note.id)}
+                    markPending={markReadMutation.isPending}
+                    marking={markReadMutation.isPending && markReadMutation.variables === note.id}
+                  />
                 ))}
-              </div>
-            </div>
+              </ul>
+            </section>
           )}
 
           {/* Read */}
           {read.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                LEÍDAS
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {read.map((note) => (
-                  <div
-                    key={note.id}
-                    style={{
-                      background: 'var(--surface-1)', border: '1px solid var(--border)',
-                      borderRadius: 14, padding: '14px 16px', opacity: 0.7,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
-                        {note.fromDisplayName}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>
-                        {new Date(note.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
-                      {note.content}
-                    </p>
-                  </div>
+            <section aria-labelledby={readId}>
+              <SectionTitle id={readId}>Leídas</SectionTitle>
+              <ul style={listReset}>
+                {read.map((note, i) => (
+                  <NoteCard key={note.id} note={note} index={unread.length + i} unread={false} />
                 ))}
-              </div>
-            </div>
+              </ul>
+            </section>
           )}
 
         </div>

@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useCampaignStore } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
 import { notesApi } from '../api/notes'
+import { Avatar, IconButton, Sheet } from './ui'
+import { BrandGlyph, BrandMark } from './BrandMark'
+import { c, eyebrow, fs, pill, radius, semantic, titleText, tone, z } from '../theme'
+import { ThemeSwitcher } from './ThemeSwitcher'
 
 const SECTION_LABELS: Record<string, string> = {
   home: 'Inicio',
@@ -85,10 +89,6 @@ export function Sidebar() {
     navigate('/login')
   }
 
-  const initials = user?.displayName
-    ? user.displayName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
-    : '?'
-
   const linkTo = (to: string) =>
     currentCampaign ? `/campaigns/${currentCampaign.id}/${to}` : '#'
 
@@ -99,94 +99,94 @@ export function Sidebar() {
   })
   const unreadCount = notes.filter((n) => !n.isRead).length
 
+  const roleTone = isGm ? semantic.gm : tone.brand
+  const roleLabel = isGm ? 'Director de juego' : 'Jugador'
+
   return (
     <>
       {/* ─── Desktop sidebar (≥1024px) ──────────────────────── */}
       <aside
-        className="hidden lg:flex flex-col shrink-0"
+        className="only-desktop"
+        aria-label="Navegación principal"
         style={{
-          width: 220,
-          minHeight: '100vh',
-          background: 'var(--surface-1)',
-          borderRight: '1px solid var(--border)',
-          position: 'relative',
+          width: 248,
+          flexDirection: 'column',
+          flexShrink: 0,
+          height: '100vh',
+          position: 'sticky',
+          top: 0,
+          background: 'color-mix(in srgb, var(--surface-1) 82%, transparent)',
+          borderRight: `1px solid ${c.border}`,
         }}
       >
-        {/* Subtle top gradient accent */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: 'linear-gradient(90deg, var(--brand-dark), var(--brand-light), transparent)',
-          opacity: 0.6,
-        }} />
+        {/* Brand */}
+        <div style={{ padding: '22px 20px 18px' }}>
+          <BrandMark size={28} subtitle="Compañero de mesa" />
+        </div>
 
         {/* Campaign block */}
-        <div style={{ padding: '20px 14px 14px', borderBottom: '1px solid var(--border)' }}>
-          {showBack && (
-            <button
-              onClick={handleBack}
-              className="flex items-center gap-1 transition-colors group"
-              style={{ color: 'var(--text-subtle)', fontSize: 11, marginBottom: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+        <div style={{ padding: '0 12px 12px' }}>
+          <div
+            style={{
+              padding: '14px 14px 14px',
+              borderRadius: radius.md,
+              background: 'linear-gradient(160deg, var(--surface-2), var(--surface-1))',
+              border: `1px solid ${c.border}`,
+            }}
+          >
+            {showBack && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="ui-icon-btn"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  color: c.muted, fontSize: fs.xs, fontWeight: 600,
+                  marginBottom: 10, marginLeft: -6, padding: '4px 8px 4px 4px',
+                  background: 'none', border: 'none', borderRadius: radius.xs, cursor: 'pointer',
+                }}
+              >
+                <ChevronLeft size={14} aria-hidden />
+                Volver a {backLabel}
+              </button>
+            )}
+            <p style={{ ...eyebrow, marginBottom: 4 }}>Campaña</p>
+            <p
+              style={{
+                ...titleText, fontSize: fs.lg, color: c.text, lineHeight: 1.25,
+                marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+              title={currentCampaign?.name}
             >
-              <ChevronLeft size={10} className="transition-transform group-hover:-translate-x-0.5" />
-              {backLabel}
-            </button>
-          )}
-
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1.3, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {currentCampaign?.name ?? 'Cosmere'}
-          </p>
-
-          {currentCampaign && (
-            <span
-              className="inline-flex items-center gap-1.5 font-bold rounded-full uppercase tracking-wider"
-              style={
-                isGm
-                  ? { fontSize: 10, padding: '3px 10px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }
-                  : { fontSize: 9, padding: '2px 9px', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', color: 'var(--brand-light)' }
-              }
-            >
-              <span style={{
-                width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
-                background: isGm ? '#f87171' : 'var(--brand-light)',
-                boxShadow: isGm ? '0 0 6px #f87171' : '0 0 6px var(--brand-light)',
-              }} />
-              {isGm ? 'Game Master' : 'Jugador'}
-            </span>
-          )}
-
+              {currentCampaign?.name ?? 'Cosmere'}
+            </p>
+            {currentCampaign && (
+              <span style={pill(roleTone)}>
+                <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: roleTone.fg, boxShadow: `0 0 8px ${roleTone.fg}` }} />
+                {roleLabel}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <nav aria-label="Secciones" style={{ flex: 1, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
           {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={linkTo(to)}
-              className="nav-item flex items-center gap-2.5 text-[13px]"
-              style={{ padding: '8px 10px' }}
-            >
-              <Icon size={14} />
+            <NavLink key={to} to={linkTo(to)} className="nav-link">
+              <Icon size={18} aria-hidden />
               {label}
             </NavLink>
           ))}
 
           {isGm && (
             <>
-              <div style={{ margin: '10px 4px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,0.18)' }} />
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(248,113,113,0.7)', letterSpacing: '0.12em' }}>GM</span>
-                <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,0.18)' }} />
+              <div style={{ margin: '16px 4px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ ...eyebrow, color: 'var(--rubi)' }}>Director</span>
+                <div aria-hidden style={{ flex: 1, height: 1, background: 'var(--rubi-border)' }} />
               </div>
               {gmNavItems.map(({ to, label, icon: Icon }) => (
-                <NavLink
-                  key={to}
-                  to={linkTo(to)}
-                  className="nav-item-gm flex items-center gap-2.5 text-[13px]"
-                  style={{ padding: '8px 10px' }}
-                >
-                  <Icon size={14} />
+                <NavLink key={to} to={linkTo(to)} className="nav-link nav-link--gm">
+                  <Icon size={18} aria-hidden />
                   {label}
                 </NavLink>
               ))}
@@ -196,266 +196,190 @@ export function Sidebar() {
 
         {/* Settings */}
         {currentCampaign && (
-          <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)' }}>
-            <NavLink
-              to={`/campaigns/${currentCampaign.id}/settings`}
-              className="nav-item flex items-center gap-2.5 text-[13px]"
-              style={{ padding: '8px 10px' }}
-            >
-              <Settings2 size={14} />
+          <div style={{ padding: '8px 12px' }}>
+            <NavLink to={`/campaigns/${currentCampaign.id}/settings`} className="nav-link">
+              <Settings2 size={18} aria-hidden />
               Ajustes
             </NavLink>
           </div>
         )}
 
+        {/* Appearance */}
+        <div style={{ padding: '4px 12px 12px' }}>
+          <ThemeSwitcher size="sm" compact />
+        </div>
+
         {/* User footer */}
-        <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ padding: '12px 16px 16px', borderTop: `1px solid ${c.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-              <div
-                className="flex items-center justify-center text-white font-bold shrink-0 bg-gradient-to-br from-violet-500 to-indigo-600"
-                style={{ width: 28, height: 28, borderRadius: '50%', fontSize: 10, border: '1.5px solid rgba(180,190,254,0.25)' }}
-              >
-                {initials}
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <Avatar name={user?.displayName} size={34} tone={isGm ? 'rubi' : 'brand'} />
               <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <p style={{ fontSize: fs.sm, fontWeight: 650, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user?.displayName}
+                </p>
+                <p style={{ fontSize: fs.xs, color: c.subtle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  @{user?.username}
                 </p>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-              <button
-                onClick={() => navigate('/campaigns')}
-                style={{ padding: 6, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', display: 'flex', alignItems: 'center' }}
-                title="Volver a campañas"
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-              >
-                <LayoutGrid size={13} />
-              </button>
-              <button
-                onClick={handleLogout}
-                style={{ padding: 6, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', display: 'flex', alignItems: 'center' }}
-                title="Cerrar sesión"
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-              >
-                <LogOut size={13} />
-              </button>
+              <IconButton label="Volver a campañas" size={36} onClick={() => navigate('/campaigns')}>
+                <LayoutGrid size={16} aria-hidden />
+              </IconButton>
+              <IconButton label="Cerrar sesión" size={36} variant="danger" onClick={handleLogout}>
+                <LogOut size={16} aria-hidden />
+              </IconButton>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* ─── Tablet sidebar (640px–1023px) ──────────────────── */}
+      {/* ─── Tablet rail (640px–1023px) ──────────────────── */}
       <aside
-        className="hidden sm:flex lg:hidden flex-col shrink-0 items-center"
+        className="only-tablet"
+        aria-label="Navegación principal"
         style={{
-          width: 64,
-          minHeight: '100vh',
-          background: 'var(--surface-1)',
-          borderRight: '1px solid var(--border)',
-          position: 'relative',
+          width: 80,
+          flexDirection: 'column',
+          alignItems: 'center',
+          flexShrink: 0,
+          height: '100vh',
+          position: 'sticky',
+          top: 0,
+          background: 'color-mix(in srgb, var(--surface-1) 82%, transparent)',
+          borderRight: `1px solid ${c.border}`,
         }}
       >
-        {/* Top accent line */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: 'linear-gradient(90deg, var(--brand-dark), var(--brand-light))',
-          opacity: 0.6,
-        }} />
-
-        {/* Role dot / back button */}
-        <div style={{ paddingTop: 14, paddingBottom: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ padding: '18px 0 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
+          <BrandGlyph size={30} />
           {showBack && (
-            <button
-              onClick={handleBack}
-              title={backLabel}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--text-subtle)', display: 'flex', borderRadius: 8 }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-            >
-              <ChevronLeft size={16} />
-            </button>
+            <IconButton label={`Volver a ${backLabel}`} size={40} variant="surface" onClick={handleBack}>
+              <ChevronLeft size={18} aria-hidden />
+            </IconButton>
           )}
-          <div
-            title={isGm ? 'Game Master' : 'Jugador'}
-            style={{
-              width: 10, height: 10, borderRadius: '50%',
-              background: isGm ? '#f87171' : 'var(--brand-light)',
-              boxShadow: isGm ? '0 0 8px #f87171' : '0 0 8px var(--brand-light)',
-            }}
-          />
+          {currentCampaign && (
+            <span
+              role="img"
+              aria-label={roleLabel}
+              title={roleLabel}
+              style={{ width: 8, height: 8, borderRadius: '50%', background: roleTone.fg, boxShadow: `0 0 10px ${roleTone.fg}` }}
+            />
+          )}
         </div>
 
-        {/* Nav icons */}
-        <nav style={{ flex: 1, padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%' }}>
+        <nav aria-label="Secciones" style={{ flex: 1, padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%', overflowY: 'auto' }}>
           {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={linkTo(to)}
-              title={label}
-              className="nav-icon-item"
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 0', width: '100%', position: 'relative' }}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <div style={{
-                      position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                      width: 3, height: 24, borderRadius: '0 3px 3px 0',
-                      background: 'var(--brand-light)',
-                      boxShadow: '0 0 8px var(--brand-light)',
-                    }} />
-                  )}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    width: 36, height: 32, borderRadius: 8,
-                    background: isActive ? 'rgba(180,190,254,0.1)' : 'transparent',
-                    transition: 'background 0.15s',
-                  }}>
-                    <Icon size={16} />
-                  </div>
-                  <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.02em', lineHeight: 1 }}>
-                    {label}
-                  </span>
-                </>
-              )}
+            <NavLink key={to} to={linkTo(to)} className="rail-link">
+              <span className="rail-icon"><Icon size={20} aria-hidden /></span>
+              <span>{label}</span>
             </NavLink>
           ))}
 
           {isGm && (
             <>
-              <div style={{ width: 28, height: 1, background: 'rgba(239,68,68,0.2)', margin: '4px 0' }} />
+              <div aria-hidden style={{ width: 32, height: 1, background: 'var(--rubi-border)', margin: '8px 0' }} />
               {gmNavItems.map(({ to, label, icon: Icon }) => (
-                <NavLink
-                  key={to}
-                  to={linkTo(to)}
-                  title={label}
-                  className="nav-icon-item-gm"
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 0', width: '100%', position: 'relative' }}
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <div style={{
-                          position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                          width: 3, height: 24, borderRadius: '0 3px 3px 0',
-                          background: '#f87171',
-                          boxShadow: '0 0 8px #f87171',
-                        }} />
-                      )}
-                      <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        width: 36, height: 32, borderRadius: 8,
-                        background: isActive ? 'rgba(239,68,68,0.1)' : 'transparent',
-                        transition: 'background 0.15s',
-                      }}>
-                        <Icon size={16} />
-                      </div>
-                      <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.02em', lineHeight: 1 }}>
-                        {label}
-                      </span>
-                    </>
-                  )}
+                <NavLink key={to} to={linkTo(to)} className="rail-link rail-link--gm">
+                  <span className="rail-icon"><Icon size={20} aria-hidden /></span>
+                  <span>{label}</span>
                 </NavLink>
               ))}
             </>
           )}
         </nav>
 
-        {/* Settings icon */}
         {currentCampaign && (
-          <div style={{ padding: '8px 0', borderTop: '1px solid var(--border)', width: '100%', display: 'flex', justifyContent: 'center' }}>
-            <NavLink
-              to={`/campaigns/${currentCampaign.id}/settings`}
-              title="Ajustes"
-              className="nav-icon-item"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 32, borderRadius: 8 }}
-            >
-              {({ isActive }) => (
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: '100%', height: '100%', borderRadius: 8,
-                  background: isActive ? 'rgba(180,190,254,0.1)' : 'transparent',
-                }}>
-                  <Settings2 size={15} />
-                </div>
-              )}
+          <div style={{ padding: '6px 0', width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <NavLink to={`/campaigns/${currentCampaign.id}/settings`} className="rail-link">
+              <span className="rail-icon"><Settings2 size={20} aria-hidden /></span>
+              <span>Ajustes</span>
             </NavLink>
           </div>
         )}
 
-        {/* User avatar button */}
-        <div style={{ padding: '12px 0', borderTop: '1px solid var(--border)', width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ padding: '12px 0 16px', borderTop: `1px solid ${c.border}`, width: '100%', display: 'flex', justifyContent: 'center' }}>
           <button
+            type="button"
             onClick={() => setShowUserMenu(true)}
-            title={user?.displayName}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            aria-label={`Menú de usuario: ${user?.displayName ?? ''}`}
+            aria-haspopup="dialog"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%' }}
           >
-            <div
-              className="flex items-center justify-center text-white font-bold bg-gradient-to-br from-violet-500 to-indigo-600"
-              style={{ width: 32, height: 32, borderRadius: '50%', fontSize: 11, border: '2px solid rgba(180,190,254,0.25)' }}
-            >
-              {initials}
-            </div>
+            <Avatar name={user?.displayName} size={36} tone={isGm ? 'rubi' : 'brand'} />
           </button>
         </div>
       </aside>
 
       {/* ─── Mobile top bar (<640px) ────────────────────────── */}
-      <div
-        className="sm:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4"
+      <header
+        className="only-mobile glass"
         style={{
-          height: 'calc(52px + var(--sat))',
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: z.nav,
+          height: 'calc(var(--topbar-h) + var(--sat))',
           paddingTop: 'var(--sat)',
-          background: 'rgba(30,30,46,0.85)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          borderBottom: '1px solid var(--border)',
+          paddingLeft: 'calc(8px + var(--sal))',
+          paddingRight: 'calc(8px + var(--sar))',
+          alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          borderBottom: `1px solid ${c.border}`,
         }}
       >
         {showBack ? (
           <button
+            type="button"
             onClick={handleBack}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, fontWeight: 600, padding: '4px 0' }}
+            className="ui-icon-btn"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 2, minHeight: 44, padding: '0 12px 0 4px',
+              background: 'none', border: 'none', borderRadius: radius.sm, cursor: 'pointer',
+              color: c.text, fontSize: fs.base, fontWeight: 600,
+            }}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={22} aria-hidden />
             {backLabel}
           </button>
-        ) : currentCampaign ? (
-          <span
-            className="inline-flex items-center font-bold rounded-full uppercase tracking-wider"
-            style={
-              isGm
-                ? { fontSize: 11, padding: '3px 10px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171' }
-                : { fontSize: 9, padding: '2px 8px', background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)', color: 'var(--brand-light)' }
-            }
-          >
-            {isGm ? 'GM' : 'Jugador'}
-          </span>
-        ) : <div />}
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, paddingLeft: 6 }}>
+            <BrandGlyph size={24} />
+            <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              <span
+                style={{
+                  ...titleText, fontSize: fs.md, color: c.text, lineHeight: 1.2,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}
+              >
+                {currentCampaign?.name ?? 'Cosmere'}
+              </span>
+              {currentCampaign && (
+                <span style={{ fontSize: fs.eyebrow, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: roleTone.fg, lineHeight: 1.4 }}>
+                  {isGm ? 'Director' : 'Jugador'}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
           {!isGm && currentCampaign && (
             <NavLink
               to={linkTo('historia')}
-              style={{ position: 'relative', display: 'flex', alignItems: 'center', padding: '8px 6px' }}
+              aria-label={unreadCount > 0 ? `Mensajes: ${unreadCount} sin leer` : 'Mensajes'}
+              className="ui-icon-btn"
+              style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: radius.sm }}
             >
-              <Bell
-                size={18}
-                style={{ color: unreadCount > 0 ? 'var(--brand-light)' : 'var(--text-subtle)', transition: 'color 0.15s' }}
-              />
+              <Bell size={20} aria-hidden style={{ color: unreadCount > 0 ? c.brandLight : c.muted }} />
               {unreadCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: 4, right: 2,
-                  minWidth: 14, height: 14, borderRadius: 7,
-                  background: 'var(--brand)', color: 'white',
-                  fontSize: 8, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 3px',
-                }}>
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute', top: 6, right: 5,
+                    minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px',
+                    background: c.brandFill, color: c.onBrand,
+                    fontSize: 11, fontWeight: 800,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 0 0 2px var(--bg)',
+                  }}
+                >
                   {unreadCount}
                 </span>
               )}
@@ -463,165 +387,98 @@ export function Sidebar() {
           )}
 
           <button
+            type="button"
             onClick={() => setShowUserMenu(true)}
-            style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 8 }}
+            aria-label={`Menú de usuario: ${user?.displayName ?? ''}`}
+            aria-haspopup="dialog"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, background: 'none', border: 'none', cursor: 'pointer', borderRadius: '50%' }}
           >
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold bg-gradient-to-br from-violet-500 to-indigo-600"
-              style={{ border: '2px solid rgba(180,190,254,0.3)' }}
-            >
-              {initials}
-            </div>
+            <Avatar name={user?.displayName} size={34} tone={isGm ? 'rubi' : 'brand'} />
           </button>
         </div>
-      </div>
+      </header>
 
       {/* ─── User menu sheet (mobile + tablet) ──────────────── */}
-      {showUserMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-50"
-            style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-            onClick={() => setShowUserMenu(false)}
-          />
-          <div
-            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl"
-            style={{
-              background: 'var(--surface-1)',
-              border: '1px solid var(--border-bright)',
-              borderBottom: 'none',
-              paddingBottom: 'calc(16px + var(--sab))',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-            </div>
-            <div style={{ padding: '8px 20px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold bg-gradient-to-br from-violet-500 to-indigo-600"
-                style={{ flexShrink: 0 }}
-              >
-                {initials}
-              </div>
-              <div>
-                <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{user?.displayName}</p>
-                <p style={{ fontSize: 12, color: 'var(--text-subtle)' }}>@{user?.username}</p>
-              </div>
-            </div>
-            <div style={{ height: 1, background: 'var(--border)', margin: '0 20px 12px' }} />
-            {currentCampaign && (
-              <NavLink
-                to={`/campaigns/${currentCampaign.id}/settings`}
-                onClick={() => setShowUserMenu(false)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  width: '100%', padding: '12px 20px',
-                  color: 'var(--text-muted)', fontSize: 14, fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
-                <Settings2 size={16} />
-                Ajustes
-              </NavLink>
-            )}
-            <button
-              onClick={() => { setShowUserMenu(false); navigate('/campaigns') }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                width: '100%', padding: '12px 20px',
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-muted)', fontSize: 14, fontWeight: 600,
-                textAlign: 'left',
-              }}
-            >
-              <LayoutGrid size={16} />
-              Volver a campañas
-            </button>
-            <button
-              onClick={() => { handleLogout(); setShowUserMenu(false) }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                width: '100%', padding: '12px 20px',
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: '#fb7185', fontSize: 14, fontWeight: 600,
-                textAlign: 'left',
-              }}
-            >
-              <LogOut size={16} />
-              Cerrar sesión
-            </button>
+      <Sheet open={showUserMenu} onClose={() => setShowUserMenu(false)} title="Tu cuenta" hideHeader maxWidth={440}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '4px 0 16px' }}>
+          <Avatar name={user?.displayName} size={48} tone={isGm ? 'rubi' : 'brand'} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ ...titleText, fontSize: fs.lg, color: c.text }}>{user?.displayName}</p>
+            <p style={{ fontSize: fs.sm, color: c.subtle }}>@{user?.username}</p>
           </div>
-        </>
-      )}
+        </div>
+        <div aria-hidden className="hairline" style={{ marginBottom: 14 }} />
+        <p style={{ ...eyebrow, marginBottom: 8 }}>Apariencia</p>
+        <ThemeSwitcher />
+        <div aria-hidden className="hairline" style={{ margin: '16px 0 8px' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {currentCampaign && (
+            <NavLink
+              to={`/campaigns/${currentCampaign.id}/settings`}
+              onClick={() => setShowUserMenu(false)}
+              className="ui-row"
+              style={menuRow}
+            >
+              <Settings2 size={20} aria-hidden />
+              Ajustes
+            </NavLink>
+          )}
+          <button
+            type="button"
+            onClick={() => { setShowUserMenu(false); navigate('/campaigns') }}
+            className="ui-row"
+            style={{ ...menuRow, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%' }}
+          >
+            <LayoutGrid size={20} aria-hidden />
+            Volver a campañas
+          </button>
+          <button
+            type="button"
+            onClick={() => { handleLogout(); setShowUserMenu(false) }}
+            className="ui-row"
+            style={{ ...menuRow, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', width: '100%', color: 'var(--rubi)' }}
+          >
+            <LogOut size={20} aria-hidden />
+            Cerrar sesión
+          </button>
+        </div>
+      </Sheet>
 
       {/* ─── Mobile bottom nav (<640px) ─────────────────────── */}
       <nav
-        className="sm:hidden fixed bottom-0 left-0 right-0 z-40 flex items-start justify-around px-1"
+        aria-label="Secciones"
+        className="only-mobile glass"
         style={{
-          height: 'calc(60px + var(--sab, 0px))',
-          paddingTop: 8,
-          background: 'rgba(30,30,46,0.92)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: '1px solid var(--border)',
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: z.nav,
+          height: 'calc(var(--bottomnav-h) + var(--sab))',
+          paddingBottom: 'var(--sab)',
+          paddingLeft: 'calc(4px + var(--sal))',
+          paddingRight: 'calc(4px + var(--sar))',
+          alignItems: 'center', justifyContent: 'space-around',
+          borderTop: `1px solid ${c.border}`,
         }}
       >
         {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={linkTo(to)}
-            className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-all duration-150"
-            style={({ isActive }) => ({
-              color: isActive ? 'var(--brand-light)' : 'var(--text-subtle)',
-            })}
-          >
-            {({ isActive }) => (
-              <>
-                <div
-                  className="flex items-center justify-center rounded-lg transition-all duration-150"
-                  style={{
-                    width: 32, height: 28,
-                    background: isActive ? 'rgba(180,190,254,0.12)' : 'transparent',
-                  }}
-                >
-                  <Icon size={16} />
-                </div>
-                <span className="text-[9px] font-semibold leading-none" style={{ letterSpacing: '0.02em' }}>
-                  {label}
-                </span>
-              </>
-            )}
+          <NavLink key={to} to={linkTo(to)} className="tab-link">
+            <span className="tab-icon"><Icon size={20} aria-hidden /></span>
+            <span>{label}</span>
           </NavLink>
         ))}
 
         {isGm && gmNavItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={linkTo(to)}
-            className="flex flex-col items-center justify-center gap-0.5 flex-1 py-1 rounded-lg transition-all duration-150"
-            style={({ isActive }) => ({
-              color: isActive ? '#f87171' : 'rgba(248,113,113,0.5)',
-            })}
-          >
-            {({ isActive }) => (
-              <>
-                <div
-                  className="flex items-center justify-center rounded-lg transition-all duration-150"
-                  style={{
-                    width: 32, height: 28,
-                    background: isActive ? 'rgba(239,68,68,0.12)' : 'transparent',
-                  }}
-                >
-                  <Icon size={16} />
-                </div>
-                <span className="text-[9px] font-semibold leading-none" style={{ letterSpacing: '0.02em' }}>
-                  {label}
-                </span>
-              </>
-            )}
+          <NavLink key={to} to={linkTo(to)} className="tab-link tab-link--gm">
+            <span className="tab-icon"><Icon size={20} aria-hidden /></span>
+            <span>{label}</span>
           </NavLink>
         ))}
       </nav>
     </>
   )
+}
+
+const menuRow: CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 14,
+  minHeight: 52, padding: '0 12px', borderRadius: radius.md,
+  color: c.text, fontSize: fs.base, fontWeight: 600,
+  textDecoration: 'none',
 }

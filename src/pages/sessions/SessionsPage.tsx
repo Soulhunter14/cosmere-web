@@ -1,13 +1,17 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useId, useRef, useEffect, type CSSProperties, type KeyboardEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, MapPin, Clock, Calendar, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, MapPin, Clock, CalendarDays, CalendarCheck, Lock } from 'lucide-react'
 import { sessionsApi } from '../../api/sessions'
 import { proposalsApi } from '../../api/proposals'
 import { lockedDaysApi } from '../../api/lockedDays'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Input, Spinner, ConfirmDialog } from '../../components/ui'
+import {
+  Input, Spinner, ConfirmDialog, Button, IconButton, Card, Badge, Field,
+  PageHeader, SectionTitle, EmptyState, Sheet,
+} from '../../components/ui'
+import { c, eyebrow, font, fs, numeral, page, radius, tint, tone } from '../../theme'
 import type { Session, ProposalResponse, LockedDay } from '../../types'
 import {
   StatusBadge,
@@ -18,6 +22,7 @@ import {
 import type { CreateForm, PromoteForm } from './ProposalsPage'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+const WEEKDAYS_LONG = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
@@ -42,7 +47,23 @@ function toDateKey(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
-const PLAYER_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9', '#f472b6']
+/** 'yyyy-MM-dd' (locked day) → "miércoles, 7 de octubre" */
+function lockDateLong(dateKey: string) {
+  return new Date(dateKey + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
+/** ['Raito', 'Kaligula', 'Soul'] → "Raito, Kaligula y Soul" */
+const namesList = new Intl.ListFormat('es', { style: 'long', type: 'conjunction' })
+
+/** Controls that are in the tab order (used to keep focus in place after a row is removed) */
+const TABBABLE = 'button:not([disabled]):not([tabindex="-1"]), input:not([disabled]), a[href]'
+
+/** Identity colour per player (by position among the campaign's players): one gem tone each, theme-aware. */
+const PLAYER_COLORS = [
+  'var(--rubi)', 'var(--heliodoro)', 'var(--topacio)', 'var(--esmeralda)',
+  'var(--circon)', 'var(--zafiro)', 'var(--amatista)', 'var(--granate)',
+]
+const PLAYER_COLOR_FALLBACK = 'var(--cuarzo)'
 
 interface SessionCreateForm {
   title: string
@@ -51,6 +72,48 @@ interface SessionCreateForm {
   location: string
   notes: string
 }
+
+/* ─── Local style fragments ─────────────────────────────────────────────── */
+
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }
+
+/** Card title (h3): Crimson Pro 600, like the book's talent boxes */
+const cardTitle: CSSProperties = {
+  fontFamily: font.display,
+  fontSize: fs.lg,
+  fontWeight: 600,
+  lineHeight: 1.25,
+  color: c.text,
+}
+
+const metaText: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 5,
+  fontSize: fs.sm, color: c.muted, fontVariantNumeric: 'tabular-nums',
+}
+
+const inlineEmpty: CSSProperties = {
+  padding: '18px 16px',
+  borderRadius: radius.md,
+  border: `1px dashed ${c.borderBright}`,
+  background: 'color-mix(in srgb, var(--surface-1) 60%, transparent)',
+  textAlign: 'center',
+  fontSize: fs.sm + 1,
+  color: c.muted,
+}
+
+/** Small square icon tile next to a card title */
+const iconTile = (t: { fg: string; bg: string; border: string }, size = 36): CSSProperties => ({
+  width: size, height: size, flexShrink: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  borderRadius: radius.sm,
+  background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
+})
+
+const rise = (i: number) => ({ '--i': i }) as CSSProperties
+
+/** Date/time pickers follow the active theme (index.css forces `color-scheme: dark` on them, which
+ *  makes the native calendar/clock glyphs almost invisible on paper). color-scheme is inherited from :root. */
+const nativePickerScheme: CSSProperties = { colorScheme: 'inherit' }
 
 // ─── Pending proposal card (always expanded, inline in calendar view) ─────────
 
@@ -64,37 +127,35 @@ function ProposalCalendarCard({
 }: {
   proposal: ProposalResponse
   isGm: boolean
-  onReject: (p: ProposalResponse) => void
-  onPromote: (p: ProposalResponse) => void
+  onReject: (p: ProposalResponse, trigger: HTMLElement) => void
+  onPromote: (p: ProposalResponse, trigger: HTMLElement) => void
   onVote: (proposalId: number, dateId: number, canAttend: boolean) => void
   votePending: boolean
 }) {
   return (
-    <div style={{
-      background: 'var(--surface-1)', border: '1px solid var(--border)',
-      borderRadius: 14, overflow: 'hidden',
-      borderLeft: '3px solid var(--brand-light)',
-    }}>
+    <Card as="article" padding={0}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px 10px' }}>
-        <Calendar size={13} color="var(--brand-light)" />
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', flex: 1 }}>
-          {proposal.title}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 16px 12px' }}>
+        <span aria-hidden style={iconTile(tone.brand)}>
+          <CalendarDays size={18} />
         </span>
+        <h3 style={{ ...cardTitle, flex: 1, minWidth: 0 }}>
+          {proposal.title}
+        </h3>
         <StatusBadge status={proposal.status} />
       </div>
 
       {proposal.notes && (
-        <p style={{ fontSize: 11, color: 'var(--text-subtle)', padding: '0 14px 8px', lineHeight: 1.4 }}>
+        <p style={{ fontSize: fs.sm + 1, color: c.muted, padding: '0 16px 12px', lineHeight: 1.5 }}>
           {proposal.notes}
         </p>
       )}
 
       {/* Dates with votes */}
-      <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {proposal.dates.map((d, idx) => (
           <div key={d.id}>
-            {idx > 0 && <div style={{ height: 1, background: 'var(--border)', marginBottom: 14 }} />}
+            {idx > 0 && <div aria-hidden style={{ height: 1, background: c.border, marginBottom: 16 }} />}
             <VoteBar
               date={d}
               isPending={votePending}
@@ -103,35 +164,28 @@ function ProposalCalendarCard({
           </div>
         ))}
 
-        {/* GM actions */}
+        {/* GM actions (wrap onto two rows on narrow phones instead of overflowing the page) */}
         {isGm && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => onPromote(proposal)}
-              style={{
-                flex: 1, padding: '7px 0', borderRadius: 9, cursor: 'pointer',
-                fontSize: 11, fontWeight: 700,
-                background: 'rgba(134,239,172,0.12)', border: '1.5px solid rgba(134,239,172,0.3)',
-                color: '#86efac',
-              }}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 16, borderTop: `1px solid ${c.border}` }}>
+            <Button
+              onClick={(e) => onPromote(proposal, e.currentTarget)}
+              icon={<CalendarCheck size={16} aria-hidden />}
+              style={{ flex: 1 }}
             >
               Promover sesión
-            </button>
-            <button
-              onClick={() => onReject(proposal)}
-              style={{
-                flex: 1, padding: '7px 0', borderRadius: 9, cursor: 'pointer',
-                fontSize: 11, fontWeight: 700,
-                background: 'rgba(251,113,133,0.08)', border: '1.5px solid rgba(251,113,133,0.2)',
-                color: '#fb7185',
-              }}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={(e) => onReject(proposal, e.currentTarget)}
+              icon={<X size={16} aria-hidden />}
+              style={{ flex: 1 }}
             >
               Rechazar
-            </button>
+            </Button>
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -144,11 +198,12 @@ export function SessionsPage() {
   const { isGm, currentCampaign } = useCampaignStore()
   const { user } = useAuthStore()
   const currentUserId = user?.id ?? 0
+  const uid = useId()
 
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
+  const [selectedDay, setSelectedDayState] = useState<Date | null>(null)
 
   // Session create form
   const [showCreate, setShowCreate] = useState(false)
@@ -165,6 +220,54 @@ export function SessionsPage() {
   // Lock days state
   const [lockNote, setLockNote] = useState('')
   const [showLockInput, setShowLockInput] = useState(false)
+  const [confirmUnlock, setConfirmUnlock] = useState<LockedDay | null>(null)
+
+  // Calendar keyboard navigation (roving tabindex) and focus restoration
+  const [focusDay, setFocusDay] = useState<number | null>(null)
+  const dayRefs = useRef<Record<number, HTMLButtonElement | null>>({})
+  const refocusLockTrigger = useRef(false)
+  /** Set once a lock is saved: the form (and its focused Confirmar) goes away, so focus the new "Día bloqueado" panel's button */
+  const focusOwnLock = useRef(false)
+  const pageRef = useRef<HTMLDivElement>(null)
+  /** Button that opened the pending delete / unlock / reject / promote confirmation */
+  const removalTrigger = useRef<HTMLElement | null>(null)
+  /** Tab-order snapshot taken when that action was confirmed */
+  const pendingRemoval = useRef<{ trigger: HTMLElement; items: HTMLElement[]; at: number } | null>(null)
+
+  /** On confirm: remember where the trigger sits in the tab order (its row goes away once the list refetches) */
+  const rememberRemoval = () => {
+    const trigger = removalTrigger.current
+    removalTrigger.current = null
+    const items = Array.from(pageRef.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? [])
+    const at = trigger ? items.indexOf(trigger) : -1
+    pendingRemoval.current = trigger && at >= 0 ? { trigger, items, at } : null
+  }
+  const askDelete = (s: Session, trigger: HTMLElement) => { removalTrigger.current = trigger; setConfirmDelete(s) }
+  const askUnlock = (l: LockedDay, trigger: HTMLElement) => { removalTrigger.current = trigger; setConfirmUnlock(l) }
+  const askReject = (p: ProposalResponse, trigger: HTMLElement) => { removalTrigger.current = trigger; setConfirmReject(p) }
+  const askPromote = (p: ProposalResponse, trigger: HTMLElement) => { removalTrigger.current = trigger; setPromoteTarget(p) }
+
+  // Once the row has gone, focus would fall to <body>: move it to the control that took its place
+  // (the next one in tab order, else the previous one). Does nothing if focus is already somewhere.
+  useEffect(() => {
+    const r = pendingRemoval.current
+    if (!r || r.trigger.isConnected) return
+    pendingRemoval.current = null
+    const active = document.activeElement
+    if (active && active !== document.body) return
+    const usable = (el: HTMLElement) => el.isConnected && !el.matches(':disabled')
+    const target = r.items.slice(r.at + 1).find(usable) ?? r.items.slice(0, r.at).reverse().find(usable)
+    target?.focus({ preventScroll: true })
+  })
+
+  /** Changing the selected day always closes the lock form and clears its note */
+  const setSelectedDay = (day: Date | null) => {
+    setSelectedDayState(day)
+    setShowLockInput(false)
+    setLockNote('')
+    refocusLockTrigger.current = false
+    focusOwnLock.current = false
+  }
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -196,7 +299,7 @@ export function SessionsPage() {
   const playerMembers = currentCampaign?.members.filter((m) => m.role === 'player') ?? []
   const playerColor = (userId: number) => {
     const idx = playerMembers.findIndex((m) => m.userId === userId)
-    return PLAYER_COLORS[idx % PLAYER_COLORS.length] ?? '#94a3b8'
+    return PLAYER_COLORS[idx % PLAYER_COLORS.length] ?? PLAYER_COLOR_FALLBACK
   }
 
   // ── Session mutations ─────────────────────────────────────────────────────
@@ -281,11 +384,6 @@ export function SessionsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['locked-days', cId] }),
   })
 
-  useEffect(() => {
-    setShowLockInput(false)
-    setLockNote('')
-  }, [selectedDay])
-
   // ── Calendar logic ────────────────────────────────────────────────────────
 
   const firstDay = new Date(viewYear, viewMonth, 1)
@@ -297,6 +395,8 @@ export function SessionsPage() {
     const dayNum = i - startOffset + 1
     cells.push(dayNum >= 1 && dayNum <= lastDay.getDate() ? new Date(viewYear, viewMonth, dayNum) : null)
   }
+  const weeks: (Date | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
 
   const sessionsByDay = (day: Date) =>
     sessions.filter((s) => isSameDay(new Date(s.date), day))
@@ -324,437 +424,532 @@ export function SessionsPage() {
 
   const pendingProposals = proposals.filter((p) => p.status === 'Pending')
 
+  // Roving tabindex: one day of the grid is in the tab order; arrows move between days.
+  const daysInMonth = lastDay.getDate()
+  const isViewMonth = (d: Date) => d.getFullYear() === viewYear && d.getMonth() === viewMonth
+  const defaultFocusDay = selectedDay && isViewMonth(selectedDay)
+    ? selectedDay.getDate()
+    : isViewMonth(today) ? today.getDate() : 1
+  const tabbableDay = focusDay !== null && focusDay <= daysInMonth ? focusDay : defaultFocusDay
+
+  const onDayKeyDown = (e: KeyboardEvent<HTMLButtonElement>, dayNum: number, weekdayIdx: number) => {
+    let next: number
+    switch (e.key) {
+      case 'ArrowLeft': next = dayNum - 1; break
+      case 'ArrowRight': next = dayNum + 1; break
+      case 'ArrowUp': next = dayNum - 7; break
+      case 'ArrowDown': next = dayNum + 7; break
+      case 'Home': next = dayNum - weekdayIdx; break
+      case 'End': next = dayNum + (6 - weekdayIdx); break
+      default: return
+    }
+    e.preventDefault()
+    next = Math.min(Math.max(next, 1), daysInMonth)
+    setFocusDay(next)
+    dayRefs.current[next]?.focus()
+  }
+
+  // Players who blocked a day in the visible month (GM legend: colour is never the only cue)
+  const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-`
+  const monthLockers: { userId: number; name: string }[] = []
+  for (const l of lockedDays) {
+    if (l.date.startsWith(monthPrefix) && !monthLockers.some((m) => m.userId === l.userId)) {
+      monthLockers.push({ userId: l.userId, name: l.userDisplayName })
+    }
+  }
+
+  const ids = {
+    month: `${uid}-month`,
+    day: `${uid}-day`,
+    proposals: `${uid}-proposals`,
+    locks: `${uid}-locks`,
+    upcoming: `${uid}-upcoming`,
+    past: `${uid}-past`,
+  }
+
   if (sessionsLoading || proposalsLoading) return <Spinner />
 
-  return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px 48px' }}>
+  // ── Selected day: lock section ────────────────────────────────────────────
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.03em' }}>
-          Calendario
-        </h1>
-        {isGm && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => openCreate()}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: 'var(--brand)', border: 'none', borderRadius: 10,
-                color: 'white', fontSize: 12, fontWeight: 700,
-                padding: '8px 12px', cursor: 'pointer',
-              }}
-            >
-              <Plus size={13} />
+  const renderLockSection = (day: Date) => {
+    const dayKey = toDateKey(day)
+    const dayLocks = lockedByDate.get(dayKey) ?? []
+
+    if (isGm) {
+      if (dayLocks.length === 0) return null
+      return (
+        <Card padding={16}>
+          <h3 style={{ ...cardTitle, display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <Lock size={16} aria-hidden style={{ color: tone.rubi.fg }} />
+            Días bloqueados
+          </h3>
+          <ul style={{ ...listReset, gap: 0 }}>
+            {dayLocks.map((l, i) => (
+              <li
+                key={l.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, minHeight: 52,
+                  borderTop: i > 0 ? `1px solid ${c.border}` : undefined,
+                }}
+              >
+                <span aria-hidden style={{ width: 10, height: 10, borderRadius: '50%', background: playerColor(l.userId), flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0, padding: '8px 0' }}>
+                  <p style={{ fontSize: fs.base, fontWeight: 650, color: c.text, lineHeight: 1.3 }}>{l.userDisplayName}</p>
+                  {l.note && (
+                    <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2, lineHeight: 1.45 }}>{l.note}</p>
+                  )}
+                </div>
+                <IconButton
+                  label={`Desbloquear día de ${l.userDisplayName}`}
+                  variant="danger"
+                  size={44}
+                  onClick={(e) => askUnlock(l, e.currentTarget)}
+                  style={{ marginRight: -8 }}
+                >
+                  <Trash2 size={18} aria-hidden />
+                </IconButton>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )
+    }
+
+    // Player view
+    const ownLock = dayLocks.find((l) => l.userId === currentUserId)
+
+    if (ownLock) {
+      return (
+        <div
+          ref={(el) => {
+            if (el && focusOwnLock.current) { focusOwnLock.current = false; el.querySelector('button')?.focus() }
+          }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '12px 8px 12px 14px', borderRadius: radius.lg,
+            background: tone.rubi.bg, border: `1px solid ${tone.rubi.border}`,
+          }}
+        >
+          <span aria-hidden style={iconTile(tone.rubi)}>
+            <Lock size={18} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: fs.base, fontWeight: 650, color: tone.rubi.fg, lineHeight: 1.3 }}>Día bloqueado</p>
+            {ownLock.note && (
+              <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2, lineHeight: 1.45 }}>{ownLock.note}</p>
+            )}
+          </div>
+          <IconButton
+            label="Desbloquear día"
+            variant="danger"
+            size={44}
+            onClick={(e) => askUnlock(ownLock, e.currentTarget)}
+            disabled={removeLockMutation.isPending}
+          >
+            <Trash2 size={18} aria-hidden />
+          </IconButton>
+        </div>
+      )
+    }
+
+    if (isPast(day)) return null
+
+    if (!showLockInput) {
+      return (
+        <button
+          type="button"
+          ref={(el) => {
+            if (el && refocusLockTrigger.current) { refocusLockTrigger.current = false; el.focus() }
+          }}
+          onClick={() => setShowLockInput(true)}
+          className="ui-row"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 52,
+            padding: '0 16px', borderRadius: radius.lg, cursor: 'pointer', textAlign: 'left',
+            background: 'transparent', border: `1px dashed ${c.borderStrong}`,
+            color: c.muted, fontSize: fs.base - 1, fontWeight: 600,
+          }}
+        >
+          <Lock size={16} aria-hidden />
+          Bloquear este día
+        </button>
+      )
+    }
+
+    return (
+      <Card padding={16}>
+        <h3 style={{ ...cardTitle, display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <Lock size={16} aria-hidden style={{ color: tone.rubi.fg }} />
+          Bloquear este día
+        </h3>
+        <Field label="Motivo (opcional)">
+          <Input
+            autoFocus
+            placeholder="Motivo (opcional)..."
+            value={lockNote}
+            onChange={(e) => setLockNote(e.target.value)}
+          />
+        </Field>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <Button
+            variant="secondary"
+            style={{ flex: 1 }}
+            onClick={() => { refocusLockTrigger.current = true; setShowLockInput(false); setLockNote('') }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            style={{ flex: 1 }}
+            icon={<Lock size={16} aria-hidden />}
+            loading={addLockMutation.isPending}
+            onClick={() => addLockMutation.mutate(
+              { date: dayKey, note: lockNote },
+              { onSuccess: () => { focusOwnLock.current = true } },
+            )}
+          >
+            {addLockMutation.isPending ? 'Guardando...' : 'Confirmar'}
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  // ── Bottom list data (when no day selected) ───────────────────────────────
+
+  const upcoming = sessions
+    .filter((s) => !isPast(new Date(s.date)))
+    .slice(0, 5)
+  const pastSessions = sessions
+    .filter((s) => isPast(new Date(s.date)))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 3)
+  const upcomingLocks = lockedDays.filter((l) => !isPast(new Date(l.date + 'T00:00:00')))
+
+  return (
+    <div ref={pageRef} style={page}>
+
+      <PageHeader
+        title="Calendario"
+        actions={isGm ? (
+          <>
+            <Button icon={<Plus size={16} aria-hidden />} onClick={() => openCreate()} aria-label="Nueva sesión">
               Sesión
-            </button>
-            <button
-              onClick={() => setShowCreateProposal(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: 'var(--surface-2)', border: '1px solid var(--border)',
-                borderRadius: 10,
-                color: 'var(--brand-light)', fontSize: 12, fontWeight: 700,
-                padding: '8px 12px', cursor: 'pointer',
-              }}
-            >
-              <Plus size={13} />
+            </Button>
+            <Button variant="secondary" icon={<Plus size={16} aria-hidden />} onClick={() => setShowCreateProposal(true)} aria-label="Nueva propuesta">
               Propuesta
-            </button>
+            </Button>
+          </>
+        ) : undefined}
+      />
+
+      {/* Month calendar */}
+      <Card as="section" padding={0} aria-labelledby={ids.month} style={{ overflow: 'hidden' }}>
+        {/* Month navigator */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 8 }}>
+          <IconButton label="Mes anterior" size={44} onClick={prevMonth}>
+            <ChevronLeft size={20} aria-hidden />
+          </IconButton>
+          <h2
+            id={ids.month}
+            aria-live="polite"
+            style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, lineHeight: 1.2, color: c.text, textAlign: 'center' }}
+          >
+            {MONTHS[viewMonth]} {viewYear}
+          </h2>
+          <IconButton label="Mes siguiente" size={44} onClick={nextMonth}>
+            <ChevronRight size={20} aria-hidden />
+          </IconButton>
+        </div>
+
+        {/* Calendar grid */}
+        <table role="grid" aria-labelledby={ids.month} style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              {WEEKDAYS.map((d, i) => (
+                <th
+                  key={d}
+                  scope="col"
+                  abbr={WEEKDAYS_LONG[i]}
+                  style={{
+                    ...eyebrow, letterSpacing: '0.08em', textAlign: 'center', padding: '8px 0',
+                    borderTop: `1px solid ${c.border}`,
+                    color: i >= 5 ? c.muted : c.subtle,
+                  }}
+                >
+                  {d}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {weeks.map((week, w) => (
+              <tr key={w}>
+                {week.map((day, i) => {
+                  const cellStyle: CSSProperties = {
+                    padding: 0,
+                    verticalAlign: 'top',
+                    borderTop: `1px solid ${c.border}`,
+                    borderLeft: i > 0 ? `1px solid ${c.border}` : undefined,
+                  }
+                  if (!day) {
+                    return <td key={i} style={{ ...cellStyle, background: 'color-mix(in srgb, var(--surface-2) 70%, transparent)' }} />
+                  }
+                  const dayNum = day.getDate()
+                  const daySessions = sessionsByDay(day)
+                  const isToday = isSameDay(day, today)
+                  const past = isPast(day)
+                  const isSelected = selectedDay ? isSameDay(day, selectedDay) : false
+                  const dayLocks = lockedByDate.get(toDateKey(day)) ?? []
+                  const ownLocked = !isGm && dayLocks.some((l) => l.userId === currentUserId)
+
+                  const labelParts = [`${WEEKDAYS_LONG[i]} ${dayNum} de ${MONTHS[viewMonth].toLowerCase()}`]
+                  if (isToday) labelParts.push('hoy')
+                  if (daySessions.length > 0) labelParts.push(`${daySessions.length} ${daySessions.length === 1 ? 'sesión' : 'sesiones'}`)
+                  if (isGm && dayLocks.length > 0) labelParts.push(`bloqueado por ${namesList.format(dayLocks.map((l) => l.userDisplayName))}`)
+                  if (ownLocked) labelParts.push('bloqueado')
+
+                  return (
+                    <td key={i} style={cellStyle}>
+                      <button
+                        type="button"
+                        ref={(el) => { dayRefs.current[dayNum] = el }}
+                        tabIndex={dayNum === tabbableDay ? 0 : -1}
+                        aria-pressed={isSelected}
+                        aria-current={isToday ? 'date' : undefined}
+                        aria-label={labelParts.join(', ')}
+                        onClick={() => setSelectedDay(isSelected ? null : day)}
+                        onKeyDown={(e) => onDayKeyDown(e, dayNum, i)}
+                        onFocus={() => setFocusDay(dayNum)}
+                        className={isSelected ? undefined : 'ui-row'}
+                        style={{
+                          width: '100%',
+                          height: 'clamp(60px, 9vw, 76px)',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          padding: '6px 2px',
+                          border: 'none',
+                          borderRadius: 0,
+                          cursor: 'pointer',
+                          background: isSelected ? 'var(--brand-bg)' : 'transparent',
+                          boxShadow: isSelected ? 'inset 0 0 0 2px var(--brand-border)' : 'none',
+                          outlineOffset: -3,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 28, height: 28, flexShrink: 0, borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontFamily: font.ui, fontSize: fs.sm + 1, lineHeight: 1,
+                            fontVariantNumeric: 'tabular-nums',
+                            fontWeight: isToday ? 750 : isSelected ? 700 : 550,
+                            background: isToday ? c.brandFill : 'transparent',
+                            color: isToday ? c.onBrand : isSelected ? c.brandLight : past ? c.subtle : c.text,
+                          }}
+                        >
+                          {dayNum}
+                        </span>
+                        <span aria-hidden style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, width: '100%' }}>
+                          {daySessions.slice(0, 2).map((s) => (
+                            <span
+                              key={s.id}
+                              style={{
+                                width: '70%', maxWidth: 44, height: 4, borderRadius: radius.full,
+                                background: isPast(new Date(s.date)) ? tint('var(--cuarzo)', 55) : c.brand,
+                              }}
+                            />
+                          ))}
+                          {daySessions.length > 2 && (
+                            <span style={{ fontSize: fs.xs, fontWeight: 650, lineHeight: 1, color: c.subtle }}>+{daySessions.length - 2}</span>
+                          )}
+                          {ownLocked && <Lock size={12} strokeWidth={2.4} style={{ color: tone.rubi.fg }} />}
+                          {isGm && dayLocks.length > 0 && (
+                            <span style={{ display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
+                              {dayLocks.slice(0, 4).map((l) => (
+                                <span key={l.id} style={{ width: 6, height: 6, borderRadius: '50%', background: playerColor(l.userId) }} />
+                              ))}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* GM legend: which player each lock colour belongs to */}
+        {isGm && monthLockers.length > 0 && (
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 16px',
+              padding: '12px 16px', borderTop: `1px solid ${c.border}`,
+            }}
+          >
+            <p style={eyebrow}>Días bloqueados</p>
+            <ul style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+              {monthLockers.map((m) => (
+                <li key={m.userId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted }}>
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: playerColor(m.userId) }} />
+                  {m.name}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
-      </div>
-
-      {/* Month navigator */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'var(--surface-1)', border: '1px solid var(--border)',
-        borderRadius: '14px 14px 0 0', padding: '12px 16px',
-      }}>
-        <button onClick={prevMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', padding: 4 }}>
-          <ChevronLeft size={18} />
-        </button>
-        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>
-          {MONTHS[viewMonth]} {viewYear}
-        </span>
-        <button onClick={nextMonth} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', padding: 4 }}>
-          <ChevronRight size={18} />
-        </button>
-      </div>
-
-      {/* Weekday headers */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-        background: 'var(--surface-1)', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)',
-      }}>
-        {WEEKDAYS.map((d) => (
-          <div key={d} style={{
-            textAlign: 'center', fontSize: 9, fontWeight: 700,
-            color: 'var(--text-subtle)', letterSpacing: '0.06em',
-            padding: '6px 0', borderBottom: '1px solid var(--border)',
-          }}>
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Calendar grid */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-        background: 'var(--border)', gap: 1,
-        border: '1px solid var(--border)', borderTop: 'none',
-        borderRadius: '0 0 14px 14px', overflow: 'hidden',
-      }}>
-        {cells.map((day, idx) => {
-          if (!day) return <div key={idx} style={{ background: 'var(--surface-2)', minHeight: 56 }} />
-          const daySessions = sessionsByDay(day)
-          const isToday = isSameDay(day, today)
-          const past = isPast(day)
-          const isSelected = selectedDay ? isSameDay(day, selectedDay) : false
-
-          return (
-            <div
-              key={idx}
-              onClick={() => setSelectedDay(isSelected ? null : day)}
-              style={{
-                background: isSelected ? 'rgba(180,190,254,0.1)' : 'var(--surface-1)',
-                minHeight: 56, padding: '6px 4px', cursor: 'pointer',
-                borderLeft: isSelected ? '2px solid var(--brand-light)' : '2px solid transparent',
-                transition: 'background 0.1s',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
-                <span style={{
-                  fontSize: 11, fontWeight: isToday ? 800 : 500,
-                  color: isToday ? 'white' : past ? 'var(--text-subtle)' : 'var(--text-muted)',
-                  background: isToday ? 'var(--brand)' : 'transparent',
-                  borderRadius: '50%', width: 22, height: 22,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {day.getDate()}
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                {daySessions.slice(0, 2).map((s) => (
-                  <div key={s.id} style={{
-                    width: '90%', height: 4, borderRadius: 2,
-                    background: isPast(new Date(s.date)) ? 'rgba(148,163,184,0.5)' : 'var(--brand-light)',
-                  }} />
-                ))}
-                {daySessions.length > 2 && (
-                  <span style={{ fontSize: 8, color: 'var(--text-subtle)' }}>+{daySessions.length - 2}</span>
-                )}
-              </div>
-              {(() => {
-                const dayKey = toDateKey(day)
-                const dayLocks = lockedByDate.get(dayKey) ?? []
-                if (dayLocks.length === 0) return null
-                if (!isGm) {
-                  return dayLocks.some((l) => l.userId === currentUserId) ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
-                      <Lock size={7} color="#f87171" />
-                    </div>
-                  ) : null
-                }
-                return (
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
-                    {dayLocks.slice(0, 4).map((l) => (
-                      <div key={l.id} style={{ width: 5, height: 5, borderRadius: '50%', background: playerColor(l.userId) }} />
-                    ))}
-                  </div>
-                )
-              })()}
-            </div>
-          )
-        })}
-      </div>
+      </Card>
 
       {/* Selected day sessions */}
       {selectedDay && (
-        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>
-              {selectedDay.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </span>
-            {isGm && (
-              <button
+        <section aria-labelledby={ids.day} className="fade-in" style={{ marginTop: 32 }}>
+          <SectionTitle
+            id={ids.day}
+            action={isGm ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Plus size={14} aria-hidden />}
                 onClick={() => openCreate(selectedDay)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  background: 'var(--surface-2)', border: '1px solid var(--border)',
-                  borderRadius: 8, color: 'var(--text-muted)', fontSize: 11, fontWeight: 600,
-                  padding: '5px 10px', cursor: 'pointer',
-                }}
+                aria-label="Añadir sesión este día"
               >
-                <Plus size={11} /> Añadir
-              </button>
+                Añadir
+              </Button>
+            ) : undefined}
+          >
+            {selectedDay.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </SectionTitle>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {selectedSessions.length === 0 ? (
+              <p style={inlineEmpty}>No hay sesiones este día</p>
+            ) : (
+              <ul style={listReset}>
+                {selectedSessions.map((s, i) => (
+                  <li key={s.id} className="rise" style={rise(i)}>
+                    <SessionCard session={s} isGm={isGm} onDelete={(trigger) => askDelete(s, trigger)} />
+                  </li>
+                ))}
+              </ul>
             )}
+
+            {/* Lock section */}
+            {renderLockSection(selectedDay)}
           </div>
-
-          {selectedSessions.length === 0 ? (
-            <div style={{
-              background: 'var(--surface-1)', border: '1px solid var(--border)',
-              borderRadius: 12, padding: '20px', textAlign: 'center',
-              color: 'var(--text-subtle)', fontSize: 13,
-            }}>
-              No hay sesiones este día
-            </div>
-          ) : (
-            selectedSessions.map((s) => <SessionCard key={s.id} session={s} isGm={isGm} onDelete={() => setConfirmDelete(s)} />)
-          )}
-
-          {/* Lock section */}
-          {(() => {
-            const dayKey = toDateKey(selectedDay)
-            const dayLocks = lockedByDate.get(dayKey) ?? []
-
-            if (isGm) {
-              if (dayLocks.length === 0) return null
-              return (
-                <div style={{
-                  background: 'var(--surface-1)', border: '1px solid var(--border)',
-                  borderRadius: 12, padding: '12px 14px',
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                    DÍAS BLOQUEADOS
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {dayLocks.map((l) => (
-                      <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: playerColor(l.userId), flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{l.userDisplayName}</span>
-                          {l.note && (
-                            <span style={{ fontSize: 11, color: 'var(--text-subtle)', marginLeft: 6 }}>{l.note}</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => removeLockMutation.mutate(l.id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', padding: 4 }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            }
-
-            // Player view
-            const ownLock = dayLocks.find((l) => l.userId === currentUserId)
-
-            if (ownLock) {
-              return (
-                <div style={{
-                  background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)',
-                  borderRadius: 12, padding: '12px 14px',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                }}>
-                  <Lock size={14} color="#f87171" />
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#f87171' }}>Día bloqueado</span>
-                    {ownLock.note && (
-                      <p style={{ fontSize: 11, color: 'var(--text-subtle)', margin: '2px 0 0' }}>{ownLock.note}</p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => removeLockMutation.mutate(ownLock.id)}
-                    disabled={removeLockMutation.isPending}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', padding: 4 }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              )
-            }
-
-            if (isPast(selectedDay)) return null
-
-            if (!showLockInput) {
-              return (
-                <button
-                  onClick={() => setShowLockInput(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    background: 'var(--surface-1)', border: '1px dashed var(--border)',
-                    borderRadius: 12, padding: '10px 14px', cursor: 'pointer',
-                    color: 'var(--text-subtle)', fontSize: 12, fontWeight: 600, width: '100%',
-                    textAlign: 'left',
-                  }}
-                >
-                  <Lock size={13} />
-                  Bloquear este día
-                </button>
-              )
-            }
-
-            return (
-              <div style={{
-                background: 'var(--surface-1)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: '12px 14px',
-              }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 8 }}>
-                  BLOQUEAR ESTE DÍA
-                </div>
-                <Input
-                  placeholder="Motivo (opcional)..."
-                  value={lockNote}
-                  onChange={(e) => setLockNote(e.target.value)}
-                />
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button
-                    onClick={() => { setShowLockInput(false); setLockNote('') }}
-                    style={{
-                      flex: 1, padding: '8px', borderRadius: 9, cursor: 'pointer',
-                      fontSize: 12, fontWeight: 600,
-                      background: 'var(--surface-2)', border: '1px solid var(--border)',
-                      color: 'var(--text-subtle)',
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => addLockMutation.mutate({ date: dayKey, note: lockNote })}
-                    disabled={addLockMutation.isPending}
-                    style={{
-                      flex: 1, padding: '8px', borderRadius: 9, cursor: 'pointer',
-                      fontSize: 12, fontWeight: 700,
-                      background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)',
-                      color: '#f87171',
-                    }}
-                  >
-                    {addLockMutation.isPending ? 'Guardando...' : 'Confirmar'}
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
-        </div>
+        </section>
       )}
 
       {/* Bottom list (when no day selected) */}
-      {!selectedDay && (() => {
-        const upcoming = sessions
-          .filter((s) => !isPast(new Date(s.date)))
-          .slice(0, 5)
-        const past = sessions
-          .filter((s) => isPast(new Date(s.date)))
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 3)
+      {!selectedDay && (
+        <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 32 }}>
 
-        return (
-          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* Pending proposals — shown first */}
-            {pendingProposals.length > 0 && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 8 }}>
-                  PROPUESTAS ABIERTAS
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {pendingProposals.map((p) => (
+          {/* Pending proposals — shown first */}
+          {pendingProposals.length > 0 && (
+            <section aria-labelledby={ids.proposals}>
+              <SectionTitle id={ids.proposals}>Propuestas abiertas</SectionTitle>
+              <ul style={listReset}>
+                {pendingProposals.map((p, i) => (
+                  <li key={p.id} className="rise" style={rise(i)}>
                     <ProposalCalendarCard
-                      key={p.id}
                       proposal={p}
                       isGm={isGm}
-                      onReject={setConfirmReject}
-                      onPromote={setPromoteTarget}
+                      onReject={askReject}
+                      onPromote={askPromote}
                       onVote={(proposalId, dateId, canAttend) =>
                         voteMutation.mutate({ proposalId, dateId, canAttend })
                       }
                       votePending={voteMutation.isPending}
                     />
-                  ))}
-                </div>
-              </div>
-            )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-            {!isGm && (() => {
-              const upcomingLocks = lockedDays.filter((l) => !isPast(new Date(l.date + 'T00:00:00')))
-              if (upcomingLocks.length === 0) return null
-              return (
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 8 }}>
-                    MIS DÍAS BLOQUEADOS
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {upcomingLocks.map((l) => (
-                      <div key={l.id} style={{
-                        background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)',
-                        borderRadius: 10, padding: '8px 12px',
-                        display: 'flex', alignItems: 'center', gap: 10,
-                      }}>
-                        <Lock size={12} color="#f87171" />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-                            {new Date(l.date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
-                          </span>
-                          {l.note && (
-                            <span style={{ fontSize: 11, color: 'var(--text-subtle)', marginLeft: 6 }}>{l.note}</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => removeLockMutation.mutate(l.id)}
-                          disabled={removeLockMutation.isPending}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', padding: 4 }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+          {!isGm && upcomingLocks.length > 0 && (
+            <section aria-labelledby={ids.locks}>
+              <SectionTitle id={ids.locks}>Mis días bloqueados</SectionTitle>
+              <Card padding={0}>
+                <ul style={{ ...listReset, gap: 0 }}>
+                  {upcomingLocks.map((l, i) => (
+                    <li
+                      key={l.id}
+                      className="rise"
+                      style={{
+                        ...rise(i),
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        minHeight: 60, padding: '8px 8px 8px 14px',
+                        borderTop: i > 0 ? `1px solid ${c.border}` : undefined,
+                      }}
+                    >
+                      <span aria-hidden style={iconTile(tone.rubi, 32)}>
+                        <Lock size={15} />
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: fs.base - 1, fontWeight: 650, color: c.text, lineHeight: 1.3 }}>
+                          {new Date(l.date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </p>
+                        {l.note && (
+                          <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2, lineHeight: 1.45 }}>{l.note}</p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
+                      <IconButton
+                        label={`Desbloquear el ${lockDateLong(l.date)}`}
+                        variant="danger"
+                        size={44}
+                        onClick={(e) => askUnlock(l, e.currentTarget)}
+                        disabled={removeLockMutation.isPending}
+                      >
+                        <Trash2 size={18} aria-hidden />
+                      </IconButton>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </section>
+          )}
 
-            {upcoming.length > 0 && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 8 }}>
-                  PRÓXIMAS SESIONES
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {upcoming.map((s) => <SessionCard key={s.id} session={s} isGm={isGm} onDelete={() => setConfirmDelete(s)} />)}
-                </div>
-              </div>
-            )}
+          {upcoming.length > 0 && (
+            <section aria-labelledby={ids.upcoming}>
+              <SectionTitle id={ids.upcoming}>Próximas sesiones</SectionTitle>
+              <ul style={listReset}>
+                {upcoming.map((s, i) => (
+                  <li key={s.id} className="rise" style={rise(i)}>
+                    <SessionCard session={s} isGm={isGm} onDelete={(trigger) => askDelete(s, trigger)} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-            {past.length > 0 && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.08em', marginBottom: 8 }}>
-                  ÚLTIMAS SESIONES
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {past.map((s) => <SessionCard key={s.id} session={s} isGm={isGm} onDelete={() => setConfirmDelete(s)} />)}
-                </div>
-              </div>
-            )}
+          {pastSessions.length > 0 && (
+            <section aria-labelledby={ids.past}>
+              <SectionTitle id={ids.past}>Últimas sesiones</SectionTitle>
+              <ul style={listReset}>
+                {pastSessions.map((s, i) => (
+                  <li key={s.id} className="rise" style={rise(i)}>
+                    <SessionCard session={s} isGm={isGm} onDelete={(trigger) => askDelete(s, trigger)} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-            {sessions.length === 0 && pendingProposals.length === 0 && (
-              <div style={{
-                background: 'var(--surface-1)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: '32px', textAlign: 'center',
-                color: 'var(--text-subtle)', fontSize: 13,
-              }}>
-                No hay sesiones registradas todavía
-              </div>
-            )}
-          </div>
-        )
-      })()}
+          {sessions.length === 0 && pendingProposals.length === 0 && (
+            <EmptyState
+              icon={<CalendarDays size={24} aria-hidden />}
+              title="No hay sesiones registradas todavía"
+            />
+          )}
+        </div>
+      )}
 
       {/* Delete session confirmation */}
       <ConfirmDialog
         open={!!confirmDelete}
         title={`¿Eliminar "${confirmDelete?.title}"?`}
         message="Esta acción no se puede deshacer."
-        onConfirm={() => { deleteMutation.mutate(confirmDelete!.id); setConfirmDelete(null) }}
+        onConfirm={() => { rememberRemoval(); deleteMutation.mutate(confirmDelete!.id); setConfirmDelete(null) }}
         onCancel={() => setConfirmDelete(null)}
       />
 
@@ -763,8 +958,33 @@ export function SessionsPage() {
         open={!!confirmReject}
         title={`¿Rechazar "${confirmReject?.title}"?`}
         message="La propuesta se cerrará y los jugadores no podrán votar más."
-        onConfirm={() => { if (confirmReject) rejectMutation.mutate(confirmReject.id); setConfirmReject(null) }}
+        confirmLabel="Rechazar"
+        onConfirm={() => { if (confirmReject) { rememberRemoval(); rejectMutation.mutate(confirmReject.id) } setConfirmReject(null) }}
         onCancel={() => setConfirmReject(null)}
+      />
+
+      {/* Unlock day confirmation (GM or player) */}
+      <ConfirmDialog
+        open={!!confirmUnlock}
+        title="¿Desbloquear este día?"
+        message={confirmUnlock
+          ? confirmUnlock.userId === currentUserId
+            ? `Volverás a estar disponible el ${lockDateLong(confirmUnlock.date)}.`
+            : `${confirmUnlock.userDisplayName} volverá a estar disponible el ${lockDateLong(confirmUnlock.date)}.`
+          : undefined}
+        confirmLabel="Desbloquear"
+        onConfirm={() => {
+          if (confirmUnlock) {
+            // Player unlocking the selected (future) day: its trash disappears, so focus the "Bloquear este día" button that replaces it
+            if (!isGm && selectedDay && !isPast(selectedDay) && confirmUnlock.date === toDateKey(selectedDay)) {
+              refocusLockTrigger.current = true
+            }
+            rememberRemoval()
+            removeLockMutation.mutate(confirmUnlock.id)
+          }
+          setConfirmUnlock(null)
+        }}
+        onCancel={() => setConfirmUnlock(null)}
       />
 
       {/* Promote dialog */}
@@ -773,98 +993,84 @@ export function SessionsPage() {
           proposal={promoteTarget}
           isPending={promoteMutation.isPending}
           onCancel={() => setPromoteTarget(null)}
-          onConfirm={(promoteForm) =>
+          onConfirm={(promoteForm) => {
+            rememberRemoval()
             promoteMutation.mutate({ proposalId: promoteTarget.id, promoteForm })
-          }
+          }}
         />
       )}
 
       {/* Create session sheet */}
-      {showCreate && (
-        <>
-          <div
-            onClick={() => setShowCreate(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-          />
-          <div style={{
-            position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 71,
-            background: 'var(--surface-1)', borderRadius: '20px 20px 0 0',
-            border: '1px solid var(--border-bright)', borderBottom: 'none',
-            paddingBottom: 'calc(20px + var(--sab, 0px))',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--surface-3)' }} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 16px' }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>Nueva sesión</span>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)' }}>
-                <X size={18} />
-              </button>
-            </div>
+      <Sheet
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Nueva sesión"
+        footer={
+          <Button
+            size="lg"
+            fullWidth
+            onClick={() => createSessionMutation.mutate()}
+            disabled={!form.title || !form.date || createSessionMutation.isPending}
+            loading={createSessionMutation.isPending}
+          >
+            {createSessionMutation.isPending ? 'Guardando...' : 'Crear sesión'}
+          </Button>
+        }
+      >
+        <IconButton
+          label="Cerrar"
+          size={44}
+          onClick={() => setShowCreate(false)}
+          style={{ position: 'absolute', top: 12, right: 12 }}
+        >
+          <X size={20} aria-hidden />
+        </IconButton>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
+          <Field label="Título">
+            <Input
+              data-autofocus
+              placeholder="Nombre de la sesión..."
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            />
+          </Field>
 
-            <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>TÍTULO</div>
-                <Input
-                  placeholder="Nombre de la sesión..."
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>FECHA</div>
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>HORA</div>
-                  <Input
-                    type="time"
-                    value={form.time}
-                    onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>LUGAR</div>
-                <Input
-                  placeholder="Lugar de la sesión..."
-                  value={form.location}
-                  onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.06em', marginBottom: 6 }}>NOTAS</div>
-                <Input
-                  placeholder="Notas opcionales..."
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                />
-              </div>
-
-              <button
-                onClick={() => createSessionMutation.mutate()}
-                disabled={!form.title || !form.date || createSessionMutation.isPending}
-                style={{
-                  background: 'var(--brand)', border: 'none', borderRadius: 12,
-                  color: 'white', fontSize: 14, fontWeight: 700,
-                  padding: '13px', cursor: 'pointer', marginTop: 4,
-                  opacity: !form.title || !form.date ? 0.5 : 1,
-                }}
-              >
-                {createSessionMutation.isPending ? 'Guardando...' : 'Crear sesión'}
-              </button>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Fecha">
+              <Input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                style={nativePickerScheme}
+              />
+            </Field>
+            <Field label="Hora">
+              <Input
+                type="time"
+                value={form.time}
+                onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+                style={nativePickerScheme}
+              />
+            </Field>
           </div>
-        </>
-      )}
+
+          <Field label="Lugar">
+            <Input
+              placeholder="Lugar de la sesión..."
+              value={form.location}
+              onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+            />
+          </Field>
+
+          <Field label="Notas">
+            <Input
+              placeholder="Notas opcionales..."
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+          </Field>
+        </div>
+      </Sheet>
 
       {/* Create proposal sheet */}
       {showCreateProposal && (
@@ -880,78 +1086,69 @@ export function SessionsPage() {
 
 // ─── Session card ─────────────────────────────────────────────────────────────
 
-function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: boolean; onDelete: () => void }) {
+function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: boolean; onDelete: (trigger: HTMLElement) => void }) {
   const date = new Date(session.date)
   const past = isPast(date)
 
   return (
-    <div style={{
-      background: 'var(--surface-1)', border: '1px solid var(--border)',
-      borderRadius: 12, padding: '12px 14px',
-      borderLeft: `3px solid ${past ? 'rgba(148,163,184,0.4)' : 'var(--brand-light)'}`,
-      display: 'flex', alignItems: 'flex-start', gap: 12,
-    }}>
-      <div style={{
-        flexShrink: 0, textAlign: 'center',
-        background: past ? 'var(--surface-2)' : 'rgba(180,190,254,0.08)',
-        border: `1px solid ${past ? 'var(--border)' : 'rgba(180,190,254,0.2)'}`,
-        borderRadius: 10, padding: '6px 10px', minWidth: 44,
-      }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: past ? 'var(--text-subtle)' : 'var(--brand-light)', lineHeight: 1 }}>
+    <Card as="article" padding={14} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+      {/* Date tile */}
+      <time
+        dateTime={session.date}
+        style={{
+          flexShrink: 0, width: 54, padding: '9px 0 8px', textAlign: 'center',
+          borderRadius: radius.md,
+          background: past ? c.s2 : 'var(--brand-bg)',
+          border: `1px solid ${past ? c.border : 'var(--brand-border)'}`,
+        }}
+      >
+        <span style={{ ...numeral, display: 'block', fontSize: fs.xl, color: past ? c.muted : c.brandLight }}>
           {date.getDate()}
-        </div>
-        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', letterSpacing: '0.04em', marginTop: 2 }}>
+        </span>
+        <span style={{ ...eyebrow, display: 'block', marginTop: 5, color: past ? c.subtle : c.brand }}>
           {date.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()}
-        </div>
-      </div>
+        </span>
+      </time>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: past ? 'var(--text-muted)' : 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {session.title}
-          </span>
+      <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+        <h3 style={{ ...cardTitle, color: past ? c.muted : c.text, overflowWrap: 'anywhere' }}>
+          {session.title}
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap', marginTop: 6 }}>
           {past ? (
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-subtle)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
-              PASADA
-            </span>
+            <Badge style={{ fontSize: fs.eyebrow, letterSpacing: '0.08em' }}>PASADA</Badge>
           ) : (
-            <span style={{ fontSize: 9, fontWeight: 700, color: '#86efac', background: 'rgba(134,239,172,0.1)', border: '1px solid rgba(134,239,172,0.2)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
-              PLANIFICADA
-            </span>
+            <Badge variant="success" style={{ fontSize: fs.eyebrow, letterSpacing: '0.08em' }}>PLANIFICADA</Badge>
           )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-subtle)' }}>
-            <Clock size={10} />
+          <span style={metaText}>
+            <Clock size={14} aria-hidden />
             {date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
           </span>
           {session.location && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-subtle)' }}>
-              <MapPin size={10} />
+            <span style={metaText}>
+              <MapPin size={14} aria-hidden />
               {session.location}
             </span>
           )}
         </div>
         {session.notes && (
-          <p style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 4, lineHeight: 1.4 }}>
+          <p style={{ fontSize: fs.sm + 1, color: c.muted, marginTop: 8, lineHeight: 1.5 }}>
             {session.notes}
           </p>
         )}
       </div>
 
       {isGm && (
-        <button
-          onClick={onDelete}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-subtle)', padding: 4, flexShrink: 0,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#fb7185')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+        <IconButton
+          label={`Eliminar sesión ${session.title}`}
+          variant="danger"
+          size={44}
+          onClick={(e) => onDelete(e.currentTarget)}
+          style={{ marginTop: -4, marginRight: -4 }}
         >
-          <Trash2 size={13} />
-        </button>
+          <Trash2 size={18} aria-hidden />
+        </IconButton>
       )}
-    </div>
+    </Card>
   )
 }

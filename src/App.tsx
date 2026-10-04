@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppLayout } from './components/AppLayout'
+import { WorldGate } from './components/WorldGate'
 import { LoginPage } from './pages/auth/LoginPage'
 import { RegisterPage } from './pages/auth/RegisterPage'
 import { CampaignListPage } from './pages/campaigns/CampaignListPage'
@@ -49,11 +50,11 @@ export default function App() {
               <Route path="personajes/bolsa/:characterId" element={<BolsaDetailPage />} />
               <Route path="historia" element={<HistoriaPage />} />
               <Route path="encyclopedia" element={<EncyclopediaPage />} />
-              <Route path="encyclopedia/radiant-orders" element={<RadiantOrdersPage />} />
+              <Route path="encyclopedia/radiant-orders" element={<WorldGate feature="caminoRadiante"><RadiantOrdersPage /></WorldGate>} />
               <Route path="encyclopedia/heroic-paths" element={<HeroicPathsPage />} />
               <Route path="encyclopedia/combat" element={<CombatPage />} />
               <Route path="encyclopedia/aventuras" element={<AventurasPage />} />
-              <Route path="encyclopedia/potencias" element={<PotenciasPage />} />
+              <Route path="encyclopedia/potencias" element={<WorldGate feature="potencias"><PotenciasPage /></WorldGate>} />
               <Route path="gm" element={<GmPage />} />
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}

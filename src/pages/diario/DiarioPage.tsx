@@ -5,6 +5,7 @@ import { ChevronRight, Drama, Flag, Sparkles, UserRound, type LucideIcon } from 
 import { diaryApi } from '../../api/diary'
 import { Button, EmptyState, PageHeader, SectionTitle, Sheet, Spinner } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
+import { useWorldConfig } from '../../store/campaignStore'
 import { buttonReset, c, eyebrow, font, fs, numeral, page, radius, shadow, titleText, tone, type Tone } from '../../theme'
 import type { DiaryEntry, DiaryMentionType } from '../../types'
 
@@ -193,6 +194,9 @@ function SessionMedallion({ n, size = 44 }: { n: number; size?: number }) {
 
 function DiaryEntrySheet({ entry, onClose }: { entry: DiaryEntry; onClose: () => void }) {
   const legendId = useId()
+  const { features } = useWorldConfig()
+  // Legend order. Spren mentions are a feature of the world (WorldConfig.features.mencionSpren), so its legend entry goes with it
+  const legendTypes = (['pj', 'npc', 'spren', 'faction'] as DiaryMentionType[]).filter((type) => type !== 'spren' || features.mencionSpren)
   return (
     <Sheet
       open
@@ -256,7 +260,7 @@ function DiaryEntrySheet({ entry, onClose }: { entry: DiaryEntry; onClose: () =>
         >
           <SectionTitle as="h3" id={legendId} style={{ marginBottom: 12 }}>En esta sesión</SectionTitle>
           <dl style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: 0 }}>
-            {(['pj', 'npc', 'spren', 'faction'] as DiaryMentionType[]).map((type) => {
+            {legendTypes.map((type) => {
               const items = entry.mentions.filter(m => m.type === type)
               if (items.length === 0) return null
               const s = MENTION_STYLE[type]
@@ -370,6 +374,7 @@ export function DiarioPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
   const cId = Number(campaignId)
   const [selected, setSelected] = useState<DiaryEntry | null>(null)
+  const cfg = useWorldConfig()
 
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ['diary', cId],
@@ -387,7 +392,7 @@ export function DiarioPage() {
 
       {entries.length === 0 ? (
         <EmptyState
-          icon={<CosmereIcon name="archivo-tormentas" size={28} />}
+          icon={<CosmereIcon name={cfg.emblema} size={28} />}
           title="El diario está vacío"
           description="Las crónicas de cada sesión aparecerán aquí."
         />

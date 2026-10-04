@@ -299,6 +299,145 @@
   }
 }
 
+/* ═══ World theme: Nacidos de la bruma (<html data-world="mistborn">) ═════════════════════════════════════
+   AppLayout sets data-world inside a campaign of that world (index.html also does it before the first paint).
+   Stormlight, and every page outside a campaign, has no attribute: none of these rules matches it.
+   "Noche de bruma" (dark) and "Pergamino de ceniza" (light): the same identity in cold steel and pewter instead of
+   Stormlight blue, warm ash surfaces and the red sun of the First Era in the atmosphere. Official gold, the navy
+   constants and the ten gem tones are shared Cosmere identity and stay as they are; derived tokens (--brand-bg,
+   --brand-border, --glow-brand…) follow --brand on their own. Text, brand and tone tokens keep ≥4.5:1 on
+   --bg … --surface-3 (--text-disabled is for disabled controls only, as in the base themes).
+   Same three places as the base theme. The dark block (0,2,0) comes after the base blocks and ties with
+   :root[data-theme='light'], so the two light blocks (0,3,0) set EVERY token it sets again: keep the three lists in
+   step, or a token missing from a light block would leak its dark value into the light theme. */
+:root[data-world='mistborn'] {
+  color-scheme: dark;
+
+  /* Ink: ash and mist */
+  --bg:        #0c0b0d;
+  --mantle:    #08070a;
+  --surface-1: #141215;
+  --surface-2: #1c191e;
+  --surface-3: #26222a;
+  --surface-4: #312c36;
+  --overlay:   rgba(6, 4, 8, 0.74);
+
+  --border:        rgba(205, 190, 200, 0.10);
+  --border-bright: rgba(205, 190, 200, 0.20);
+  --border-strong: rgba(205, 190, 200, 0.34);
+  --hover:         rgba(205, 190, 200, 0.06);
+  --hover-strong:  rgba(205, 190, 200, 0.10);
+  --track:         rgba(205, 190, 200, 0.12);
+
+  --text:          #ede9e7;
+  --text-muted:    #bdb5b6;
+  --text-subtle:   #988f92;
+  --text-disabled: #6c6468;
+
+  /* Brand: steel */
+  --brand:       #a9bccd;
+  --brand-light: #d3dfea;
+  --brand-dark:  #3e5a74;   /* solid fill carrying white text */
+  --brand-fill:  #a9bccd;   /* primary button fill */
+  --on-brand:    #0b1218;
+  --brand-glow:  rgba(169, 188, 205, 0.26);
+
+  /* Atmosphere: the red sun of the First Era (top right), steel and ash haze */
+  --atmo: radial-gradient(900px 520px at 88% -8%, rgba(190, 98, 84, 0.10), transparent 62%),
+          radial-gradient(700px 480px at -12% 104%, rgba(169, 188, 205, 0.05), transparent 60%),
+          radial-gradient(600px 400px at 40% 120%, rgba(150, 140, 150, 0.05), transparent 60%);
+  --grain-opacity: 0.06;   /* ash */
+  --selection: rgba(169, 188, 205, 0.26);
+}
+
+:root[data-world='mistborn'][data-theme='light'] {
+  color-scheme: light;
+
+  /* Paper: pale ash, warm white cards */
+  --bg:        #ebe8e6;
+  --mantle:    #e0dcda;
+  --surface-1: #faf8f7;
+  --surface-2: #f1eeec;
+  --surface-3: #e5e0de;
+  --surface-4: #d8d2d0;
+  --overlay:   rgba(30, 22, 32, 0.42);
+
+  --border:        rgba(40, 30, 40, 0.13);
+  --border-bright: rgba(40, 30, 40, 0.22);
+  --border-strong: rgba(40, 30, 40, 0.38);
+  --hover:         rgba(40, 30, 40, 0.05);
+  --hover-strong:  rgba(40, 30, 40, 0.09);
+  --track:         rgba(40, 30, 40, 0.12);
+
+  --text:          #1d1a1f;
+  --text-muted:    #4a434a;
+  --text-subtle:   #625a62;
+  --text-disabled: #a69ea2;
+
+  /* Brand: pewter */
+  --brand:       #3a5672;
+  --brand-light: #2f4760;   /* active text */
+  --brand-dark:  #28384a;   /* solid fill carrying white text */
+  --brand-fill:  #2b3a4c;   /* primary buttons */
+  --on-brand:    #ffffff;
+  --brand-glow:  rgba(58, 86, 114, 0.22);
+
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(40, 30, 40, 0.08);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 28px -14px rgba(40, 30, 40, 0.28);
+  --shadow-3: 0 28px 70px -18px rgba(40, 30, 40, 0.38);
+
+  --atmo: radial-gradient(1000px 560px at 85% -12%, rgba(255, 255, 255, 0.9), transparent 62%),
+          radial-gradient(760px 480px at 105% 110%, rgba(176, 96, 88, 0.10), transparent 60%),
+          linear-gradient(180deg, #efecea 0%, #e8e4e2 60%, #e3dfdd 100%);
+  --grain-opacity: 0.04;
+  --selection: rgba(58, 86, 114, 0.22);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-world='mistborn']:not([data-theme='dark']) {
+    color-scheme: light;
+
+    /* Paper: pale ash, warm white cards */
+    --bg:        #ebe8e6;
+    --mantle:    #e0dcda;
+    --surface-1: #faf8f7;
+    --surface-2: #f1eeec;
+    --surface-3: #e5e0de;
+    --surface-4: #d8d2d0;
+    --overlay:   rgba(30, 22, 32, 0.42);
+
+    --border:        rgba(40, 30, 40, 0.13);
+    --border-bright: rgba(40, 30, 40, 0.22);
+    --border-strong: rgba(40, 30, 40, 0.38);
+    --hover:         rgba(40, 30, 40, 0.05);
+    --hover-strong:  rgba(40, 30, 40, 0.09);
+    --track:         rgba(40, 30, 40, 0.12);
+
+    --text:          #1d1a1f;
+    --text-muted:    #4a434a;
+    --text-subtle:   #625a62;
+    --text-disabled: #a69ea2;
+
+    /* Brand: pewter */
+    --brand:       #3a5672;
+    --brand-light: #2f4760;   /* active text */
+    --brand-dark:  #28384a;   /* solid fill carrying white text */
+    --brand-fill:  #2b3a4c;   /* primary buttons */
+    --on-brand:    #ffffff;
+    --brand-glow:  rgba(58, 86, 114, 0.22);
+
+    --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(40, 30, 40, 0.08);
+    --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 28px -14px rgba(40, 30, 40, 0.28);
+    --shadow-3: 0 28px 70px -18px rgba(40, 30, 40, 0.38);
+
+    --atmo: radial-gradient(1000px 560px at 85% -12%, rgba(255, 255, 255, 0.9), transparent 62%),
+            radial-gradient(760px 480px at 105% 110%, rgba(176, 96, 88, 0.10), transparent 60%),
+            linear-gradient(180deg, #efecea 0%, #e8e4e2 60%, #e3dfdd 100%);
+    --grain-opacity: 0.04;
+    --selection: rgba(58, 86, 114, 0.22);
+  }
+}
+
 /* ═══ Base ═══════════════════════════════════════════════════════════════ */
 
 /* In @layer base so Tailwind utilities (legacy p-*, m-* classes) can still win over the reset */

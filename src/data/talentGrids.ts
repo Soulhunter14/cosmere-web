@@ -31,26 +31,10 @@
  * this manual.
  */
 
-export interface TalentGridCell {
-  /** Exact talent name, matching the corresponding data file's talento/forma 'name'/'nombre'. */
-  name: string
-  /** 0-indexed lane (left-to-right, as printed in the book). */
-  col: number
-  /** 0-indexed row (top-to-bottom, as printed in the book). */
-  row: number
-}
+import type { TalentGrid } from '../lib/talentTypes'
 
-export interface TalentGrid {
-  /** Number of lanes in this tree's diagram. */
-  cols: number
-  /** Number of rows in this tree's diagram. */
-  rows: number
-  /** One entry per talent placed in the diagram. Not necessarily cols*rows — every heroic,
-   *  potencia and radiante grid here is a full rectangle, but 'cantor' has a gap (no talent
-   *  above/below 'Mente ambiciosa' in its own lane) and 'radiante:truthwatchers' adds an extra
-   *  row for a talent with no diagram of its own. */
-  cells: TalentGridCell[]
-}
+/** `TalentGrid` and `TalentGridCell` live in src/lib/talentTypes.ts since T34a (Cosmere core); re-exported so that no import of them changes */
+export type { TalentGrid, TalentGridCell } from '../lib/talentTypes'
 
 export const TALENT_GRIDS: Record<string, TalentGrid> = {
 // Heroic specialties (2 lanes x 4 rows, per the book's diagram).

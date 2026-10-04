@@ -18,6 +18,9 @@ import type { Potencia } from '../data/potencias'
 import type { PoderDef } from '../data/mistborn/tipos'
 import type { TipoClavo, ReglaHemalurgia } from '../data/mistborn/hemalurgia'
 import type { AventurasOverlay, CombatOverlay } from '../data/overlays'
+import type { TalentRules } from '../lib/talentRules'
+import type { RadiantOrder } from '../data/radiantOrders'
+import type { CaminoNacidoDelMetal } from '../data/mistborn/caminosNacidosDelMetal'
 
 /** Character fields that hold an attribute value (talentGraph.ts only has `SkillField` for skills). */
 export type AttrField = 'fuerza' | 'velocidad' | 'intelecto' | 'voluntad' | 'discernimiento' | 'presencia'
@@ -35,8 +38,11 @@ export interface TopicDef {
   ruta?: string
 }
 
-// Placeholder that the owning task replaces with the real type (it does not exist yet).
-export type TalentRules = unknown      // TODO T34a: replace with the real type from src/lib/talentRules.ts
+/** Talent rules of a world (T34a, src/lib/talentRules.ts): every tree, grid and summary the talent engine reads. A type-only import */
+export type { TalentRules }
+
+/** An Investida path with its talent tree (§2): a radiant order (Stormlight) or a metalborn path (Mistborn). Type-only imports: no data reach the main chunk */
+export type CaminoInvestidoDef = RadiantOrder | CaminoNacidoDelMetal
 
 /** Overlays of the shared «Aventuras» and «Combate» rules (T23, src/data/overlays.ts). A type-only import: no data reach the main chunk */
 export type { AventurasOverlay, CombatOverlay }

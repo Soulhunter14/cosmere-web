@@ -10,9 +10,48 @@ import { TIPOS_CLAVO, REGLAS_HEMALURGIA } from '../data/mistborn/hemalurgia'
 import { PODERES_FERUQUIMICOS } from '../data/mistborn'
 import { PODERES_ALOMANTICOS } from '../data/mistborn/alomancia'
 import { HEROIC_PATHS_MISTBORN } from '../data/mistborn/heroicPaths'
+import { SKILL_NAME_MAP, type TalentRules } from '../lib/talentRules'
+import { TALENT_GRIDS } from '../data/talentGrids'
+import { TALENT_SUMMARIES } from '../data/talentSummaries'
+import { CAMINOS_NACIDOS_DEL_METAL } from '../data/mistborn/caminosNacidosDelMetal'
+import { ASCENDENCIAS_MB } from '../data/mistborn/origenes'
+import { TALENT_GRIDS_MISTBORN } from '../data/mistborn/talentGrids'
+import { TALENT_SUMMARIES_MISTBORN } from '../data/mistborn/talentSummaries'
+
+/**
+ * Keys `heroico:<camino>:<Especialidad>` of the specialties that both books share (10, reused by reference from Stormlight, §8):
+ * they keep their Stormlight grid, picked from TALENT_GRIDS. The 8 specialties of this book have their own key in TALENT_GRIDS_MISTBORN.
+ */
+const CLAVES_HEROICO_REUTILIZADAS = HEROIC_PATHS_MISTBORN
+  .flatMap((p) => p.specialties.map((s) => `heroico:${p.id}:${s.name}`))
+  .filter((clave) => Object.hasOwn(TALENT_GRIDS, clave))
+
+/**
+ * Talent rules of Scadrial (T34a, §7.7, §8): the heroic paths of this book, the five metalborn paths, the 34 metallic powers and the
+ * trees of the three ancestries (by slug). Grids: the 10 shared specialties keep the Stormlight ones, then TALENT_GRIDS_MISTBORN by
+ * reference (metalborn paths, ancestries, the 8 new specialties and, from T38-2, the powers). Summaries: Stormlight's, then this book's.
+ */
+export const MISTBORN_TALENTOS: TalentRules = {
+  id: 'mistborn',
+  caminosHeroicos: HEROIC_PATHS_MISTBORN,
+  caminosInvestidos: CAMINOS_NACIDOS_DEL_METAL,
+  poderes: [...PODERES_ALOMANTICOS, ...PODERES_FERUQUIMICOS],
+  arbolesAscendencia: Object.fromEntries(ASCENDENCIAS_MB.map((a) => [a.slug, a.arbol])),
+  grids: { ...Object.fromEntries(CLAVES_HEROICO_REUTILIZADAS.map((clave) => [clave, TALENT_GRIDS[clave]])), ...TALENT_GRIDS_MISTBORN },
+  summaries: { ...TALENT_SUMMARIES, ...TALENT_SUMMARIES_MISTBORN },
+  // «Armamento ligero» / «Armamento pesado»: the names this book gives to armasLigeras / armasPesadas (§7.7)
+  skillNameMap: { ...SKILL_NAME_MAP, 'Armamento ligero': 'armasLigeras', 'Armamento pesado': 'armasPesadas' },
+  nombresIdeales: null,
+  formasIniciales: [],
+  // The exclusivity of the metalborn paths is enforced by the sheet (CaminoMetalPicker), not by the talent map (§7.7 #2)
+  ignorarClausulas: [/^no tener ningún otro talento de ruptura o herencia\.?$/i],
+  // Permanent increases of the attributes (Bendiciones, Tamaño desmedido, Guardián del conocimiento) count for prerequisites (L.28 / PDF 34)
+  bonosCuentanParaRequisitos: true,
+  campoCaminoInvestido: 'caminoMetal',
+}
 
 export const DATA: WorldData = {
-  talentos: null,
+  talentos: MISTBORN_TALENTOS,
   caminosHeroicos: HEROIC_PATHS_MISTBORN,
   poderes: [
     ...PODERES_ALOMANTICOS,

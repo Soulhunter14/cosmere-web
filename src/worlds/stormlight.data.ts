@@ -11,6 +11,7 @@ import { HEROIC_PATHS } from '../data/heroicPaths'
 import { POTENCIAS } from '../data/potencias'
 import type { AventurasOverlay, CombatOverlay } from '../data/overlays'
 import type { WorldData } from './types'
+import { STORMLIGHT_TALENTOS } from '../lib/talentRules'
 
 /**
  * Overlay of Stormlight over the shared «Aventuras» rules (T23b, Q12, P8). The base (src/data/aventuras.ts) is neutral Cosmere text;
@@ -129,7 +130,7 @@ export const STORMLIGHT_COMBATE: CombatOverlay = {
 }
 
 export const DATA: WorldData = {
-  talentos: null,
+  talentos: STORMLIGHT_TALENTOS,
   caminosHeroicos: HEROIC_PATHS,
   poderes: POTENCIAS,
   overlays: { aventuras: STORMLIGHT_AVENTURAS, combat: STORMLIGHT_COMBATE },

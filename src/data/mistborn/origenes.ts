@@ -105,8 +105,8 @@ export const ARBOL_SANGRE_KOLOSS: Talento[] = [
       'nuevo en cada nivel que subes (+1 de salud máxima por nivel).',
     notaLibro:
       'El párrafo «Resistencia Koloss (nivel 1)» de «Elección de ascendencia de sangre koloss» escribe «Koloss» con mayúscula inicial ' +
-      '(L.38 / PDF 44, verificado en imagen); el título de la ficha del talento y los prerrequisitos de los demás talentos (L.38-39 / PDF 44-45) usan ' +
-      '«Resistencia koloss». Aquí, en el motor de talentos y en el servidor se usa la forma en minúscula.',
+      '(L.38 / PDF 44), pero el título de la ficha del talento y los prerrequisitos de los demás talentos (L.38-39 / PDF 44-45) usan ' +
+      '«Resistencia koloss» en minúscula.',
   },
   {
     // L.39 / PDF 45
@@ -123,8 +123,7 @@ export const ARBOL_SANGRE_KOLOSS: Talento[] = [
       'como tu rango, en lugar de una sola.',
     notaLibro:
       'El diagrama dice que puedes hacerlo tantas veces por escena como tu rango; el texto de la ficha habla de un número de veces ' +
-      'adicional igual al rango, en lugar de una sola vez (L.39 / PDF 45, verificado en imagen). No queda claro si el total por escena es el rango o el rango ' +
-      'más la vez habitual: se recoge la lectura del diagrama.',
+      'adicional igual al rango (L.39 / PDF 45). No queda claro si el total es el rango o el rango más la vez habitual: se sigue la lectura del diagrama.',
   },
   {
     // L.39 / PDF 45
@@ -196,8 +195,8 @@ export const BENDICIONES_KANDRA: BendicionKandra[] = [
     bonos: [{ objetivo: 'desvio', valor: 1 }], subeMaximo: false,
     descripcion: 'Tu valor de desvío aumenta en 1; bajo el efecto de Disfraz kandra, ese desvío sí reduce el daño por golpe.',
     notaLibro:
-      'El libro solo dice que el valor de desvío aumenta en 1 (L.35 / PDF 41, verificado en imagen) y no aclara si se acumula con el de la ' +
-      'armadura: la app lo acumula [inferido, Q8: decisión cerrada; la imagen confirma que el libro no dice nada de la armadura].',
+      'El libro solo dice que el valor de desvío aumenta en 1 (L.35 / PDF 41) y no aclara si se acumula con el de la ' +
+      'armadura [inferido: la imagen confirma que el libro no dice nada de la armadura]. Se asume aquí que se acumula.',
   },
 ]
 

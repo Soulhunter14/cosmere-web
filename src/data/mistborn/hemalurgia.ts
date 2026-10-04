@@ -92,9 +92,7 @@ export const TIPOS_CLAVO: TipoClavo[] = [
     arte: 'feruquimia', categoria: 'espiritual',
     opciones: ['feruquimia:aluminio', 'feruquimia:cromo', 'feruquimia:duraluminio', 'feruquimia:nicrosil'],
     notaLibro:
-      'Observación: el clavo de bendaleo ofrece feruquimia de nicrosil (L.291 / PDF 297), mientras que la tabla de medallones feruquímicos ' +
-      'marca el nicrosil como no disponible para personajes jugadores (L.294 / PDF 300). Se transcriben las dos tablas tal cual ' +
-      '(verificado en imagen, PDF 297 y 300).',
+      'El clavo de bendaleo ofrece feruquimia de nicrosil (L.291 / PDF 297), pero la tabla de medallones feruquímicos marca el nicrosil como no disponible para personajes jugadores (L.294 / PDF 300). Se incluyen ambas opciones tal como aparecen en el libro.',
   },
   {
     metal: 'bronce', rango: 3, tipo: 'poder', roba: 'Poder alomántico mental',
@@ -259,10 +257,9 @@ export const REGLAS_HEMALURGIA: ReglaHemalurgia[] = [
       'Investidura; desde ese momento puede gastar sus subidas de nivel en talentos del árbol del poder y en grados de esa habilidad.',
     cita: 'L.290 / PDF 296',
     notaLibro:
-      'El libro no dice de dónde sale la mente de metal de un poder feruquímico obtenido por clavo (el clavo no cuenta como mente de ' +
-      'metal, salvo que la DJ decida lo contrario, L.290 / PDF 296) ni menciona la meta «Fabricar tu mente de metal»: se deja a criterio de la ' +
-      'DJ [inferido: el libro guarda silencio sobre el origen de esa mente de metal (verificado en imagen, PDF 296); solo dice que el clavo ' +
-      'no cuenta como mente de metal salvo decisión de la DJ].',
+      'El libro no especifica de dónde sale la mente de metal de un poder feruquímico obtenido por clavo (el clavo no cuenta como mente de ' +
+      'metal, salvo que la DJ decida lo contrario, L.290 / PDF 296) ni menciona la meta «Fabricar tu mente de metal». Se deja a criterio de la ' +
+      'DJ cómo se obtiene esa mente de metal [inferido: el libro guarda silencio sobre su origen; solo aclara que el clavo no la sustituye salvo decisión de la DJ].',
   },
   {
     id: 'poder-existente',

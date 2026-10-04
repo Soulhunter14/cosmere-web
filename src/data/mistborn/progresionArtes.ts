@@ -29,9 +29,9 @@ export const PROGRESION_ARTES_METALICAS: Record<GradosArte, ProgresionArte> = {
     dado: 20,
     alcance: 192,
     notaLibro:
-      'Con 6 o más grados la tabla dice «Igual al rango», mientras que el texto de L.163 / PDF 169 define el límite como los grados en la ' +
-      'habilidad Investida (mínimo 1); las dos frases están impresas así (verificado en imagen, PDF 169). Se transcribe la tabla tal cual y el ' +
-      'servidor aplica el rango del personaje [inferido: el libro no concilia las dos frases y la imagen no lo resuelve; con rango máximo 5, ' +
+      'La tabla dice «Igual al rango» para el límite, pero el texto de L.163 / PDF 169 define el límite como los grados en la ' +
+      'habilidad Investida (mínimo 1); el libro se contradice sobre este punto. ' +
+      'Se aplica aquí el rango del personaje [inferido: el libro no concilia las dos frases; con rango máximo 5, ' +
       'L.29 / PDF 35, el límite de la fila «6 o más» nunca superaría el de 5 grados, lo que apunta a una errata de «grados» por «rango»]. ' +
       'Solo es posible superar los 5 grados con hemalurgia u otros efectos especiales (nota * de la tabla).',
   },

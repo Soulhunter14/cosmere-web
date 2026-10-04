@@ -68,7 +68,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
     talentos: [
       {
         name: 'Ráfaga de monedas', cost: 'special', prereq: 'poder Alomancia de acero', description: 'Antes de Lanzar una moneda puedes gastar Investidura extra, hasta tu límite, para que el disparo tenga el rasgo Explosiva: 1,5 m de radio por cada punto extra.',
-        notaLibro: 'El prerrequisito se imprime «Alomancia de acero», sin el «poder» de las demás raíces (L.174 / PDF 180, verificado en imagen); se normaliza a «poder Alomancia de acero».',
+        notaLibro: 'El libro imprime solo «Alomancia de acero» para este talento, sin el «poder» que sí llevan los demás (L.174 / PDF 180).',
       }, // L.174 / PDF 180
       { name: 'Prevenirse con palanca', cost: 'passive', prereq: 'poder Alomancia de acero', description: 'Cuando te apoyas con Prevenirse en algo mayor que tú, ese objeto pone el tamaño para tus Tirones de hierro y Empujones de acero; con objetos de tu tamaño o menores, tienes ventaja en esas pruebas de Alomancia.' }, // L.174 / PDF 180
       { name: 'Disparo con empujón', cost: 'special', prereq: 'Armamento pesado 2 o más o Armamento ligero 2 o más; talento Ráfaga de monedas', description: 'Tu Empujón de acero puede lanzar la munición metálica de un arma a distancia, en vez de la prueba de Alomancia. Valen el alcance y el daño del arma, con alcances corto y largo +6 m por punto gastado, más los dados de Lanzar una moneda.' }, // L.173 / PDF 179
@@ -83,7 +83,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
     id: 'alomancia:aluminio', arte: 'alomancia', metal: 'aluminio', name: 'Alomancia de aluminio', atributo: 'Voluntad',
     caminos: [...TRES_CAMINOS], eras: erasDe('aluminio'), requiereMeta: true, costoBase: 'action1', // L.175 / PDF 181 (verificado en imagen): no tree header lists the paths; brumoso and nacidoble are backed by the text and by the table of L.372 / PDF 378 (Era 2), nacido-de-la-bruma is [inferido] by analogy with duraluminio and electro, whose headers list it (§7.5)
     descripcion: 'En Scadrial se tiene por un poder inútil, incluso dañino: vacía de golpe tus reservas de metal, también las de las mentes de metal que decantes. Fuera de Scadrial protege de las Artes Investidas ajenas, y los saltamundos llaman «vacíos» a quienes lo queman. El libro solo lo recomienda en campañas con saltamundos.',
-    notaLibro: 'Sin árbol de talentos ni frase de caminos que lo desbloqueen (L.175 / PDF 181, verificado en imagen); sí es elegible como poder en Era 2 (tabla de L.372 / PDF 378: brumoso y nacidoble) y el recuadro «Elección de alomancia de aluminio» presenta al «mosquito de aluminio» como opción de personaje. Los `caminos` son los tres caminos alománticos: brumoso y nacidoble salen de esa tabla; nacido de la bruma se añade por analogía con el duraluminio y el electro, cuyas cabeceras sí lo listan [inferido: ni la entrada ni el recuadro enumeran caminos].',
+    notaLibro: 'Sin árbol de talentos ni caminos que lo desbloqueen (L.175 / PDF 181), pero es elegible como poder en Era 2 (tabla de L.372 / PDF 378: brumoso y nacidoble) y el recuadro «Elección de alomancia de aluminio» presenta al «mosquito de aluminio» como opción de personaje. Los tres caminos disponibles son brumoso, nacidoble y nacido de la bruma; los dos primeros salen de esa tabla, el tercero por analogía con el duraluminio y el electro [inferido: ni la entrada ni el recuadro lo enumeran explícitamente].',
     acciones: [
       {
         nombre: 'Quemar aluminio', activacion: 'action1', duracion: '1 ronda',
@@ -232,7 +232,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
       { name: 'Burbuja espontánea', cost: 'reaction', prereq: 'Alomancia 2 o más; poder Alomancia de cadmio', description: 'Cuando alguien va a hacer algo que una burbuja afectaría, gastas 1 punto de concentración y quemas bendaleo o cadmio (Investidura normal). Contra un ataque debes hacerlo antes de la tirada, y el ataque cruza el borde.' }, // L.186 / PDF 192
       {
         name: 'Dilatación temporal', cost: 'passive', prereq: 'Alomancia 3 o más; talento Burbuja ampliada', description: 'Con Burbuja ampliada, tu burbuja de cadmio puede medir entre 10,5 y 13,5 m (en vez de 7,5 m).',
-        notaLibro: 'El texto del talento da una horquilla de 10,5 a 13,5 m; el diagrama lo resume como «hasta los 13,5 metros» (L.186 / PDF 192 y L.187 / PDF 193, verificado en imagen del diagrama).',
+        notaLibro: 'El texto del talento da una horquilla de 10,5 a 13,5 m; el diagrama lo resume como «hasta los 13,5 metros» (L.186 / PDF 192 y L.187 / PDF 193).',
       }, // L.186 / PDF 192
       { name: 'Burbuja expeditiva', cost: 'passive', prereq: 'Alomancia 3 o más; talento Burbuja espontánea', description: 'Quemar bendaleo o cadmio te cuesta una acción menos.' }, // L.186 / PDF 192
     ],
@@ -269,7 +269,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
       { name: 'Encender determinación', cost: 'special', prereq: 'Liderazgo 2 o más; talento Agresión abrumadora', description: 'Una vez por escena, al quemar cinc, cambias el efecto habitual por dar ánimo: cada personaje de la zona menos tú recupera concentración igual a la mitad de la Investidura gastada (hacia arriba) y queda Resuelto hasta que lo pierda o acabe tu encendido.' }, // L.189 / PDF 195
       {
         name: 'Manipulación sutil', cost: 'action1', prereq: 'Perspicacia 3 o más; talento Influencia precisa', description: 'Gastas 1 punto de Investidura: hasta el final de tu próximo turno tienes ventaja al influir en personajes de tu alcance (también en la prueba de Alomancia para pasar inadvertido) y los Secuaces y Rivales que te resisten pierden 2 puntos de concentración más. Se mantiene con 1 punto como acción gratuita.',
-        notaLibro: 'En la copia de cinc la línea «Activación» imprime el marcador «[1 action]» en lugar del símbolo (L.190 / PDF 196, verificado en imagen); el diagrama de cinc y la copia de latón (L.206 / PDF 212) llevan el símbolo de 1 acción, que es el que se usa.',
+        notaLibro: 'En la ficha de cinc aparece el marcador de texto «[1 action]» en la línea de activación, pero el diagrama de cinc y la copia de latón llevan el símbolo de 1 acción (L.190 / PDF 196 y L.206 / PDF 212).',
       }, // L.190 / PDF 196
       { name: 'Brío profundo', cost: 'special', prereq: 'Liderazgo 3 o más; talento Encender determinación', description: 'Al Encender determinación eliges además tantos objetivos como Investidura gastaste: quedan Concentrados mientras dure el efecto.' }, // L.189 / PDF 195
     ],
@@ -308,7 +308,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
     id: 'alomancia:cromo', arte: 'alomancia', metal: 'cromo', name: 'Alomancia de cromo', atributo: 'Voluntad',
     caminos: [...BRUMOSO_NACIDOBLE], eras: erasDe('cromo'), requiereMeta: true, costoBase: 'action1',
     descripcion: 'Con un toque vacías las reservas de poder de un nacido del metal o de otro personaje Investido, que siente un frío súbito. Sus alomantes son las sanguijuelas; en Scadrial, una banda sensata lleva una por si aparece otro usuario de las artes metálicas.',
-    notaLibro: 'La acción dice «Tira 1d4» y, a la vez, que el objeto con cargas «pierde la mitad» (L.193 / PDF 199); Sifón de mentes de metal (L.194 / PDF 200) dice que con ese talento se pierde el resultado del dado «en lugar de la mitad», así que de base se pierde la mitad y el dado solo cuenta con ese talento. Se toma la mitad (verificado en imagen, PDF 199 y 200); la tirada de 1d4 de ese punto no fija las cargas.',
+    notaLibro: 'La acción dice «Tira 1d4» y, a la vez, que el objeto con cargas «pierde la mitad» (L.193 / PDF 199); Sifón de mentes de metal (L.194 / PDF 200) aclara que con ese talento se pierde el resultado del dado «en lugar de la mitad». De base, la mitad del resultado es lo que se pierde; la tirada de 1d4 solo fija las cargas cuando usas el talento Sifón.',
     acciones: [
       {
         nombre: 'Quemar cromo', activacion: 'action1', duracion: 'Instantánea',
@@ -339,7 +339,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
     id: 'alomancia:duraluminio', arte: 'alomancia', metal: 'duraluminio', name: 'Alomancia de duraluminio', atributo: 'Voluntad',
     caminos: [...TRES_CAMINOS], eras: erasDe('duraluminio'), requiereMeta: true, costoBase: 'special', // verificado en imagen, PDF 202: the tree header lists nacido-de-la-bruma, but the table of L.372 / PDF 378 does not list this metal for it in Era 1; PDF 173 leaves the end-of-Era-1 case to the GM (see notaLibro)
     descripcion: 'Si lo quemas al usar otro poder, toda tu Investidura estalla en él: un fogonazo difícil de controlar, pero capaz de saltarse los límites de la capacidad. Sin otra capacidad Investida no sirve de nada (de ahí «mosquitos de duraluminio»). El libro solo lo recomienda con saltamundos o con clavos hemalúrgicos a mano.',
-    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.196 / PDF 202), pero la tabla de L.372 / PDF 378 no lista el duraluminio para el nacido de la bruma (Era 1); la nota ‡ de L.168 / PDF 174 y el apartado «Final de la Era 1» de L.167 / PDF 173 lo abren a finales de la Era 1 y dejan a la DJ fijar cuándo y cómo se conoce. Se conserva la cabecera como opción del director a finales de la Era 1 (verificado en imagen, PDF 173, 174, 202 y 378).',
+    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.196 / PDF 202), pero la tabla de L.372 / PDF 378 no lo lista para el nacido de la bruma en Era 1. Sin embargo, la nota ‡ de L.168 / PDF 174 y el apartado «Final de la Era 1» de L.167 / PDF 173 dicen que puede conocerse a finales de Era 1 a criterio del director. Se sigue la cabecera como opción disponible a finales de la Era 1.',
     acciones: [
       {
         nombre: 'Quemar duraluminio', activacion: 'special', duracion: 'Instantánea',
@@ -367,7 +367,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
     id: 'alomancia:electro', arte: 'alomancia', metal: 'electro', name: 'Alomancia de electro', atributo: 'Voluntad',
     caminos: [...TRES_CAMINOS], eras: erasDe('electro'), requiereMeta: true, costoBase: 'action1', // verificado en imagen, PDF 204: the tree header lists nacido-de-la-bruma, but the table of L.372 / PDF 378 does not list this metal for it in Era 1; PDF 173 leaves the end-of-Era-1 case to the GM (see notaLibro)
     descripcion: 'Ves tus «sombras de electro», tus posibles futuros inmediatos. Solo te ves a ti mismo y a tu sombra reaccionando, sin saber qué o quién la provoca, por lo que a los oráculos les cuesta interpretarlas sin práctica. Valen menos que las del atium, pero quemar electro vuelve inútil el atium contra ti.',
-    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.198 / PDF 204), pero la tabla de L.372 / PDF 378 no lista el electro para el nacido de la bruma (Era 1); la nota ‡ de L.168 / PDF 174 y el apartado «Final de la Era 1» de L.167 / PDF 173 lo abren a finales de la Era 1 y dejan a la DJ fijar cuándo y cómo se conoce. Se conserva la cabecera como opción del director a finales de la Era 1 (verificado en imagen, PDF 173, 174, 204 y 378).',
+    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.198 / PDF 204), pero la tabla de L.372 / PDF 378 no lo lista para el nacido de la bruma en Era 1. Sin embargo, la nota ‡ de L.168 / PDF 174 y el apartado «Final de la Era 1» de L.167 / PDF 173 dicen que puede conocerse a finales de Era 1 a criterio del director. Se sigue la cabecera como opción disponible a finales de la Era 1.',
     acciones: [
       {
         nombre: 'Quemar electro', activacion: 'action1', duracion: '1 ronda',
@@ -418,7 +418,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
       { name: 'Sentir la debilidad', cost: 'passive', prereq: 'Alomancia 3 o más; talento Reenfoque con avivamiento', description: 'Quemando estaño, si Obtienes ventaja con Deducción o una habilidad de Discernimiento, conoces además la salud actual del objetivo y sus tres Defensas, y tu siguiente ataque contra él ese turno hace 1d4 de daño extra (dado de artes metálicas: con 2 grados, 1d6; etc.).' }, // L.200 / PDF 206
       {
         name: 'Enhaciendo el no ver', cost: 'free', prereq: 'Alomancia 3 o más; talento Sensibilidad proactiva', description: 'Quemando estaño, gastas 2 puntos de concentración y conservas un único sentido de tu elección, con el alcance multiplicado por cuatro; dura hasta que acabe tu próximo turno o dejes de quemar. Una vez por turno, en una prueba que dependa de ese sentido, puedes optar por una Oportunidad. Se mantiene con 2 puntos de concentración como acción gratuita.',
-        notaLibro: 'El nombre se imprime así, con «Enhaciendo», tanto en el texto como en el diagrama (L.199-200 / PDF 205-206, verificado en imagen del diagrama); parece una errata de «Enfocando» o «Haciendo». Se conserva tal como se imprime.',
+        notaLibro: 'El nombre aparece como «Enhaciendo» tanto en el texto como en el diagrama (L.199-200 / PDF 205-206), lo que parece ser una errata de «Enfocando» o «Haciendo». Se conserva tal como está impreso en el libro.',
       }, // L.199 / PDF 205
     ],
   },
@@ -525,7 +525,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
       { name: 'Estallido asistido', cost: 'passive', prereq: 'Alomancia 4 o más; poder Alomancia de nicrosil', description: 'Si haces estallar la capacidad de un aliado con Quemar nicrosil, este puede prescindir del dado de trama (o tirarlo si prefiere), no tiene que tomar los máximos y controla mejor los efectos extraordinarios, que resuelve con la DJ.' }, // L.208 / PDF 214
       {
         name: 'Agarre estallante', cost: 'special', prereq: 'Atletismo 2 o más o Hurto 2 o más; talento Nicroestallido proactivo', description: 'Tras superar una prueba de habilidad física (un ataque con arma, o Hurto para sustraer viales) contra alguien de tu cercanía, gastas una Oportunidad o 2 puntos de concentración y le aplicas Nicroestallido proactivo, sin acción; tu prueba de Alomancia contra su Defensa física triunfa sin tirar.',
-        notaLibro: 'En el diagrama de nicrosil la tarjeta de este talento no lleva icono de activación (L.207 / PDF 213, verificado en imagen); el texto del talento indica ★, activación especial (L.208 / PDF 214), que es la que se usa.',
+        notaLibro: 'En el diagrama de nicrosil esta carta no lleva icono de activación (L.207 / PDF 213), pero el texto del talento indica ★, activación especial (L.208 / PDF 214).',
       }, // L.208 / PDF 214
       { name: 'Estallido inesperado', cost: 'special', prereq: 'Sigilo 3 o más; talento Agarre estallante', description: 'La primera vez en cada escena que haces estallar una capacidad enemiga, su dado de trama se tira con desventaja; si gastas su Complicación para que pierda el control, influyes más en cómo se resuelve.' }, // L.208 / PDF 214
     ],
@@ -584,7 +584,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
     talentos: [
       {
         name: 'Revitalizar', cost: 'free', prereq: 'Alomancia 2 o más; poder Alomancia de peltre', description: 'Gastas 1 punto de Investidura y recuperas 1d6 + tu rango actual de salud (rango 2: 1d6 + 2). Sirve incluso Inconsciente o si algo te impide actuar.',
-        notaLibro: 'La línea «Activación» de la entrada imprime ∞ (siempre activo), pero el diagrama marca ▷ (acción gratuita) y la regla dice «acción gratuita» y gasta 1 punto de Investidura por uso (L.212 / PDF 218, verificado en imagen). Se guarda como acción gratuita (`free`).',
+        notaLibro: 'El libro se contradice: la ficha de platino imprime ∞ (siempre activo), pero el diagrama marca ▷ (acción gratuita) y la regla lo describe como acción gratuita que gasta 1 punto de Investidura por uso (L.212 / PDF 218). Se aplica aquí la acción gratuita del diagrama y la regla.',
       }, // L.212 / PDF 218
       { name: 'Armamento de brazo de peltre', cost: 'special', prereq: 'Armamento pesado 1 o más o Armamento ligero 1 o más; poder Alomancia de peltre', description: 'En un ataque cuerpo a cuerpo con arma, quemando peltre o decantando fuerza de una mentepeltre, tu dado de daño sin armas puede sustituir al del arma (decídelo antes de tirar; el arma conserva sus rasgos y su tipo de daño).' }, // L.212 / PDF 218
       { name: 'Aguantar el arrastre', cost: 'special', prereq: 'Alomancia 3 o más; talento Revitalizar', description: 'Si tu salud llega a 0 quemando peltre, puedes ignorar el estado Inconsciente (las lesiones siguen). Al terminar el efecto caes Inconsciente si sigues en 0. Mientras sigues a 0 así, cada daño que sufres te deja Agotado [−1].' }, // L.211 / PDF 217

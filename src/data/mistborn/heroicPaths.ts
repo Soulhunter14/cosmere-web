@@ -222,7 +222,7 @@ const MATANEBLINOS: EspecialidadNdB = {
       activation: 'passive',
       rolDescription: 'Preparas cuchillas y munición pensadas para engañar a los alomantes que confían en su instinto.',
       description: 'Un arma diseñada para contrarrestar las Artes Investidas (daga de cristal, hacha de obsidiana, bastón de duelo, palos de ruido o arma de fuego con munición mataneblinos) obtiene en tus manos el rasgo Preparación rápida, y al impactar o hacer un rasguño con ella infliges daño adicional igual a tus grados en Perspicacia. Obtienes la pericia de utilidad Fabricar armamento o una pericia en arma a tu elección.',
-      notaLibro: 'El libro escribe «Armamento mataneblino» (en singular) en la configuración icónica «Miembro de una escuadra de asesinos» (L.87 / PDF 93); el nombre del talento en el diagrama (L.89 / PDF 95) y en su texto completo es «Armamento mataneblinos», que es el que se usa aquí y en los prerrequisitos (verificado en imagen, PDF 93, 95 y 97).',
+      notaLibro: 'El libro escribe «Armamento mataneblino» (en singular) en la configuración icónica «Miembro de una escuadra de asesinos» (L.87 / PDF 93), pero el nombre del talento en el diagrama (L.89 / PDF 95) y en su texto completo es «Armamento mataneblinos» (plural), que es el que se usa aquí.',
     },
     // Serenidad (L.92 / PDF 98): the same text as the shared ones, here after Buscar alomante
     heredado(talentoBase('erudito', 'Cirujano', 'Serenidad'), { prerequisites: 'talento Buscar alomante' }),
@@ -515,7 +515,7 @@ const PLANIFICADOR: EspecialidadNdB = {
       activation: 'action2',
       rolDescription: 'Con previsión y algo de suerte, tu plan sale a pedir de boca.',
       description: 'Una vez por escena, revela un plan maestro: colabora con la DJ para crear un suceso (capítulo 9, «Sucesos») con un desenlace positivo para tus aliados y para ti, que representa los esfuerzos hechos fuera de escena para lograr una ventaja narrativa importante. Solo puedes tener uno activo a la vez. Su medidor de suceso tiene por defecto 3 espacios de Oportunidad, a los que contribuís tus aliados y tú; al crearlo puedes añadir tantos espacios como tus grados en Deducción (más difícil de activar, pero más impactante). El grupo lo activa rellenando el medidor antes del siguiente descanso largo; si no, el plan fracasa.',
-      notaLibro: 'Errata del libro: el texto completo imprime «Deducción +1» (L.124 / PDF 130); el diagrama del árbol dice «Deducción 1 o más» (L.121 / PDF 127), que es lo que se usa aquí (verificado en imagen, PDF 127 y 130).',
+      notaLibro: 'El libro se contradice: el texto completo imprime «Deducción +1» (L.124 / PDF 130), pero el diagrama del árbol dice «Deducción 1 o más» (L.121 / PDF 127). Se sigue el diagrama.',
     },
     // Compostura (L.123 / PDF 129): the very same talent as the Oficial one (same prerequisite, same text)
     talentoBase('lider', 'Oficial', 'Compostura'),
@@ -575,13 +575,13 @@ const LADRON_NDB = compartida(LADRON, `${LADRON.description} Recomendada para la
   // L.83 / PDF 89 (text) and L.81 / PDF 87 (diagram)
   'Comportamiento arriesgado': {
     prerequisites: 'Perspicacia 2 o más, talento principal Oportunista',
-    notaLibro: 'En Nacidos de la bruma el texto completo y el diagrama coinciden: piden Perspicacia 2 o más (L.83 / PDF 89; L.81 / PDF 87; verificado en imagen). En Archivo de las Tormentas el texto del talento omite ese grado y el libro se contradice.',
+    notaLibro: 'En Nacidos de la bruma el texto completo y el diagrama coinciden: piden Perspicacia 2 o más (L.83 / PDF 89; L.81 / PDF 87). En Archivo de las Tormentas el texto del talento omite ese grado y el libro se contradice.',
   },
   // L.83 / PDF 89
   'Contactos en los bajos fondos': {
     prerequisites: 'tener un patrocinador o compañero que forme parte de los bajos fondos delictivos, talento Obstinarse',
     rolDescription: 'Cuando te mueves en círculos de mala reputación, el nombre de tu patrocinador o compañero ejerce una influencia notable.',
-    notaLibro: 'Nacidos de la bruma habla de un patrocinador o «compañero» de los bajos fondos (L.83 / PDF 89; el diagrama, L.81 / PDF 87, lo resume como «patrocinador o compañero»; verificado en imagen); Archivo de las Tormentas dice «seguidor».',
+    notaLibro: 'Nacidos de la bruma habla de un patrocinador o «compañero» de los bajos fondos (L.83 / PDF 89; el diagrama, L.81 / PDF 87, lo resume igual); Archivo de las Tormentas dice «seguidor».',
   },
 })
 
@@ -607,7 +607,7 @@ const CIRUJANO_NDB = compartida(
     // L.106 / PDF 112
     'Inteligencia emocional': {
       description: 'Tu talento Ilustración te otorga una habilidad adicional y puedes usar Ilustración para elegir habilidades espirituales que no sean Investidas. Obtienes pericia en Diagnóstico.',
-      notaLibro: 'En Nacidos de la bruma la restricción es «que no sean Investidas» (L.106 / PDF 112, verificado en imagen); en Archivo de las Tormentas es «que no son de potencia». El dato compartido de Archivo de las Tormentas no recoge la restricción.',
+      notaLibro: 'En Nacidos de la bruma la restricción es «que no sean Investidas» (L.106 / PDF 112); en Archivo de las Tormentas es «que no son de potencia». El dato compartido de Archivo de las Tormentas no recoge la restricción.',
     },
   },
 )
@@ -619,7 +619,7 @@ const ESTRATEGA_NDB = compartida(
     // L.108 / PDF 114
     'Cuerpo y mente': {
       description: 'Tu talento Ilustración te otorga una habilidad adicional y puedes usar Ilustración para elegir habilidades físicas que no sean Investidas. Obtienes pericia en un arma de tu elección.',
-      notaLibro: 'En Nacidos de la bruma la restricción es «que no sean Investidas» (L.108 / PDF 114, verificado en imagen); en Archivo de las Tormentas es «que no son de potencia». El dato compartido de Archivo de las Tormentas no recoge la restricción.',
+      notaLibro: 'En Nacidos de la bruma la restricción es «que no sean Investidas» (L.108 / PDF 114); en Archivo de las Tormentas es «que no son de potencia». El dato compartido de Archivo de las Tormentas no recoge la restricción.',
     },
   },
 )
@@ -631,7 +631,7 @@ const SOLDADO_NDB = compartida(
     // L.117 / PDF 123 (text) and L.113 / PDF 119 (diagram)
     'Posición defensiva': {
       prerequisites: 'Atletismo 2 o más, talento Avance cauteloso',
-      notaLibro: 'En Nacidos de la bruma el texto completo sí imprime el prerrequisito de talento, Avance cauteloso, y el diagrama la cuelga de esa carta (L.117 / PDF 123; L.113 / PDF 119; verificado en imagen). En Archivo de las Tormentas el texto no imprime ningún prerrequisito de talento.',
+      notaLibro: 'En Nacidos de la bruma el texto completo imprime el prerrequisito de talento Avance cauteloso, y el diagrama lo cuelga de esa carta (L.117 / PDF 123; L.113 / PDF 119). En Archivo de las Tormentas el texto no imprime ningún prerrequisito de talento.',
     },
   },
 )
@@ -643,7 +643,7 @@ const OFICIAL_NDB = compartida(
     // L.122 / PDF 128 (text) and L.120 / PDF 126 (diagram)
     Autoridad: {
       prerequisites: 'tener una posición de mando en una organización o gracias a un patrocinador, talento Mando confiado',
-      notaLibro: 'El texto completo de Nacidos de la bruma pide liderar una organización o tener un patrocinador que dé mando sobre un grupo (L.122 / PDF 128), y el diagrama lo redacta como «tener una posición de mando en una organización o gracias a un patrocinador» (L.120 / PDF 126; verificado en imagen). Se usa la redacción del diagrama: empieza por «tener», así que el motor la trata como cláusula de historia que se confirma a mano. Archivo de las Tormentas exige un título que dé mando sobre al menos 5 personas.',
+      notaLibro: 'El texto completo de Nacidos de la bruma pide liderar una organización o tener un patrocinador que dé mando sobre un grupo (L.122 / PDF 128), y el diagrama lo redacta como «tener una posición de mando en una organización o gracias a un patrocinador» (L.120 / PDF 126). Se sigue la redacción del diagrama. Archivo de las Tormentas exige un título que dé mando sobre al menos 5 personas.',
     },
   },
 )
@@ -684,7 +684,7 @@ export const HEROIC_PATHS_MISTBORN: CaminoHeroicoNdB[] = [
     definition: 'Los eruditos persiguen sin descanso el siguiente descubrimiento, equilibrando la seguridad en sus ideas con la humildad para rectificar, ya sea entre cenizas o en talleres que huelen a pólvora. Ninguna curiosidad les parece menor: exploran, aprenden y construyen, conscientes de que el progreso científico puede elevar o hundir una civilización.',
     // L.106 / PDF 112
     mainTalentEffect: 'Eliges una pericia cultural o de utilidad que no tengas y dos habilidades cognitivas diferentes que no sean Investidas. Al hacer pruebas, se considera que tienes esa pericia y un grado adicional en cada habilidad elegida (incluso por encima del máximo habitual); son temporales y no cuentan para los prerrequisitos. Puedes reasignarlos tras un descanso largo con acceso a una biblioteca.',
-    notaLibro: 'En Nacidos de la bruma Ilustración excluye las habilidades Investidas al elegir las dos habilidades cognitivas (L.106 / PDF 112, verificado en imagen); en Archivo de las Tormentas excluye las de potencia. El dato compartido de Archivo de las Tormentas no recoge la restricción.',
+    notaLibro: 'En Nacidos de la bruma Ilustración excluye las habilidades Investidas al elegir las dos habilidades cognitivas (L.106 / PDF 112); en Archivo de las Tormentas excluye las de potencia. El dato compartido de Archivo de las Tormentas no recoge la restricción.',
     specialties: [CIRUJANO_NDB, ESTRATEGA_NDB, INVENTOR],
   }),
   // Guerrero (L.110-117 / PDF 116-123; diagram L.112-113 / PDF 118-119)
@@ -694,7 +694,7 @@ export const HEROIC_PATHS_MISTBORN: CaminoHeroicoNdB[] = [
     recommendedSkills: ['Agilidad', 'Armamento ligero', 'Armamento pesado', 'Atletismo', 'Disciplina', 'Intimidación', 'Liderazgo', 'Persuasión'],
     // L.111 / PDF 117
     mainTalentEffect: 'Aprendes a utilizar las posiciones. Empiezas con Posición vigilante, que adoptas con 1 acción: reduce en 1 el coste de concentración de Esquivar y Acometida reactiva y te permite adoptar otra posición conocida con acción gratuita. Entrar en una posición cuesta las acciones que indica su talento y la posición termina si usas una acción gratuita para ello, si pasas a otra o si acaba la escena; mientras la mantienes obtienes sus acciones y efectos. Por defecto, solo se usan posiciones en combate.',
-    notaLibro: 'En Nacidos de la bruma Posición vigilante se adopta con 1 acción (L.111 / PDF 117, verificado en imagen), como indica la activación del talento; el texto de Archivo de las Tormentas la da como acción gratuita.',
+    notaLibro: 'En Nacidos de la bruma Posición vigilante se adopta con 1 acción (L.111 / PDF 117), como indica la activación del talento; el texto de Archivo de las Tormentas la da como acción gratuita.',
     specialties: [ALBOROTADOR, PISTOLERO, SOLDADO_NDB],
   }),
   // Líder (L.118-125 / PDF 124-131; diagram L.120-121 / PDF 126-127)

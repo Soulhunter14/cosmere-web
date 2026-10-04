@@ -265,7 +265,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'de otros dos poderes cuyo metal tengas disponible, sin gastar Investidura y sin necesitar ninguna acción.',
         notaLibro:
           'El diagrama (L.143 / PDF 149) resume el efecto como «usar también otro poder naciente» (uno); la entrada (L.142 / PDF 148) ' +
-          'dice «otros dos poderes para los que tengas metal disponible». Se transcribe la entrada (verificado en imagen, PDF 148 y 149).',
+          'dice «otros dos poderes para los que tengas metal disponible». Se sigue la entrada del talento.',
       },
       {
         name: 'Quemar instintivamente', // L.142 / PDF 148
@@ -392,7 +392,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
     icon: 'Container', // [inferido → Q18]: no official icon for the path in the book (PDF 133-165, verificado en imagen)
     notaLibro:
       'La entrada (L.146 / PDF 152) escribe el prerrequisito como «ruptura o de herencia»; el diagrama (L.147 / PDF 153) y los otros ' +
-      'cuatro caminos, «ruptura o herencia». Se transcribe la forma común (verificado en imagen, PDF 152 y 153).',
+      'cuatro caminos lo ponen como «ruptura o herencia». Se usa la forma común de los demás caminos.',
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -551,7 +551,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'suministro recurrente, recupera su capacidad normal; con otros metales raros restauras 2 cargas por cada medio kilo de metal.',
         notaLibro:
           'El diagrama (L.157 / PDF 163) abrevia la condición como «tus dos poderes utilizan el mismo metal» y omite «talento Mentes ' +
-          'de metal ampliadas o Investido», que muestran sus flechas. Se transcribe la entrada (verificado en imagen, PDF 161 y 163).',
+          'de metal ampliadas o Investido», que muestran sus flechas en la entrada. Se sigue la entrada del talento.',
       },
       {
         name: 'Composición recursiva', // L.155 / PDF 161
@@ -605,7 +605,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'sinergias crean tus poderes.',
         notaLibro:
           'El diagrama (L.157 / PDF 163) abrevia la condición como «tus dos poderes utilizan metales distintos» y omite «talento ' +
-          'Mentes de metal ampliadas o Investido», que muestran sus flechas. Se transcribe la entrada (verificado en imagen, PDF 163 y 165).',
+          'Mentes de metal ampliadas o Investido», que muestran sus flechas en la entrada. Se sigue la entrada del talento.',
       },
       {
         name: 'Sinergia metálica', // L.159 / PDF 165
@@ -619,8 +619,8 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'de metal para potenciar tu poder alomántico, obtienes también los efectos del poder feruquímico, como si hubieras ' +
           'decantado la mente con esas cargas.',
         notaLibro:
-          'La entrada dice «Tras usar Resonancia de aleación» (L.159 / PDF 165); el talento se llama Resonancia aleada, como en el ' +
-          'diagrama (L.157 / PDF 163; verificado en imagen, PDF 163 y 165).',
+          'La entrada habla de «Resonancia de aleación» (L.159 / PDF 165), pero el talento se llama Resonancia aleada, como aparece en el ' +
+          'diagrama (L.157 / PDF 163).',
       },
       {
         name: 'Trazas de metal', // L.159 / PDF 165

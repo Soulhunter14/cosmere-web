@@ -1,15 +1,48 @@
 import { useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronRight, Star, X } from 'lucide-react'
-import { HEROIC_PATHS, type HeroicPath } from '../../data/heroicPaths'
+import { ChevronRight, RefreshCw, Star, X } from 'lucide-react'
+import type { HeroicPath, HeroicPathSpecialty } from '../../data/heroicPaths'
+import type { Era } from '../../types'
 import { TalentActivation } from '../../components/TalentActivation'
 import { HeroicPathIcon } from '../../components/GameIcons'
 import { CosmereIcon } from '../../components/CosmereIcon'
-import { IconButton, PageHeader, SectionTitle, Tabs, TabPanel } from '../../components/ui'
+import { Button, ErrorMessage, IconButton, PageHeader, SectionTitle, Spinner, Tabs, TabPanel } from '../../components/ui'
 import { useDialogA11y } from '../../hooks/useDialogA11y'
-import { c, eyebrow, font, fs, page, pill, radius, shadow, tint, titleText, toneFrom } from '../../theme'
+import { useEra, useWorldConfig, useWorldData } from '../../store/campaignStore'
+import { isAvailable } from '../../worlds'
+import type { WorldConfig } from '../../worlds/types'
+import { c, eyebrow, font, fs, page, pill, radius, shadow, tint, titleText, tone, toneFrom, type Tone } from '../../theme'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+
+// ── Era of the specialties ──
+// The six paths are Cosmere; the specialties each world offers come with its data (`WorldData.caminosHeroicos`). A book can restrict a
+// specialty to some eras (Nacidos de la bruma tags Inventor and Pistolero «ERA 2», L.73 / PDF 79): the data then carry `eras`, the era of
+// the campaign filters them with `isAvailable` and a chip marks them. `WorldData` types its paths with the shared HeroicPath, which has
+// no `eras`, so the field is read through this one accessor.
+const erasOf = (s: HeroicPathSpecialty): Era[] | undefined => (s as HeroicPathSpecialty & { eras?: Era[] }).eras
+
+/** The path with only the specialties of the era of the campaign (`null` = no era: all of them); the same object if none is left out */
+function forEra(path: HeroicPath, era: Era | null): HeroicPath {
+  const specialties = path.specialties.filter((s) => isAvailable({ eras: erasOf(s) }, era))
+  return specialties.length === path.specialties.length ? path : { ...path, specialties }
+}
+
+/** Label and tone (from the world's own era list) of the chip of a specialty that exists in only some of its eras; `null` if it exists in all */
+function eraChipOf(s: HeroicPathSpecialty, eras: WorldConfig['eras']): { label: string; tone: Tone } | null {
+  const defs = eras?.filter((e) => erasOf(s)?.includes(e.id)) ?? []
+  if (!eras || defs.length === 0 || defs.length === eras.length) return null
+  return { label: defs.map((e) => e.label).join(' · '), tone: defs.length === 1 ? defs[0].tone : tone.cuarzo }
+}
+
+/** Small uppercase tag inside a pill or a tab, like the «ERA 2» tag the book prints on the specialty: the era's tone plus its text */
+function EraChip({ label, t }: { label: string; t: Tone }) {
+  return (
+    <span style={{ ...pill(t), padding: '1px 7px', fontSize: fs.eyebrow, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+      {label}
+    </span>
+  )
+}
 
 // ── Local sheet with a hero header (dialog named by the visible title) ──
 function HeroSheet({ open, onClose, labelledBy, children, maxWidth = 600 }: {
@@ -65,6 +98,7 @@ function HeroSheet({ open, onClose, labelledBy, children, maxWidth = 600 }: {
 
 function PathDetail({ path, titleId }: { path: HeroicPath; titleId: string }) {
   const [activeSpecialty, setActiveSpecialty] = useState(0)
+  const cfg = useWorldConfig()
   const specialty = path.specialties[activeSpecialty]
   const t = toneFrom(path.color)
   const specPrefix = `spec-${path.id}`
@@ -157,7 +191,14 @@ function PathDetail({ path, titleId }: { path: HeroicPath; titleId: string }) {
         <section>
           <SectionTitle as="h3">Especialidades</SectionTitle>
           <Tabs
-            tabs={path.specialties.map((s, i) => ({ id: String(i), label: s.name }))}
+            tabs={path.specialties.map((s, i) => {
+              const era = eraChipOf(s, cfg.eras)
+              return {
+                id: String(i),
+                label: era ? <>{s.name}<EraChip label={era.label} t={era.tone} /></> : s.name,
+                ariaLabel: era ? `${s.name} (${era.label})` : undefined,
+              }
+            })}
             value={String(activeSpecialty)}
             onChange={(id) => setActiveSpecialty(Number(id))}
             ariaLabel="Especialidades"
@@ -198,6 +239,7 @@ function PathDetail({ path, titleId }: { path: HeroicPath; titleId: string }) {
 
 function PathCard({ path, onClick }: { path: HeroicPath; onClick: () => void }) {
   const t = toneFrom(path.color)
+  const cfg = useWorldConfig()
 
   return (
     <button
@@ -228,9 +270,15 @@ function PathCard({ path, onClick }: { path: HeroicPath; onClick: () => void }) 
           {path.name}
         </span>
         <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {path.specialties.map((s) => (
-            <span key={s.name} style={pill(t)}>{s.name}</span>
-          ))}
+          {path.specialties.map((s) => {
+            const era = eraChipOf(s, cfg.eras)
+            return (
+              <span key={s.name} style={pill(t)}>
+                {s.name}
+                {era && <EraChip label={era.label} t={era.tone} />}
+              </span>
+            )
+          })}
         </span>
       </span>
 
@@ -240,15 +288,47 @@ function PathCard({ path, onClick }: { path: HeroicPath; onClick: () => void }) 
 }
 
 export function HeroicPathsPage() {
-  const [selected, setSelected] = useState<HeroicPath | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const sheetTitleId = useId()
+  const cfg = useWorldConfig()
+  const era = useEra()
+  const { data, isPending } = useWorldData()
+  const header = (
+    <PageHeader
+      title="Caminos Heroicos"
+      subtitle={`Los seis caminos que definen las competencias mundanas de cada héroe en ${cfg.planeta}`}
+    />
+  )
+
+  // Stormlight never waits (its WorldData is `initialData`); the paths of another world come with its lazy chunk
+  if (isPending) {
+    return (
+      <div style={page}>
+        {header}
+        <Spinner />
+      </div>
+    )
+  }
+  // The chunk did not load: never show another world's paths in its place. A failed `import()` stays failed for the rest of the
+  // document (the browser keeps the failure), so a `refetch()` could not recover it: only reloading the page does
+  if (!data) {
+    return (
+      <div style={page}>
+        {header}
+        <ErrorMessage message="No se pudieron cargar los caminos heroicos." style={{ marginBottom: 16 }} />
+        <Button onClick={() => window.location.reload()} icon={<RefreshCw size={15} aria-hidden />}>
+          Recargar la página
+        </Button>
+      </div>
+    )
+  }
+
+  const caminos = data.caminosHeroicos.map((path) => forEra(path, era))
+  const selected = caminos.find((path) => path.id === selectedId) ?? null
 
   return (
     <div style={page}>
-      <PageHeader
-        title="Caminos Heroicos"
-        subtitle="Los seis caminos que definen las competencias mundanas de cada héroe en Roshar"
-      />
+      {header}
 
       <ul
         aria-label="Caminos heroicos"
@@ -257,14 +337,14 @@ export function HeroicPathsPage() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))',
         }}
       >
-        {HEROIC_PATHS.map((path, i) => (
+        {caminos.map((path, i) => (
           <li key={path.id} className="rise" style={{ '--i': i } as CSSProperties}>
-            <PathCard path={path} onClick={() => setSelected(path)} />
+            <PathCard path={path} onClick={() => setSelectedId(path.id)} />
           </li>
         ))}
       </ul>
 
-      <HeroSheet open={!!selected} onClose={() => setSelected(null)} labelledBy={sheetTitleId}>
+      <HeroSheet open={!!selected} onClose={() => setSelectedId(null)} labelledBy={sheetTitleId}>
         {/* key: the specialty tab resets to the first one for every path, as before */}
         {selected && <PathDetail key={selected.id} path={selected} titleId={sheetTitleId} />}
       </HeroSheet>

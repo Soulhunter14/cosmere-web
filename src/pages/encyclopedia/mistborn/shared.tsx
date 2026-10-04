@@ -1,19 +1,22 @@
 /**
- * Building blocks shared by the lazy encyclopedia pages of Nacidos de la bruma (OrigenesPage and CaminosMetalPage; T24b
- * reuses them). Components only, so fast refresh keeps working (react-refresh/only-export-components). They follow the look
- * of RadiantOrdersPage and PotenciasPage and read the world through `useWorldConfig()` and `useEra()`, never by world id (P8).
+ * Building blocks shared by the lazy encyclopedia pages of Nacidos de la bruma (OrigenesPage, CaminosMetalPage and, since T24b,
+ * ArtesMetalicasPage and PoderMetalPage). Components only, so fast refresh keeps working (react-refresh/only-export-components).
+ * They follow the look of RadiantOrdersPage and PotenciasPage and read the world through `useWorldConfig()` and `useEra()`, never
+ * by world id (P8).
  */
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { BookOpen, ChevronDown, TriangleAlert, X } from 'lucide-react'
+import { Link, useParams, type LinkProps } from 'react-router-dom'
+import { Anvil, BookOpen, ChevronDown, Flame, Pin, TriangleAlert, X } from 'lucide-react'
 import type { Era } from '../../../types'
 import type { Talento } from '../../../data/potencias'
+import { getMetal, type ArteMetal, type MetalId } from '../../../data/mistborn/metales'
 import { TalentActivation } from '../../../components/TalentActivation'
 import { IconButton } from '../../../components/ui'
 import { useDialogA11y } from '../../../hooks/useDialogA11y'
 import { useEra, useWorldConfig } from '../../../store/campaignStore'
 import { isAvailable } from '../../../worlds'
-import { c, eyebrow, font, fs, pill, radius, tone, type Tone } from '../../../theme'
+import { c, eyebrow, font, fs, pill, radius, tone, toneFrom, type Tone } from '../../../theme'
 
 // ── Sheet with a hero header (the dialog is named by the visible title) ──
 export function HeroSheet({ open, onClose, labelledBy, children, maxWidth = 600 }: {
@@ -67,10 +70,11 @@ export function HeroSheet({ open, onClose, labelledBy, children, maxWidth = 600 
   )
 }
 
-// ── Talent row: header button + sibling panel (h4: it lives under an h3 section) ──
-export function TalentoRow({ talento, concedido = false }: { talento: Talento; concedido?: boolean }) {
+// ── Talent row: header button + sibling panel (h4 by default: it lives under an h3 section; `headingLevel` 3 under an h2 one) ──
+export function TalentoRow({ talento, concedido = false, headingLevel = 4 }: { talento: Talento; concedido?: boolean; headingLevel?: 3 | 4 }) {
   const [open, setOpen] = useState(false)
   const id = useId()
+  const H = headingLevel === 3 ? 'h3' : 'h4'
 
   return (
     <div
@@ -81,7 +85,7 @@ export function TalentoRow({ talento, concedido = false }: { talento: Talento; c
         transition: 'border-color var(--dur-2)',
       }}
     >
-      <h4 style={{ margin: 0, fontFamily: font.ui, fontSize: 'inherit', fontWeight: 'inherit', letterSpacing: 0 }}>
+      <H style={{ margin: 0, fontFamily: font.ui, fontSize: 'inherit', fontWeight: 'inherit', letterSpacing: 0 }}>
         <button
           type="button"
           id={`${id}-btn`}
@@ -104,7 +108,7 @@ export function TalentoRow({ talento, concedido = false }: { talento: Talento; c
             style={{ color: c.subtle, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform var(--dur-2) var(--ease-out)' }}
           />
         </button>
-      </h4>
+      </H>
       {open && (
         <div id={`${id}-panel`} className="fade-in" style={{ padding: '0 12px 12px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10, borderTop: `1px solid ${c.border}` }}>
@@ -197,4 +201,39 @@ export function EraNotice({ eras }: { eras: Era[] }) {
       <span>No existe en la era de tu campaña ({label}); consúltalo como referencia.</span>
     </p>
   )
+}
+
+// ── Glyph of a metal. PROVISIONAL until T46: the official glyphs (alomancia Era 1 / Era 2, feruquimia) come with T45 and T46 swaps the
+// body of this component for `MetalGlyph`. Until then, one Lucide icon per art tinted with the colour of the metal (a data colour: toneFrom) ──
+export function GlifoMetal({ metal, arte, size = 22 }: { metal: MetalId; arte: ArteMetal | 'hemalurgia'; size?: number }) {
+  const t = toneFrom(getMetal(metal).color)
+  const Icono = arte === 'alomancia' ? Flame : arte === 'feruquimia' ? Anvil : Pin
+  const box = Math.round(size * 1.9)
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: box, height: box, borderRadius: radius.md, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
+      }}
+    >
+      <Icono size={size} />
+    </span>
+  )
+}
+
+// ── Links inside the «Artes metálicas» section: the route shape lives here only (App.tsx: encyclopedia/artes-metalicas[/:arte/:metal]) ──
+const rutaArtes = (campaignId: string | undefined) => `/campaigns/${campaignId}/encyclopedia/artes-metalicas`
+
+/** Link to the page of one power: Alomancia or Feruquimia of a metal */
+export function LinkPoder({ arte, metal, ...rest }: { arte: ArteMetal; metal: MetalId } & Omit<LinkProps, 'to'>) {
+  const { campaignId } = useParams()
+  return <Link to={`${rutaArtes(campaignId)}/${arte}/${metal}`} {...rest} />
+}
+
+/** Link to the index of the metallic arts; `arte` leaves its tab selected (the index reads it from the `?arte=` parameter) */
+export function LinkArtes({ arte, ...rest }: { arte?: ArteMetal | 'hemalurgia' } & Omit<LinkProps, 'to'>) {
+  const { campaignId } = useParams()
+  return <Link to={arte ? `${rutaArtes(campaignId)}?arte=${arte}` : rutaArtes(campaignId)} {...rest} />
 }

@@ -18,3 +18,7 @@ export const DATA: WorldData = {
 // The Investida paths are not a WorldData field: they live INSIDE TalentRules (§7.1, §7.7). T19 only makes them reachable from this
 // lazy module; T34a composes `MISTBORN_TALENTOS.caminosInvestidos` from this export.
 export { CAMINOS_NACIDOS_DEL_METAL } from '../data/mistborn/caminosNacidosDelMetal'
+// The ancestries are not a WorldData field: the kandra and sangre koloss trees feed `TalentRules.arbolesAscendencia` (§7.7). T20 only
+// makes them reachable from this lazy module; T34a composes `MISTBORN_TALENTOS.arbolesAscendencia` from the `arbol` of each
+// `ASCENDENCIAS_MB` entry.
+export { ASCENDENCIAS_MB, ARBOL_KANDRA, ARBOL_SANGRE_KOLOSS } from '../data/mistborn/origenes'

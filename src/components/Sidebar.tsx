@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore'
 import { notesApi } from '../api/notes'
 import { Avatar, IconButton, Sheet } from './ui'
 import { BrandGlyph, BrandMark } from './BrandMark'
+import { WorldBadge } from './WorldBadge'
 import { c, eyebrow, fs, pill, radius, semantic, titleText, tone, z } from '../theme'
 import { ThemeSwitcher } from './ThemeSwitcher'
 
@@ -154,12 +155,17 @@ export function Sidebar() {
             <p
               style={{
                 ...titleText, fontSize: fs.lg, color: c.text, lineHeight: 1.25,
-                marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                marginBottom: currentCampaign ? 6 : 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}
               title={currentCampaign?.name}
             >
               {currentCampaign?.name ?? 'Cosmere'}
             </p>
+            {currentCampaign && (
+              <p style={{ display: 'flex', marginBottom: 10 }}>
+                <WorldBadge world={currentCampaign.world} era={currentCampaign.era} />
+              </p>
+            )}
             {currentCampaign && (
               <span style={pill(roleTone)}>
                 <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: roleTone.fg, boxShadow: `0 0 8px ${roleTone.fg}` }} />
@@ -266,6 +272,7 @@ export function Sidebar() {
               style={{ width: 8, height: 8, borderRadius: '50%', background: roleTone.fg, boxShadow: `0 0 10px ${roleTone.fg}` }}
             />
           )}
+          {currentCampaign && <WorldBadge variant="emblem" world={currentCampaign.world} era={currentCampaign.era} />}
         </div>
 
         <nav aria-label="Secciones" style={{ flex: 1, padding: '6px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%', overflowY: 'auto' }}>
@@ -351,8 +358,11 @@ export function Sidebar() {
                 {currentCampaign?.name ?? 'Cosmere'}
               </span>
               {currentCampaign && (
-                <span style={{ fontSize: fs.eyebrow, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: roleTone.fg, lineHeight: 1.4 }}>
-                  {isGm ? 'Director' : 'Jugador'}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, lineHeight: 1.4 }}>
+                  <span style={{ flexShrink: 0, fontSize: fs.eyebrow, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: roleTone.fg }}>
+                    {isGm ? 'Director' : 'Jugador'}
+                  </span>
+                  <WorldBadge short world={currentCampaign.world} era={currentCampaign.era} iconSize={12} style={{ fontSize: fs.eyebrow }} />
                 </span>
               )}
             </div>

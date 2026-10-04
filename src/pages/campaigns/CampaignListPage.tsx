@@ -1,18 +1,22 @@
 import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, LogIn, Trash2, ArrowRight, LogOut, CalendarDays, X } from 'lucide-react'
+import { Plus, LogIn, Trash2, ArrowRight, LogOut, CalendarDays, TriangleAlert, X } from 'lucide-react'
 import { campaignsApi } from '../../api/campaigns'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Button, ConfirmDialog, ErrorMessage, IconButton, Input, PageHeader, Spinner } from '../../components/ui'
+import { Button, ConfirmDialog, ErrorMessage, Field, IconButton, Input, PageHeader, Segmented, Sheet, Spinner } from '../../components/ui'
 import { BrandGlyph, BrandMark } from '../../components/BrandMark'
+import { CosmereIcon } from '../../components/CosmereIcon'
+import { WorldBadge } from '../../components/WorldBadge'
+import { WORLDS } from '../../worlds'
+import type { Era, WorldId } from '../../types'
 import { characterHeroBackground, characterPalette } from '../../lib/avatar'
 import { heroPill, onGem } from '../../lib/hero'
 import bandaUrl from '../../assets/cosmere/ornamento-banda.svg?url'
-import { buttonReset, c, card, font, fs, radius, shadow, tint, titleText, tone } from '../../theme'
+import { buttonReset, c, card, eyebrow, font, fs, radius, shadow, tint, titleText, tone } from '../../theme'
 
-// ─── Inline form component ────────────────────────────────────────────────────
+// ─── Inline form component (joining with an invite code) ──────────────────────
 function InlineForm({
   id,
   title,
@@ -110,6 +114,158 @@ const bandMask: CSSProperties = {
   maskComposite: 'intersect',
 }
 
+// ─── «Nueva campaña»: name, setting and (where the setting has eras) era ──────
+/* The settings offered come from the registry, so a new world shows up here on its own (P8): no world or era literals */
+const WORLD_LIST = Object.values(WORLDS)
+
+function CreateCampaignSheet({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const setCurrentCampaign = useCampaignStore((s) => s.setCurrentCampaign)
+  const [name, setName] = useState('')
+  const [world, setWorld] = useState<WorldId>(WORLD_LIST[0].id)
+  const [era, setEra] = useState<Era | null>(null)
+  const cfg = WORLDS[world]
+  const eraDef = cfg.eras?.find((e) => e.id === era)
+  const formId = 'campaign-create-form'
+
+  const createMutation = useMutation({
+    mutationFn: () => campaignsApi.create({ name: name.trim(), world, era: cfg.eras ? era : null }),
+    onSuccess: (campaign) => {
+      qc.invalidateQueries({ queryKey: ['campaigns'] })
+      setCurrentCampaign(campaign)
+      navigate(`/campaigns/${campaign.id}/home`)
+    },
+  })
+
+  // Where the world has eras the era is required; world and era are fixed once the campaign exists
+  const canSubmit = !!name.trim() && !(cfg.eras && !era) && !createMutation.isPending
+
+  const chooseWorld = (id: WorldId) => {
+    if (id === world) return
+    setWorld(id)
+    setEra(null)
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={() => { if (!createMutation.isPending) onClose() }}
+      title="Nueva campaña"
+      maxWidth={480}
+      footer={
+        <>
+          <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose} disabled={createMutation.isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" form={formId} size="lg" style={{ flex: 2 }} disabled={!canSubmit} loading={createMutation.isPending}>
+            Crear campaña
+          </Button>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (canSubmit) createMutation.mutate()
+        }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
+      >
+        <Field label="Nombre de la campaña">
+          <Input
+            data-autofocus
+            placeholder="El nombre de tu campaña..."
+            value={name}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+
+        <div>
+          <p style={{ ...eyebrow, marginBottom: 8 }}>Ambientación</p>
+          <Segmented<WorldId>
+            ariaLabel="Ambientación"
+            value={world}
+            onChange={chooseWorld}
+            options={WORLD_LIST.map((w) => ({
+              value: w.id,
+              label: (
+                <>
+                  <CosmereIcon name={w.emblema} size={16} />
+                  {w.nombreCorto}
+                </>
+              ),
+              ariaLabel: w.nombre,
+            }))}
+          />
+          {/* Preview of the choice: announced when the setting (or its era) changes */}
+          <div
+            aria-live="polite"
+            style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12, padding: '12px 14px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 56, height: 56, flexShrink: 0, borderRadius: radius.md,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: tone.brand.bg, border: `1px solid ${tone.brand.border}`, color: c.brandLight,
+              }}
+            >
+              <CosmereIcon name={cfg.emblema} size={40} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, color: c.text, lineHeight: 1.25 }}>{cfg.nombre}</p>
+              <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2 }}>
+                Ambientada en {cfg.planeta}
+                {eraDef && ` · ${eraDef.label}`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {cfg.eras && (
+          <div>
+            <p style={{ ...eyebrow, marginBottom: 8 }}>Era</p>
+            <Segmented<Era | ''>
+              ariaLabel="Era"
+              value={era ?? ''}
+              onChange={(v) => { if (v) setEra(v) }}
+              options={cfg.eras.map((e) => ({
+                value: e.id,
+                label: (
+                  <>
+                    <span aria-hidden style={{ width: 8, height: 8, flexShrink: 0, borderRadius: '50%', background: e.tone.fg }} />
+                    {e.label}
+                  </>
+                ),
+              }))}
+            />
+            <p aria-live="polite" style={{ fontSize: fs.xs, color: c.subtle, marginTop: 8, lineHeight: 1.45 }}>
+              {eraDef ? eraDef.aviso : 'Elige la era para poder crear la campaña.'}
+            </p>
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px',
+            borderRadius: radius.md, background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`,
+          }}
+        >
+          <TriangleAlert size={17} aria-hidden style={{ color: tone.topacio.fg, marginTop: 1, flexShrink: 0 }} />
+          <p style={{ fontSize: fs.sm + 1, color: tone.topacio.fg, lineHeight: 1.4 }}>
+            La ambientación y la era no se pueden cambiar después de crear la campaña.
+          </p>
+        </div>
+
+        {createMutation.isError && <ErrorMessage message="Algo salió mal. Inténtalo de nuevo." />}
+      </form>
+    </Sheet>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export function CampaignListPage() {
   const navigate = useNavigate()
@@ -117,25 +273,16 @@ export function CampaignListPage() {
   const setCurrentCampaign = useCampaignStore((s) => s.setCurrentCampaign)
   const { logout } = useAuthStore()
 
-  const [newName, setNewName] = useState('')
   const [joinCode, setJoinCode] = useState('')
-  const [mode, setMode] = useState<'create' | 'join' | null>(null)
+  // Joining stays an inline form; creating opens the «Nueva campaña» sheet (setting and era need room)
+  const [mode, setMode] = useState<'join' | null>(null)
+  const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const [openingId, setOpeningId] = useState<number | null>(null)
 
   const { data: campaigns, isLoading, error } = useQuery({
     queryKey: ['campaigns'],
     queryFn: campaignsApi.getAll,
-  })
-
-  const createMutation = useMutation({
-    // Provisional: until the creation form lets the user pick the setting, every new campaign is Stormlight.
-    mutationFn: () => campaignsApi.create({ name: newName, world: 'stormlight', era: null }),
-    onSuccess: (campaign) => {
-      qc.invalidateQueries({ queryKey: ['campaigns'] })
-      setCurrentCampaign(campaign)
-      navigate(`/campaigns/${campaign.id}/home`)
-    },
   })
 
   const joinMutation = useMutation({
@@ -209,9 +356,8 @@ export function CampaignListPage() {
                 </Button>
                 <Button
                   icon={<Plus size={16} aria-hidden />}
-                  aria-expanded={mode === 'create'}
-                  aria-controls={mode === 'create' ? 'campaign-create-form' : undefined}
-                  onClick={() => setMode(mode === 'create' ? null : 'create')}
+                  aria-haspopup="dialog"
+                  onClick={() => { setMode(null); setCreating(true) }}
                 >
                   Nueva campaña
                 </Button>
@@ -219,21 +365,7 @@ export function CampaignListPage() {
             }
           />
 
-          {/* ── Inline forms ─────────────────────────────── */}
-          {mode === 'create' && (
-            <InlineForm
-              id="campaign-create-form"
-              title="Nueva campaña"
-              placeholder="El nombre de tu campaña..."
-              value={newName}
-              onChange={setNewName}
-              onSubmit={() => createMutation.mutate()}
-              onClose={() => { setMode(null); setNewName('') }}
-              submitLabel="Crear"
-              isPending={createMutation.isPending}
-              error={!!createMutation.error}
-            />
-          )}
+          {/* ── Join form (creating opens the sheet below) ── */}
           {mode === 'join' && (
             <InlineForm
               id="campaign-join-form"
@@ -287,7 +419,7 @@ export function CampaignListPage() {
                 <Button variant="secondary" icon={<LogIn size={16} aria-hidden />} onClick={() => setMode('join')}>
                   Unirse con código
                 </Button>
-                <Button icon={<Plus size={16} aria-hidden />} onClick={() => setMode('create')}>
+                <Button icon={<Plus size={16} aria-hidden />} aria-haspopup="dialog" onClick={() => { setMode(null); setCreating(true) }}>
                   Nueva campaña
                 </Button>
               </div>
@@ -310,6 +442,8 @@ export function CampaignListPage() {
                   index={i}
                   name={cmp.name}
                   role={cmp.role}
+                  world={cmp.world}
+                  era={cmp.era}
                   createdAt={cmp.createdAt}
                   nextSessionDate={cmp.nextSessionDate}
                   nextSessionTitle={cmp.nextSessionTitle}
@@ -322,6 +456,9 @@ export function CampaignListPage() {
           )}
         </main>
       </div>
+
+      {/* Mounted only while open: its fields and its mutation start from scratch every time */}
+      {creating && <CreateCampaignSheet onClose={() => setCreating(false)} />}
 
       <ConfirmDialog
         open={confirmDelete.open}
@@ -346,6 +483,8 @@ function CampaignCard({
   index,
   name,
   role,
+  world,
+  era,
   createdAt,
   nextSessionDate,
   nextSessionTitle,
@@ -357,6 +496,8 @@ function CampaignCard({
   index: number
   name: string
   role: string
+  world: WorldId
+  era: Era | null
   createdAt: string
   nextSessionDate?: string
   nextSessionTitle?: string
@@ -367,7 +508,7 @@ function CampaignCard({
   const [hovered, setHovered] = useState(false)
   const isGm = role === 'gm'
   const titleId = `campaign-${id}-title`
-  const roleId = `campaign-${id}-role`
+  const chipsId = `campaign-${id}-chips`
   const metaId = `campaign-${id}-meta`
   const accent = characterPalette(id).accent
   const dot = roleDot(isGm ? '--rubi' : '--brand')
@@ -408,11 +549,14 @@ function CampaignCard({
           {name.charAt(0).toUpperCase()}
         </span>
 
-        {/* Role chip */}
-        <span id={roleId} style={{ ...heroPill, position: 'absolute', top: 14, left: 14, textTransform: 'uppercase', letterSpacing: '0.08em', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
-          <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: dot, boxShadow: `0 0 8px ${dot}` }} />
-          {isGm ? 'Director' : 'Jugador'}
-        </span>
+        {/* Chips: role, world and (where the world has eras) era */}
+        <div id={chipsId} style={{ position: 'absolute', top: 14, left: 14, right: 14, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <span style={{ ...heroPill, textTransform: 'uppercase', letterSpacing: '0.08em', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: dot, boxShadow: `0 0 8px ${dot}` }} />
+            {isGm ? 'Director' : 'Jugador'}
+          </span>
+          <WorldBadge variant="hero" world={world} era={era} />
+        </div>
 
         {/* Title */}
         <h2
@@ -433,7 +577,7 @@ function CampaignCard({
         type="button"
         onClick={onOpen}
         aria-labelledby={titleId}
-        aria-describedby={`${roleId} ${metaId}`}
+        aria-describedby={`${chipsId} ${metaId}`}
         aria-busy={opening || undefined}
         style={{ ...buttonReset, position: 'absolute', inset: 0, zIndex: 1, borderRadius: 'inherit', outlineOffset: -3 }}
       />

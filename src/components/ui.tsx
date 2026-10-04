@@ -704,6 +704,11 @@ export function Segmented<T extends string | number>({
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const tn = tones[t]
+  // Roving tabindex: only the checked radio is tabbable. With nothing checked (a choice still pending, e.g. the era of a
+  // new campaign) the first enabled radio takes the Tab stop instead, as in the WAI-ARIA radio pattern; otherwise the
+  // whole group would be unreachable by keyboard.
+  const checkedIndex = options.findIndex((o) => o.value === value)
+  const tabStop = checkedIndex >= 0 ? checkedIndex : options.findIndex((o) => !o.disabled)
   const move = (e: React.KeyboardEvent, i: number) => {
     const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
     if (!dir) return
@@ -734,7 +739,7 @@ export function Segmented<T extends string | number>({
             aria-checked={on}
             aria-label={o.ariaLabel}
             disabled={o.disabled}
-            tabIndex={on ? 0 : -1}
+            tabIndex={i === tabStop ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => move(e, i)}
             className="ui-seg"

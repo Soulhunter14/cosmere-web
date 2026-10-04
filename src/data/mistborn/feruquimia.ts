@@ -149,8 +149,7 @@ const ACERO = poder({
         'turno rápido en la primera ronda obtienes 2 acciones adicionales; en una conversación o empeño, una contribución adicional en ' +
         'la primera ronda.',
       notaLibro:
-        'Errata de icono: el diagrama del árbol (L.214 / PDF 220) marca Velocista de acero con ★ (activación especial), pero la entrada ' +
-        'del talento (L.215 / PDF 221) indica ∞ (siempre activo). Se transcribe el texto de la entrada (verificado en imagen, PDF 220 y 221).',
+        'El diagrama del árbol (L.214 / PDF 220) marca este talento con ★ (activación especial), pero la entrada del talento (L.215 / PDF 221) indica ∞ (siempre activo). Se sigue el texto de la entrada del talento.',
     },
   ],
   cargasConVinculo: false,
@@ -226,10 +225,9 @@ const ALUMINIO = poder({
   cargasConVinculo: false,
   medallon: { disponibleParaPJ: true, rangoRecompensa: 1 }, // L.294 / PDF 300
   notaLibro:
-    'El texto de la entrada habla de los genuinos «a lo largo de ambas eras» (L.216 / PDF 222), pero la tabla «Metales en la feruquimia» ' +
+    'El texto de la entrada dice que los genuinos son «a lo largo de ambas eras» (L.216 / PDF 222), pero la tabla «Metales en la feruquimia» ' +
     '(L.171 / PDF 177) da el aluminio en Era 2 † (aparece a finales de la Era 1, L.167 / PDF 173) y la tabla de L.372 / PDF 378 no lo ofrece ' +
-    'a ningún camino de Era 1. Se conservan las eras de la tabla de metales (decisión de diseño; verificado en imagen, PDF 177, 222 y 378); ' +
-    'no ampliarlas sin confirmarlo.',
+    'a ningún camino de Era 1. Se usan aquí las eras de la tabla de metales.',
 })
 
 // ── Atium · L.218-219 / PDF 224-225 ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -304,9 +302,8 @@ const ATIUM = poder({
       description:
         'Obtienes ventaja en las pruebas que usen el atributo Presencia para influir en un personaje de tu misma categoría de edad física.',
       notaLibro:
-        'Errata de icono: en el diagrama del árbol (L.219 / PDF 225) los iconos de Aparentar la edad (▶, 1 acción) y de Plena forma (∞, siempre ' +
-        'activo) están intercambiados respecto a las entradas, que dan ∞ y ▶ respectivamente. Se transcribe el texto de las entradas ' +
-        '(verificado en imagen, PDF 225).',
+        'En el diagrama del árbol (L.219 / PDF 225) los iconos de Aparentar la edad (▶, 1 acción) y de Plena forma (∞, siempre ' +
+        'activo) están intercambiados respecto a las entradas, que dan ∞ y ▶ respectivamente. Se siguen los textos de las entradas.',
     },
     {
       name: 'Plena forma',
@@ -316,8 +313,7 @@ const ATIUM = poder({
         'Si tu categoría de edad cronológica es Maduro o superior, gastas 2 cargas de la menteatium para pasar a ser físicamente Joven y ' +
         'quedar Mejorado [+1 a todos los atributos] hasta el final de tu próximo turno. Puedes mantenerlo gastando 2 cargas como acción gratuita.',
       notaLibro:
-        'Errata de icono: el diagrama del árbol (L.219 / PDF 225) marca Plena forma con ∞, pero su entrada (L.219 / PDF 225) indica ▶ (1 acción); ' +
-        'ver Aparentar la edad. Se transcribe el texto de la entrada (verificado en imagen, PDF 225).',
+        'El diagrama del árbol (L.219 / PDF 225) marca este talento con ∞, pero su entrada (L.219 / PDF 225) indica ▶ (1 acción). Se sigue el texto de la entrada.',
     },
   ],
   cargasConVinculo: false,
@@ -408,10 +404,9 @@ const BENDALEO = poder({
   cargasConVinculo: true, // con Dosis de prevención y Ruina de envenenadores se anota qué medicina o veneno guarda cada carga
   medallon: { disponibleParaPJ: true, rangoRecompensa: 1 }, // L.294 / PDF 300
   notaLibro:
-    'Consejo para la DJ (L.220 / PDF 226): en las novelas los incorporadores no almacenan nutrición e hidratación en la misma mente y suelen ' +
-    'llevar dos; el JdR lo simplifica con una sola mentebendaleo. Variante opcional: dos mentes (una para nutrición y otra para hidratación) ' +
-    'repartiendo entre ellas el máximo de cargas, y la DJ decide a cuál va cada carga; incluso una mente independiente para cada medicina ' +
-    '(verificado en imagen, PDF 226).',
+    'El libro aconseja a la DJ (L.220 / PDF 226) que en las novelas los incorporadores no almacenan nutrición e hidratación en la misma mente y suelen ' +
+    'llevar dos; el JdR lo simplifica con una sola mentebendaleo. Hay una variante opcional: dos mentes (una para nutrición y otra para hidratación) ' +
+    'repartiendo entre ellas el máximo de cargas, con la DJ decidiendo a cuál va cada carga; incluso una mente independiente para cada medicina es posible.',
 })
 
 // ── Bronce · L.222-223 / PDF 228-229 ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -1009,8 +1004,8 @@ const DURALUMINIO = poder({
         'su relación contigo hasta después de un descanso largo (por ejemplo, un compañero o patrocinador temporal); al terminar, el ' +
         'personaje decide qué grado de amistad mantiene.',
       notaLibro:
-        'Falta el icono de activación de Vínculo instantáneo en el diagrama del árbol (L.235 / PDF 241); la entrada del talento ' +
-        '(L.235 / PDF 241) indica 3 acciones. Se transcribe el texto de la entrada (verificado en imagen, PDF 241).',
+        'El diagrama del árbol no muestra icono de activación para este talento (L.235 / PDF 241), pero la entrada del talento ' +
+        '(L.235 / PDF 241) indica 3 acciones. Se sigue el texto de la entrada.',
     },
   ],
   cargasConVinculo: false,
@@ -1241,10 +1236,10 @@ const ESTANO = poder({
   cargasConVinculo: false,
   medallon: { disponibleParaPJ: true, rangoRecompensa: 1 }, // L.294 / PDF 300
   notaLibro:
-    'Consejo para la DJ (L.239 / PDF 245): en las novelas los susurravientos solo guardan un sentido por mentestaño y suelen llevar al menos ' +
-    'cinco; el JdR lo simplifica con una sola mentestaño para todos los sentidos. Variante opcional: una mentestaño independiente por ' +
+    'El libro aconseja a la DJ (L.239 / PDF 245) que en las novelas los susurravientos solo guardan un sentido por mentestaño y suelen llevar al menos ' +
+    'cinco; el JdR lo simplifica con una sola mentestaño para todos los sentidos. Hay una variante opcional: una mentestaño independiente por ' +
     'sentido, repartiendo entre ellas el máximo de cargas; al almacenar solo se ganan cargas para el sentido de esa mente y al decantarla ' +
-    'solo se mejora ese sentido (verificado en imagen, PDF 245).',
+    'solo se mejora ese sentido.',
 })
 
 // ── Hierro · L.241-242 / PDF 247-248 ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -1531,13 +1526,10 @@ const NICROSIL = poder({
   cargasConVinculo: true, // se anota a qué capacidad Investida está vinculada cada carga
   medallon: { disponibleParaPJ: false, rangoRecompensa: null }, // «No disponible para personajes jugadores», L.294 / PDF 300
   notaLibro:
-    'La entrada no trae árbol de talentos ni la frase «Es posible desbloquear este árbol mediante el talento principal de los caminos de…» ' +
-    '(L.246 / PDF 252); el poder se puede elegir igualmente («Elección del nicrosil como ferrin», L.246 / PDF 252: casi nadie lo hace, porque ' +
-    'solo es útil si también puedes emplear otra capacidad Investida, p. ej. en una campaña de saltamundos o con clavos hemalúrgicos). ' +
-    'La app lo ofrece a ferrin y nacidoble: el recuadro habla de los ferrins, la tabla de L.372 / PDF 378 lo da en Era 2 a ferrin y nacidoble y ' +
-    'no al feruquimista (solo de Era 1), y los demás metales feruquímicos que solo son de Era 2 (bendaleo, cadmio, cromo) listan «ferrin y ' +
-    'nacidoble» (verificado en imagen, PDF 177, 252 y 378). Tampoco está disponible en medallones para personajes jugadores ' +
-    '(L.294 / PDF 300).',
+    'La entrada no trae árbol de talentos ni la frase de desbloqueo de los caminos (L.246 / PDF 252). El poder se puede elegir («Elección del nicrosil como ferrin», L.246 / PDF 252), aunque casi nadie lo hace porque solo es útil con otra capacidad Investida (p. ej. en campañas de saltamundos o con clavos hemalúrgicos). ' +
+    'Se ofrece aquí a ferrin y nacidoble: el recuadro habla de los ferrins, la tabla de L.372 / PDF 378 lo da en Era 2 a ferrin y nacidoble ' +
+    '(no al feruquimista, solo de Era 1), y los demás metales feruquímicos de solo Era 2 (bendaleo, cadmio, cromo) listan «ferrin y ' +
+    'nacidoble». Tampoco está disponible en medallones para personajes jugadores (L.294 / PDF 300).',
 })
 
 // ── Oro · L.247-248 / PDF 253-254 ────────────────────────────────────────────────────────────────────────────────────────────────

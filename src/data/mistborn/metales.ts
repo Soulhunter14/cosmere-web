@@ -72,15 +72,15 @@ export interface MetalDef {
 const NOTA_FIN_ERA_1 =
   'A finales de la Era 1 el aluminio, el duraluminio y el electro dejan de ser un secreto del Ministerio de Acero ' +
   '(L.168 / PDF 174 ‡; L.171 / PDF 177 †; L.372 / PDF 378 *). El libro avisa de que es muy poco probable que un PJ los conozca antes de la ' +
-  'muerte del lord Legislador y deja a la DJ y al jugador acordar cuándo y cómo se enteró (L.167 / PDF 173, «Final de la Era 1»): ofrecerlos ' +
-  'en una campaña de finales de la Era 1 es una opción del director (verificado en imagen, PDF 173, 174, 177 y 378).'
+  'muerte del lord Legislador. La sección «Final de la Era 1» (L.167 / PDF 173) deja a la DJ y al jugador acordar cuándo y cómo se enteró: ' +
+  'ofrecerlos en una campaña de finales de la Era 1 es una opción del director.'
 
 const NOTA_ORO =
-  'El Ministerio de Acero ocultó la existencia de los brumosos de oro hasta casi el final de la Era 1 (L.167 / PDF 173; L.168 / PDF 174 ‡): ' +
-  'en la tabla de L.372 / PDF 378 el oro está en Era 1 para nacido de la bruma y feruquimista, pero no para el brumoso, y la nota * de esa ' +
-  'tabla equipara la existencia de los brumosos de oro a la del aluminio, el duraluminio y el electro a finales de la era (verificado en ' +
-  'imagen, PDF 173, 174 y 378). Abrirlo entonces al brumoso como opción del director [inferido: el libro deja el momento a acuerdo con la ' +
-  'DJ solo para el aluminio, el duraluminio y el electro; para el oro se extiende por analogía y la imagen no lo resuelve].'
+  'El Ministerio de Acero ocultó la existencia de los brumosos de oro hasta casi el final de la Era 1 (L.167 / PDF 173; L.168 / PDF 174 ‡). ' +
+  'En la tabla de L.372 / PDF 378 el oro está en Era 1 para nacido de la bruma y feruquimista, pero no para el brumoso. La nota * de esa ' +
+  'tabla equipara la existencia de los brumosos de oro a la del aluminio, el duraluminio y el electro a finales de la era. ' +
+  'Se ofrece al brumoso como opción del director a finales de Era 1 [inferido: el libro deja el momento a acuerdo con la ' +
+  'DJ solo para el aluminio, el duraluminio y el electro; para el oro se extiende por analogía].'
 
 /**
  * Columns: `pareja`, `interno`, `empujon`, `nombreBrumoso`, `categoriaAlomancia` and `eras` come from L.168 / PDF 174; `puro`, `nombreFerrin`

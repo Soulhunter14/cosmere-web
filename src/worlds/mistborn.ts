@@ -16,6 +16,7 @@ export const MISTBORN: WorldConfig = {
   id: 'mistborn',
   nombre: 'Nacidos de la bruma',
   nombreCorto: 'Bruma',
+  nombreDe: 'de Nacidos de la bruma',
   planeta: 'Scadrial',
   emblema: 'cosmere-emblem', // provisional until T46 (then 'nacidos-bruma-emblem')
   // L.372 / PDF 378. Tones are [inferido → Q18]

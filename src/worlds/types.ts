@@ -16,6 +16,7 @@ import type { SkillField } from '../lib/talentGraph'
 import type { HeroicPath } from '../data/heroicPaths'
 import type { Potencia } from '../data/potencias'
 import type { PoderDef } from '../data/mistborn/tipos'
+import type { AventurasOverlay, CombatOverlay } from '../data/overlays'
 
 /** Character fields that hold an attribute value (talentGraph.ts only has `SkillField` for skills). */
 export type AttrField = 'fuerza' | 'velocidad' | 'intelecto' | 'voluntad' | 'discernimiento' | 'presencia'
@@ -33,10 +34,11 @@ export interface TopicDef {
   ruta?: string
 }
 
-// Placeholders that the owning task replaces with the real type (they do not exist yet).
+// Placeholder that the owning task replaces with the real type (it does not exist yet).
 export type TalentRules = unknown      // TODO T34a: replace with the real type from src/lib/talentRules.ts
-export type AventurasOverlay = unknown // TODO T23: replace with the real type from src/data/overlays.ts
-export type CombatOverlay = unknown    // TODO T23: replace with the real type from src/data/overlays.ts
+
+/** Overlays of the shared «Aventuras» and «Combate» rules (T23, src/data/overlays.ts). A type-only import: no data reach the main chunk */
+export type { AventurasOverlay, CombatOverlay }
 
 /** A metallic power of Mistborn: PoderAlomantico | PoderFeruquimico (T16). A type-only import: no data reach the main chunk */
 export type { PoderDef }
@@ -54,6 +56,8 @@ export interface WorldConfig {
   id: WorldId
   nombre: string
   nombreCorto: string
+  /** The name after «de», with the Spanish contraction («del Archivo de las Tormentas», «de Nacidos de la bruma»): for running text such as «reglas de combate {nombreDe}» */
+  nombreDe: string
   /** Visible name of the planet («del mundo de Scadrial») */
   planeta: 'Roshar' | 'Scadrial'
   /** Name of an official icon in src/assets/cosmere (CosmereIcon) */

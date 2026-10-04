@@ -4,11 +4,12 @@
  * Born empty in T06b: each F3 task (T16-T23) connects its exports to the matching field when it finishes.
  * Meeting-point file: later tasks add lines, they never reorder them.
  */
+import { MISTBORN_AVENTURAS, MISTBORN_COMBATE } from '../data/mistborn'
 import type { WorldData } from './types'
 
 export const DATA: WorldData = {
   talentos: null,
   caminosHeroicos: [],
   poderes: [],
-  overlays: { aventuras: null, combat: null },
+  overlays: { aventuras: MISTBORN_AVENTURAS, combat: MISTBORN_COMBATE },
 }

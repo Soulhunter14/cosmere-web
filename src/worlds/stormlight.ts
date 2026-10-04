@@ -17,6 +17,7 @@ export const STORMLIGHT: WorldConfig = {
   id: 'stormlight',
   nombre: 'Archivo de las Tormentas',
   nombreCorto: 'Tormentas',
+  nombreDe: 'del Archivo de las Tormentas', // «reglas de combate {nombreDe}» (CombatPage: the text it already shows today)
   planeta: 'Roshar',
   emblema: 'archivo-tormentas',
   eras: null,

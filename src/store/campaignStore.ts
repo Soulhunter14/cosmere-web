@@ -49,6 +49,9 @@ export const useWorldConfig = (): WorldConfig => getWorld(useWorld())
 // Heavy, lazy data of the current campaign's world, cached forever. `initialData`: where the data already travel in
 // the main bundle (Stormlight, `syncData`) `isPending` is false from the first render, so no new Spinner appears (P1);
 // only a world without `syncData` loads through `import()`. `structuralSharing: false`: the data are large and immutable.
+// `networkMode: 'always'`: an `import()` is not a network request as far as TanStack is concerned (the PWA precaches the chunk),
+// but with the default mode it would pause, with no error, whenever the browser is offline and the pages that wait for the data
+// (Aventuras and Combate, T23) would stay on their Spinner (same reasoning as the campaign query of AppLayout).
 export function useWorldData() {
   const cfg = useWorldConfig()
   return useQuery({
@@ -58,5 +61,6 @@ export function useWorldData() {
     staleTime: Infinity,
     gcTime: Infinity,
     structuralSharing: false,
+    networkMode: 'always',
   })
 }

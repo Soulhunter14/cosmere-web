@@ -1,16 +1,17 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   AudioWaveform, Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import {
   Button, Card, ConfirmDialog, IconButton, Input, SectionTitle, Select, Sheet, Spinner, TabPanel, Tabs, Textarea,
 } from '../../components/ui'
 import type { Character, StatDesglose, UpdateCharacterRequest } from '../../types'
+import type { HabilidadDef } from '../../worlds/types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { POTENCIAS } from '../../data/potencias'
@@ -382,20 +383,13 @@ const ATTR_NAMES: Record<string, string> = {
 
 type DefKey = 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual'
 
-const SECTIONS = [
+/** The three columns of the sheet: attributes, defense and custom slots follow the Cosmere rules; their skills come from the world's table */
+const COLUMNAS = [
   {
     key: 'fisico', label: 'Físico',
     tone: tone.granate,
     attrs: [['fuerza', 'FUE'], ['velocidad', 'VEL']] as [string, string][],
     defKey: 'defensaFisica' as DefKey,
-    skills: [
-      ['agilidad',    'Agilidad',     'velocidad', 'VEL'],
-      ['armasLigeras','Armas Ligeras','velocidad', 'VEL'],
-      ['armasPesadas','Armas Pesadas','fuerza',    'FUE'],
-      ['atletismo',   'Atletismo',    'velocidad', 'VEL'],
-      ['hurto',       'Hurto',        'velocidad', 'VEL'],
-      ['sigilo',      'Sigilo',       'velocidad', 'VEL'],
-    ] as [string, string, string, string][],
     customNs: [1, 4] as [number, number],
   },
   {
@@ -403,14 +397,6 @@ const SECTIONS = [
     tone: tone.zafiro,
     attrs: [['intelecto', 'INT'], ['voluntad', 'VOL']] as [string, string][],
     defKey: 'defensaCognitiva' as DefKey,
-    skills: [
-      ['deduccion',   'Deducción',   'intelecto', 'INT'],
-      ['disciplina',  'Disciplina',  'voluntad',  'VOL'],
-      ['intimidacion','Intimidación','voluntad',  'VOL'],
-      ['manufactura', 'Manufactura', 'intelecto', 'INT'],
-      ['medicina',    'Medicina',    'intelecto', 'INT'],
-      ['conocimiento','Conocimiento','intelecto', 'INT'],
-    ] as [string, string, string, string][],
     customNs: [2, 5] as [number, number],
   },
   {
@@ -418,17 +404,17 @@ const SECTIONS = [
     tone: tone.amatista,
     attrs: [['discernimiento', 'DIS'], ['presencia', 'PRE']] as [string, string][],
     defKey: 'defensaEspiritual' as DefKey,
-    skills: [
-      ['engano',      'Engaño',      'presencia',      'PRE'],
-      ['liderazgo',   'Liderazgo',   'presencia',      'PRE'],
-      ['percepcion',  'Percepción',  'discernimiento', 'DIS'],
-      ['perspicacia', 'Perspicacia', 'discernimiento', 'DIS'],
-      ['persuasion',  'Persuasión',  'presencia',      'PRE'],
-      ['supervivencia','Supervivencia','discernimiento','DIS'],
-    ] as [string, string, string, string][],
     customNs: [3, 6] as [number, number],
   },
 ]
+
+/** Sections of the sheet for a skills table (`WorldConfig.habilidades`): each column takes, in the table's order, the skills whose `columna` is its `key` */
+const buildSections = (habilidades: HabilidadDef[]) => COLUMNAS.map((col) => ({
+  ...col,
+  skills: habilidades
+    .filter((h) => h.columna === col.key)
+    .map((h): [string, string, string, string] => [h.field, h.label, h.atributo, h.codigo]),
+}))
 
 const ASCENDENCIAS: { id: string; label: string; tone: Tone; icon: ReactNode }[] = [
   { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icon: <UserRound size={20} /> },
@@ -454,6 +440,8 @@ export function CharacterDetailPage() {
   const qc = useQueryClient()
   const location = useLocation()
   const { isGm, currentCampaign } = useCampaignStore()
+  const cfg = useWorldConfig()
+  const sections = useMemo(() => buildSections(cfg.habilidades), [cfg.habilidades])
   const { user: currentUser } = useAuthStore()
   const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
   const [form, setForm] = useState<Character | null>(null)
@@ -886,7 +874,7 @@ export function CharacterDetailPage() {
             <div>
               <SectionTitle>Defensas</SectionTitle>
               <div style={{ display: 'grid', gridTemplateColumns: GRID_3_OR_1, gap: 8 }}>
-                {SECTIONS.map((section, i) => {
+                {sections.map((section, i) => {
                   const t = section.tone
                   const defStat = f[section.defKey] as StatDesglose | undefined
                   const defValue = defStat?.total ?? 0
@@ -966,7 +954,7 @@ export function CharacterDetailPage() {
             })()}
 
             {/* Físico / Cognitivo / Espiritual sections */}
-            {SECTIONS.map((section, sectionIdx) => {
+            {sections.map((section, sectionIdx) => {
               const t = section.tone
               const defStat = f[section.defKey] as StatDesglose | undefined
               const defValue = defStat?.total ?? 0

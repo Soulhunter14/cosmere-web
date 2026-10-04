@@ -8,7 +8,7 @@
 import { Anvil, Coins, Flame, Sparkle } from 'lucide-react'
 import { tone } from '../theme'
 import type { WorldConfig } from './types'
-import { HABILIDADES_STORMLIGHT_LEGADO } from './skills'
+import { HABILIDADES_COSMERE } from './skills'
 import { iconoCaminoMetal, iconoHumano, iconoKandra, iconoSangreKoloss } from './mistborn.icons'
 import { MISTBORN_TOPICS } from './mistborn.topics'
 
@@ -39,7 +39,8 @@ export const MISTBORN: WorldConfig = {
     equipoInicial: true,
     origenes: true,
   },
-  habilidades: HABILIDADES_STORMLIGHT_LEGADO, // provisional: T26 replaces it with HABILIDADES_COSMERE; no tirador/pnj tables: Mistborn uses `habilidades` on all three surfaces
+  // The book's table (T26). No tirador/pnj tables nor `columnasPnj`: Mistborn reads `habilidades` on all three surfaces (the dice roller from T43)
+  habilidades: HABILIDADES_COSMERE,
   // Alomancia rolls with Voluntad and attacks (L.172 / PDF 178); Feruquimia with Intelecto. Icons are [inferido → Q18]
   habilidadesInvestidas: [
     { nombre: 'Alomancia', atributo: 'voluntad', codigo: 'VOL', icono: Flame, ataque: true },

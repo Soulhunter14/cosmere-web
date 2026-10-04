@@ -3,7 +3,9 @@ import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Edit2, Save, X } from 'lucide-react'
 import { globalNpcsApi } from '../../api/global-npcs'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
+import { COLUMNAS_COSMERE } from '../../worlds/skills'
+import type { AtributosColumna, AttrField, HabilidadDef } from '../../worlds/types'
 import { Button, Card, ErrorMessage, Field, IconButton, Input, Spinner, TabPanel, Tabs, Textarea } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { StatIcons } from '../../lib/gameIcons'
@@ -14,44 +16,25 @@ import type { GlobalNpc } from '../../types'
 type NumKey = { [K in keyof GlobalNpc]-?: GlobalNpc[K] extends number ? K : never }[keyof GlobalNpc]
 type TextKey = 'apariencia' | 'notas'
 
-const SECTIONS = [
-  {
-    key: 'fisico', label: 'Físico', tone: tone.granate,
-    attrs: [['fuerza', 'FUE'], ['velocidad', 'VEL']] as [NumKey, string][],
-    skills: [
-      ['agilidad', 'Agilidad', 'velocidad', 'VEL'],
-      ['armasLigeras', 'Armas ligeras', 'velocidad', 'VEL'],
-      ['armasPesadas', 'Armas pesadas', 'fuerza', 'FUE'],
-      ['atletismo', 'Atletismo', 'fuerza', 'FUE'],
-      ['hurto', 'Hurto', 'velocidad', 'VEL'],
-      ['sigilo', 'Sigilo', 'velocidad', 'VEL'],
-    ] as [NumKey, string, NumKey, string][],
-  },
-  {
-    key: 'cognitivo', label: 'Cognitivo', tone: tone.zafiro,
-    attrs: [['intelecto', 'INT'], ['discernimiento', 'DIS']] as [NumKey, string][],
-    skills: [
-      ['deduccion', 'Deducción', 'intelecto', 'INT'],
-      ['disciplina', 'Disciplina', 'discernimiento', 'DIS'],
-      ['intimidacion', 'Intimidación', 'discernimiento', 'DIS'],
-      ['manufactura', 'Manufactura', 'intelecto', 'INT'],
-      ['medicina', 'Medicina', 'intelecto', 'INT'],
-      ['conocimiento', 'Conocimiento', 'intelecto', 'INT'],
-    ] as [NumKey, string, NumKey, string][],
-  },
-  {
-    key: 'espiritual', label: 'Espiritual', tone: tone.amatista,
-    attrs: [['voluntad', 'VOL'], ['presencia', 'PRE']] as [NumKey, string][],
-    skills: [
-      ['engano', 'Engaño', 'presencia', 'PRE'],
-      ['liderazgo', 'Liderazgo', 'presencia', 'PRE'],
-      ['percepcion', 'Percepción', 'discernimiento', 'DIS'],
-      ['perspicacia', 'Perspicacia', 'discernimiento', 'DIS'],
-      ['persuasion', 'Persuasión', 'presencia', 'PRE'],
-      ['supervivencia', 'Supervivencia', 'voluntad', 'VOL'],
-    ] as [NumKey, string, NumKey, string][],
-  },
-]
+/** The three columns of the page. The skills of each one and the two attributes that head it (its tiles and its defense) come from the world */
+const COLUMNAS = [
+  { key: 'fisico', label: 'Físico', tone: tone.granate },
+  { key: 'cognitivo', label: 'Cognitivo', tone: tone.zafiro },
+  { key: 'espiritual', label: 'Espiritual', tone: tone.amatista },
+] as const
+
+const ATTR_CODES: Record<AttrField, string> = {
+  fuerza: 'FUE', velocidad: 'VEL', intelecto: 'INT', voluntad: 'VOL', discernimiento: 'DIS', presencia: 'PRE',
+}
+
+/** Cards of the page: `habilidades` decides which skills go in each column, `columnas` which two attributes head it */
+const buildSections = (habilidades: HabilidadDef[], columnas: AtributosColumna) => COLUMNAS.map((col) => ({
+  ...col,
+  attrs: columnas[col.key].map((k): [NumKey, string] => [k, ATTR_CODES[k]]),
+  skills: habilidades
+    .filter((h) => h.columna === col.key)
+    .map((h): [NumKey, string, NumKey, string] => [h.field, h.label, h.atributo, h.codigo]),
+}))
 
 const TEXT_FIELDS: [TextKey, string][] = [
   ['apariencia', 'Apariencia'],
@@ -126,6 +109,7 @@ export function GlobalNpcDetailPage() {
   const qc = useQueryClient()
   const location = useLocation()
   const { isGm } = useCampaignStore()
+  const cfg = useWorldConfig()
   const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
   const [form, setForm] = useState<GlobalNpc | null>(null)
   const [tab, setTab] = useState<Tab>('stats')
@@ -159,6 +143,8 @@ export function GlobalNpcDetailPage() {
 
   const rubi = tone.rubi
   const numberInput: CSSProperties = { textAlign: 'center', ...numeral, fontSize: fs.lg, padding: '6px 8px' }
+  // Until T50 Stormlight reads its own legacy table and grouping; every other world reads the book's (no world id is compared here)
+  const sections = buildSections(cfg.habilidadesPnj ?? cfg.habilidades, cfg.columnasPnj ?? COLUMNAS_COSMERE)
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', paddingBottom: 32 }}>
@@ -321,7 +307,7 @@ export function GlobalNpcDetailPage() {
         {/* STATS TAB */}
         {tab === 'stats' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {SECTIONS.map((section, si) => {
+            {sections.map((section, si) => {
               const t = section.tone
               const defense = 10 + (f[section.attrs[0][0]] ?? 0) + (f[section.attrs[1][0]] ?? 0)
               const headingId = `npc-sec-${section.key}`
@@ -409,7 +395,7 @@ export function GlobalNpcDetailPage() {
               padding={0}
               aria-labelledby="npc-talentos"
               className="rise"
-              style={{ '--i': SECTIONS.length, overflow: 'hidden', border: `1px solid ${tone.gold.border}` } as CSSProperties}
+              style={{ '--i': sections.length, overflow: 'hidden', border: `1px solid ${tone.gold.border}` } as CSSProperties}
             >
               <div style={{ padding: '12px 16px', background: tone.gold.bg, borderBottom: `1px solid ${tone.gold.border}` }}>
                 <CardHeading id="npc-talentos" t={tone.gold}>Talentos</CardHeading>

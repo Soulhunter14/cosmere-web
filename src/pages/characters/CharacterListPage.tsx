@@ -253,7 +253,7 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
   const createMutation = useMutation({
     mutationFn: () => charactersApi.create(id, {
       name: newName, playerName: '', level: 1,
-      ascendencia: '', caminoHeroico: '', caminoRadiante: '',
+      ascendencia: '', caminoHeroico: '', caminoRadiante: '', caminoMetal: '', caminoInicial: '',
       ownerId: newOwnerId ?? undefined,
     }),
     onSuccess: (char) => {

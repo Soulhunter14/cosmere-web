@@ -1,3 +1,5 @@
+import type { AttrField } from '../worlds/types'
+
 // Auth
 export interface User {
   id: number
@@ -44,6 +46,8 @@ export interface StatLinea {
   concepto: string
   valor: number
   descripcionCondicion?: string
+  /** Attribute-bonus line of any origin (cantor form, Blessing, talent, spike), flagged by the server (§5.1): the sheet reads this instead of the concept text */
+  esBono: boolean
 }
 
 export interface StatDesglose {
@@ -51,6 +55,26 @@ export interface StatDesglose {
   unidad?: string          // undefined = integer, "m" = meters
   lineas: StatLinea[]      // active — sum to total
   situacional: StatLinea[] // visible but NOT counted in total
+}
+
+// Metallic power of a Mistborn character (§4.2, §5.4): alomancy or feruchemy of one metal; derived id = `${arte}:${metal}`
+export interface PoderPersonaje {
+  arte: 'alomancia' | 'feruquimia'
+  /** ASCII id of one of the 17 metals (`hierro`, `acero`, `estano`…) */
+  metal: string
+  origen: 'camino' | 'clavo' | 'lerasium' | 'medallon'
+  /** false = nascent, true = complete (L.132-133 / PDF 138-139); the server owns it (meta conclusion, PATCH recursos) */
+  completo: boolean
+  /** Meta enlazada de «Entrenar tu poder» / «Fabricar tu mente de metal» */
+  metaId: number | null
+  /** Feruchemy: current charges, one reserve per metal */
+  cargas: number
+  /** Componedor: permanent −1 per use (≤ 0) */
+  ajusteCargasMax: number
+  /** Alomancy, rare metals only */
+  viales: number
+  /** Estado «Desprovisto [poder]» (L.310 / PDF 316) */
+  desprovisto: boolean
 }
 
 // Characters
@@ -138,16 +162,47 @@ export interface Character {
   spells: string[]
   equipment: string[]
   equippedArmor: string
+  // Nacidos de la bruma (§5.1). In Stormlight: '', '', [], {}, [] and {} (bonosAtributos carries the cantor-form bonus)
+  /** Metalborn path: `''`, `brumoso`, `nacido-de-la-bruma`, `feruquimista`, `ferrin` or `nacidoble` (L.19 / PDF 25) */
+  caminoMetal: string
+  /** Which path the character started with (L.17-18 / PDF 23-24): `''` = undecided (every existing character) */
+  caminoInicial: '' | 'heroico' | 'metal'
+  poderes: PoderPersonaje[]
+  /** Table state by key: `investiduraActual`, `cuentasAtium`, `arquillas` (written with PATCH …/recursos, never with the PUT) */
+  recursos: Record<string, number>
+  /** Kandra Blessings: `consciencia`, `potencia`, `presencia`, `estabilidad`, `fortaleza` (at most 2, no duplicates) */
+  bendiciones: string[]
+  /** World-specific derived stats (`alomancia.limite`, `poder.cobre.cargasMax`…), computed by the server */
+  derivadosSet: Record<string, StatDesglose>
+  /** Attribute bonuses of any origin, without zeros; the sheet and the dice roller add them only when `features.bonosServidor` is true */
+  bonosAtributos: Partial<Record<AttrField, number>>
   createdAt: string
   updatedAt: string
 }
 
-export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante'> & { ownerId?: number }
+export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante' | 'caminoMetal' | 'caminoInicial'> & { ownerId?: number }
+// `poderes`, `bendiciones` and `caminoInicial` do travel in the PUT; `recursos` (and the table state of each power) go with PATCH …/recursos
 export type UpdateCharacterRequest = Omit<Character,
   'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas' |
   'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |
-  'salud' | 'investidura' | 'movimiento' | 'desvioCalculado'
+  'salud' | 'investidura' | 'movimiento' | 'desvioCalculado' |
+  'recursos' | 'derivadosSet' | 'bonosAtributos'
 >
+
+// PATCH …/recursos (Nacidos de la bruma, §5.2): only the keys that are present are written
+export interface RecursosPatch {
+  recursos?: Record<string, number>
+  poderes?: {
+    arte: string
+    metal: string
+    cargas?: number
+    viales?: number
+    desprovisto?: boolean
+    completo?: boolean
+    /** Componedor: only ≤ 0 (L.155 / PDF 161) */
+    ajusteCargasMax?: number
+  }[]
+}
 
 // Metas
 export interface Meta {

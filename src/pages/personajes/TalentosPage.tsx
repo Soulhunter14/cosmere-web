@@ -7,22 +7,16 @@ import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { EmptyState, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { buildTalentGraph, graphOptionsFromCharacter, talentBudget } from '../../lib/talentGraph'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
-import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, tone, toneFrom } from '../../theme'
+import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, tone } from '../../theme'
 import { onGem } from '../../lib/hero'
 
 /* White initial on the deep character gradient (lib/avatar: >= 10:1 on every palette), as in MetasPage/BolsaPage. */
 const ON_GEM = onGem
 
 function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-
   // Book budget (shared engine, see lib/talentGraph.ts): allowed / used / excess / falta.
   const budget = useMemo(() => {
     const graph = buildTalentGraph(graphOptionsFromCharacter(character))
@@ -72,22 +66,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
           {character.name}
         </span>
 
-        {(path || order) && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {path && (
-              <span style={pill(toneFrom(path.color))}>
-                <HeroicPathIcon id={path.id} size={13} />
-                {path.name}
-              </span>
-            )}
-            {order && (
-              <span style={{ ...pill(toneFrom(order.color)), paddingLeft: 4 }}>
-                <RadiantOrderIcon orderId={order.id} size={16} decorative />
-                {order.name}
-              </span>
-            )}
-          </span>
-        )}
+        <CharacterIdentityPills character={character} />
 
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: fs.sm, color: c.muted, fontVariantNumeric: 'tabular-nums' }}>

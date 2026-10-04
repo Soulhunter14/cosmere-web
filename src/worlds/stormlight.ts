@@ -5,6 +5,7 @@
  */
 import { Gem } from 'lucide-react'
 import { tone } from '../theme'
+import { RADIANT_ORDERS } from '../data/radiantOrders'
 import type { WorldConfig } from './types'
 import {
   COLUMNAS_STORMLIGHT_PNJ_LEGADO,
@@ -48,7 +49,14 @@ export const STORMLIGHT: WorldConfig = {
     { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icono: iconoHumano, puntosAtributoBase: 12 },
     { id: 'Oyente', label: 'Oyente', tone: tone.amatista, icono: iconoOyente, puntosAtributoBase: 12 },
   ],
-  caminoInvestido: { field: 'caminoRadiante', label: 'Orden', excluyente: true },
+  caminoInvestido: {
+    field: 'caminoRadiante',
+    label: 'Orden',
+    excluyente: true,
+    // The ten radiant orders, with the name and colour the lists and hubs show today (radiantOrders.ts already travels in the main bundle)
+    caminos: RADIANT_ORDERS.map((o) => ({ id: o.id, nombre: o.name, color: o.color })),
+    insignia: true, // RadiantOrderIcon: the official round glyph, 16 px in the pills
+  },
   recursos: [],
   derivados: [],
   moneda: { simbolo: 'mc', nombre: 'Marcos', imagen: null, decimales: 0 },

@@ -10,10 +10,7 @@ import { EmptyState, PageHeader, Spinner, TabPanel, Tabs, type TabItem } from '.
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { charactersApi } from '../../api/characters'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { CharacterHero } from '../../components/CharacterHero'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
@@ -166,9 +163,6 @@ function PlayerPersonajesPage() {
     )
   }
 
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-
   const activeMetas = character.metas?.filter((m) => m.estado === 'activa').length ?? 0
   const sphere = cosmereImage('esfera-broam-esmeralda')
 
@@ -245,21 +239,12 @@ function PlayerPersonajesPage() {
             <h1 style={{ ...titleText, fontSize: fs['2xl'], color: HERO_TEXT, marginBottom: 10, overflowWrap: 'anywhere' }}>
               {character.name}
             </h1>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
-              {path && (
-                <span style={heroPill}>
-                  <HeroicPathIcon id={path.id} size={13} />
-                  {path.name}
-                </span>
-              )}
-              {order && (
-                <span style={heroPill}>
-                  <RadiantOrderIcon orderId={order.id} size={16} decorative />
-                  {order.name}
-                </span>
-              )}
-            </div>
+            <CharacterIdentityPills
+              character={character}
+              variant="hero"
+              insetIcon={false}
+              leading={<span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>}
+            />
           </div>
         </div>
       </CharacterHero>

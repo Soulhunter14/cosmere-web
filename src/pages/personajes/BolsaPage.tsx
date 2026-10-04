@@ -7,13 +7,10 @@ import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { EmptyState, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
 import { cosmereImage } from '../../lib/cosmereAssets'
-import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, toneFrom } from '../../theme'
+import { buttonReset, c, card, fs, page, radius, shadow, titleText } from '../../theme'
 import { onGem } from '../../lib/hero'
 
 /** Official sphere illustration (a diamond mark) next to the marcos count */
@@ -21,8 +18,6 @@ const MARCO_IMG = cosmereImage('esfera-marco-diamante')
 
 function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
   const [hovered, setHovered] = useState(false)
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
   const itemCount = (character.weapons?.length ?? 0) + (character.armor?.length ?? 0) + (character.equipment?.length ?? 0)
   const marcos = (character.marcosInfusas ?? 0) + (character.marcosOpacas ?? 0)
 
@@ -73,22 +68,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>{character.name}</span>
 
-        {(path || order) && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {path && (
-              <span style={pill(toneFrom(path.color))}>
-                <HeroicPathIcon id={path.id} size={13} />
-                {path.name}
-              </span>
-            )}
-            {order && (
-              <span style={{ ...pill(toneFrom(order.color)), paddingLeft: 4 }}>
-                <RadiantOrderIcon orderId={order.id} size={16} decorative />
-                {order.name}
-              </span>
-            )}
-          </span>
-        )}
+        <CharacterIdentityPills character={character} />
 
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: fs.sm, color: c.muted }}>
           <span style={metaItem}>

@@ -7,12 +7,9 @@ import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { Avatar, Button, ConfirmDialog, EmptyState, Field, IconButton, Input, PageHeader, Sheet, Spinner } from '../../components/ui'
 import type { CampaignDetail, Member } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
-import { buttonReset, c, card, eyebrow, fs, page, pill, radius, shadow, titleText, tone, toneFrom, type Tone } from '../../theme'
+import { buttonReset, c, card, eyebrow, fs, page, pill, radius, shadow, titleText, tone, type Tone } from '../../theme'
 import { onGem } from '../../lib/hero'
 
 /* White initial on the deep character gradient (lib/avatar: ≥ 10:1 on every palette). */
@@ -75,7 +72,7 @@ function CharacterCard({
   players,
   index = 0,
 }: {
-  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; maxHealth: number; ownerId?: number }
+  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; caminoMetal: string; maxHealth: number; ownerId?: number }
   isGm: boolean
   ownerName?: string
   onOpen: () => void
@@ -85,9 +82,6 @@ function CharacterCard({
   index?: number
 }) {
   const [showAssign, setShowAssign] = useState(false)
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-  const hasPaths = !!(character.caminoHeroico || character.caminoRadiante) && !!(path || order)
   const r = radius.lg - 1
 
   return (
@@ -130,22 +124,7 @@ function CharacterCard({
             </span>
 
             {/* Path badges */}
-            {hasPaths && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {path && (
-                  <span style={pill(toneFrom(path.color))}>
-                    <HeroicPathIcon id={path.id} size={13} />
-                    {path.name}
-                  </span>
-                )}
-                {order && (
-                  <span style={{ ...pill(toneFrom(order.color)), paddingLeft: 4 }}>
-                    <RadiantOrderIcon orderId={order.id} size={16} decorative />
-                    {order.name}
-                  </span>
-                )}
-              </span>
-            )}
+            <CharacterIdentityPills character={character} />
 
             {/* Meta line: level · ascendencia, then the owner badge (GM view) */}
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

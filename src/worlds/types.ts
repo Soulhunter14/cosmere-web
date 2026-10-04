@@ -55,6 +55,18 @@ export interface HabilidadDef {
 
 /** The two attributes that head each column of a skills page: the two tiles of its card and the two terms of its defense (10 + attribute + attribute) */
 export type AtributosColumna = Record<HabilidadDef['columna'], [AttrField, AttrField]>
+/**
+ * Light summary of one Investida path of a world (a radiant order, a metalborn path): what a pill or a chip needs to name and
+ * colour it. The heavy definition (talent tree, texts) lives in the lazy data of the world / TalentRules (T34a), never in the config.
+ */
+export interface CaminoInvestidoResumen {
+  /** Value of the character field `WorldConfig.caminoInvestido.field` */
+  id: string
+  /** Visible name */
+  nombre: string
+  /** Data colour (hex) for toneFrom()/ink()/tint() */
+  color: string
+}
 
 export interface WorldConfig {
   id: WorldId
@@ -107,7 +119,15 @@ export interface WorldConfig {
     topeAtributo?: Partial<Record<AttrField, number>>
   }[]
   /** The Investida path the world adds to the heroic paths: radiant order (Stormlight) or metalborn path (Mistborn) */
-  caminoInvestido: { field: 'caminoRadiante' | 'caminoMetal'; label: string; excluyente: boolean } | null
+  caminoInvestido: {
+    field: 'caminoRadiante' | 'caminoMetal'
+    label: string
+    excluyente: boolean
+    /** The paths of the world in book order, for the identity pills of the lists and hubs (CharacterIdentityPills); the one a character has is `character[field]` */
+    caminos: CaminoInvestidoResumen[]
+    /** `iconos.caminoInvestido` is a round badge of its own (Stormlight: the official order glyph), drawn at 16 px and pulled to the edge of a pill; `false` = a plain glyph (Mistborn: Lucide) that takes the size and padding of the heroic-path icon beside it */
+    insignia: boolean
+  } | null
   recursos: { clave: string; label: string; icono: LucideIcon; decimales: 0 | 2 }[]
   derivados: { clave: string; label: string; grupo: 'alomancia' | 'feruquimia' }[]
   moneda: { simbolo: 'mc' | 'ar'; nombre: string; imagen: string | null; decimales: 0 | 2 }

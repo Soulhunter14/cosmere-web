@@ -3,12 +3,14 @@
  *
  * `aventuras.ts` and `combatRules.ts` are Cosmere content shared by every world. What differs between worlds (a state that only one
  * book has, the currency of a cost, an example, a rule that one book words differently) is an overlay that the world owns and
- * carries in its `WorldData.overlays`: the one of Mistborn travels in its lazy chunk, the one of Stormlight will live in the main
- * bundle (T23b). The pages never compare world ids: they ask `useWorldData()` for the overlay and resolve it here.
+ * carries in its `WorldData.overlays`: the one of Mistborn travels in its lazy chunk, the one of Stormlight lives in the main
+ * bundle (`stormlight.data.ts`, so its first render already has it). The pages never compare world ids: they ask `useWorldData()`
+ * for the overlay and resolve it here.
  *
- * T23 state: the base is still written with the Stormlight text, so Stormlight has no overlay and resolves to the base arrays
- * themselves (same references, P1) and Mistborn corrects what its book words differently. T23b neutralises the base and gives
- * Stormlight an overlay of its own: the arrays it resolves to must then be JSON-identical to today's.
+ * Since T23b the base is neutral (no colour of any world: «monedas locales», generic examples, no Empoderado) and each world has an
+ * overlay of its own. A world without overlay (`null`, or its lazy data not loaded yet) gets the base itself, by identity. The overlay of
+ * Stormlight puts back, by name and in place, the exact text the base carried before T23b: the arrays it resolves to are JSON-identical
+ * to the old ones (compared before and after).
  *
  * Operations, applied in this order:
  * - lists of named items (`Overlay`): `remove`, `replace` and `add` by `name`;

@@ -1,16 +1,19 @@
 /**
  * Overlay of Nacidos de la bruma over the shared «Aventuras» rules (`src/data/aventuras.ts`; resolver in `src/data/overlays.ts`).
  * Capítulo 9 of both books is the same engine, so only what differs is written here (operations 1-17 of the checklist of
- * `docs/nacidos-de-la-bruma/06-delta-reglas-base.md` §6.2): the two states that only this book has (Desprovisto, Mermado), the one
- * it lacks (Empoderado), the metal-mind benefit of the rests and the new rest activity, the currency of the costs and the examples
- * of Scadrial. Texts are short paraphrases of the book, not quotations.
- * The base is still written with the Stormlight text (T23): T23b neutralises it and drops the operations it makes redundant.
+ * `docs/nacidos-de-la-bruma/06-delta-reglas-base.md` §6.2): the two states that only this book has (Desprovisto, Mermado), the
+ * metal-mind benefit of the rests and the new rest activity, the currency of the costs and the examples of Scadrial. Texts are short
+ * paraphrases of the book, not quotations.
+ * The base is neutral since T23b (Q12): it has no Empoderado (the one state this book lacks) and its Inconsciente has no exception of
+ * the Radiants, so operations 3 and 4 of the checklist (`remove: ['Empoderado']`, the replacement of Inconsciente) are gone. What the
+ * base words with a neutral currency («monedas locales») or without examples is written here for Scadrial.
  */
 import type { AventurasOverlay } from '../overlays'
 
 export const MISTBORN_AVENTURAS: AventurasOverlay = {
   estados: {
-    // 15 states: Empoderado is Stormlight's (Radiant Ideals), Desprovisto and Mermado are new (L.310-311 / PDF 316-317).
+    // 15 states: the 13 of the neutral base (Empoderado, the Ideals of the Radiants, is Stormlight's and lives in its overlay) plus
+    // Desprovisto and Mermado, which are new (L.310-311 / PDF 316-317).
     // The resolver sorts the list alphabetically again (Desprovisto after Desorientado, Mermado after Mejorado)
     add: [
       {
@@ -27,15 +30,6 @@ export const MISTBORN_AVENTURAS: AventurasOverlay = {
           'El atributo entre corchetes se reduce en la cifra indicada. Penaliza las habilidades asociadas, los talentos que usan directamente ese atributo y el movimiento si es Velocidad, pero no cambia tus defensas, salud máxima, concentración máxima ni Investidura máxima.',
         special:
           'Acumulativo: puede afectar a varios atributos a la vez. Ejemplo: Velocidad 3 y Mermado [Velocidad -2] = -2 a Agilidad, Armamento ligero, Hurto y Sigilo, y movimiento de 9 a 7,5 m.',
-      },
-    ],
-    remove: ['Empoderado'],
-    // Inconsciente loses the exception of the Radiants (L.311 / PDF 317)
-    replace: [
-      {
-        name: 'Inconsciente',
-        details:
-          'Quedas Tumbado y dejas caer lo que sujetas. No puedes interactuar con el entorno ni usar acciones o reacciones. En combate siempre tienes turno lento pero no puedes actuar.',
       },
     ],
   },
@@ -62,7 +56,8 @@ export const MISTBORN_AVENTURAS: AventurasOverlay = {
     },
   },
 
-  // Reposo: costes en arquillas y ejemplos de Scadrial (L.308-310 / PDF 314-316); Mentoría en las artes metálicas es nueva
+  // Reposo: costes en arquillas (la base los escribe en «monedas locales») y ejemplos de Scadrial (L.308-310 / PDF 314-316);
+  // Mentoría en las artes metálicas es nueva
   actividades: {
     add: [
       {

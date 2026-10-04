@@ -1,3 +1,7 @@
+// Shared rules of the Cosmere RPG (chapter 9 of both books): the NEUTRAL base. Wording that belongs to one world (its currency, its
+// examples, a state only its book has) is not written here: it lives in the overlay of that world (T23b, Q12, P8) and the pages
+// read the base through the resolver of overlays.ts. The generic wording that stands in for it («monedas locales», the flood, the
+// tunnel, the powerful enemy, the voyage with few provisions) was written for this base: it is not a quotation of either book.
 export interface AventuraSection {
   id: string
   title: string
@@ -103,7 +107,7 @@ export const ACTIVIDADES_REPOSO: ActividadReposo[] = [
     name: 'Manufactura',
     duration: 'Variable según complejidad',
     cost: 'Materiales requeridos',
-    description: 'Puedes fabricar objetos o fabriales tal como se describe en el capítulo 7. La manufactura puede llevar muchos días, por lo que es ideal llevarla a cabo durante períodos de reposo.',
+    description: 'Puedes fabricar objetos tal como se describe en el capítulo 7. La manufactura puede llevar muchos días, por lo que es ideal llevarla a cabo durante períodos de reposo.',
   },
   {
     name: 'Trabajar en una profesión',
@@ -120,19 +124,19 @@ export const ACTIVIDADES_REPOSO: ActividadReposo[] = [
   {
     name: 'Investigación',
     duration: '10+ días para información importante',
-    cost: '3 mc/día',
-    description: 'Visita devotarios, lee en bibliotecas o experimenta en laboratorios. Dile a la DJ qué esperas descubrir y ella decidirá si es posible y cuánto tiempo necesitas. Suele requerir pruebas de Deducción, Saber o Persuasión.',
+    cost: '3 monedas locales/día',
+    description: 'Lee en bibliotecas o experimenta en laboratorios. Dile a la DJ qué esperas descubrir y ella decidirá si es posible y cuánto tiempo necesitas. Suele requerir pruebas de Deducción, Saber o Persuasión.',
   },
   {
     name: 'Entrenamiento',
     duration: '20+ días',
-    cost: '5 mc/día',
-    description: 'Busca un mentor, libro de referencia o expertos para adquirir una nueva pericia especializada (como Martillo de guerra o Semiesquirla). La DJ determina el tiempo y las pruebas requeridas.',
+    cost: '5 monedas locales/día',
+    description: 'Busca un mentor, libro de referencia o expertos para adquirir una nueva pericia especializada. La DJ determina el tiempo y las pruebas requeridas.',
   },
   {
     name: 'Autorreflexión',
     duration: '10+ días',
-    cost: '5 mc/día',
+    cost: '5 monedas locales/día',
     description: 'Evalúa tus valores y experiencias para llevar a cabo cambios mecánicos en tu personaje: cambiar talentos, ajustar grados de habilidad u otras modificaciones. Coordínate con la DJ para integrar los cambios en la historia.',
   },
 ]
@@ -145,7 +149,7 @@ export const SUCESOS_SECTIONS: AventuraSection[] = [
     title: '¿Qué es un suceso?',
     summary: 'Un suceso es una herramienta opcional que la DJ introduce dentro de una escena para representar circunstancias inminentes que progresan hacia un momento que sacudirá la acción. Funciona como una cuenta atrás independiente del objetivo principal.',
     details: [
-      { label: 'Positivos o negativos', text: 'Los sucesos pueden ser buenos o malos para los PJs. Ejemplos: una alta tormenta que se acerca, la llegada de refuerzos aliados, el creciente enfado de una multitud o el inminente cierre de una perpendicular.' },
+      { label: 'Positivos o negativos', text: 'Los sucesos pueden ser buenos o malos para los PJs. Ejemplos: una inundación que se acerca, la llegada de refuerzos aliados, el creciente enfado de una multitud o el inminente derrumbe de un túnel.' },
       { label: 'Frecuencia', text: 'La DJ puede incorporar dos o tres sucesos por sesión, generalmente repartidos entre distintas escenas. No deben parecer giros aleatorios; son dispositivos deliberados para aumentar la tensión.' },
       { label: 'Medidor', text: 'Cada suceso tiene un medidor con al menos dos espacios de Oportunidad, Complicación o ambas. La DJ elige la cantidad de cada tipo al presentarlo.' },
     ],
@@ -156,7 +160,7 @@ export const SUCESOS_SECTIONS: AventuraSection[] = [
     summary: 'Jugadores, DJ y PNJs pueden rellenar los espacios del medidor gastando Oportunidades o Complicaciones en lugar de usarlos para sus efectos habituales.',
     details: [
       { label: 'Oportunidades (jugadores)', text: 'Gastar una Oportunidad en un suceso positivo rellena un espacio, acercando un resultado favorable. A veces es mejor guardarla para un beneficio inmediato; la elección es estratégica.' },
-      { label: 'Complicaciones (DJ)', text: 'La DJ puede gastar una Complicación en un suceso negativo. Esto le da control dramático sobre cuándo se activa un suceso adverso, como un abismoide irrumpiendo en la escena.' },
+      { label: 'Complicaciones (DJ)', text: 'La DJ puede gastar una Complicación en un suceso negativo. Esto le da control dramático sobre cuándo se activa un suceso adverso, como un enemigo poderoso irrumpiendo en la escena.' },
       { label: 'PNJs aliados y enemigos', text: 'Los PNJs también contribuyen. Las Oportunidades de aliados avanzan sucesos positivos; las de enemigos avanzan sucesos negativos (y viceversa con las Complicaciones).' },
     ],
   },
@@ -166,7 +170,7 @@ export const SUCESOS_SECTIONS: AventuraSection[] = [
     summary: 'Una vez rellenados todos los espacios del medidor, el suceso se activa y sus consecuencias se hacen realidad en la escena.',
     details: [
       { label: 'Medidores dobles', text: 'Para desenlaces más complejos, la DJ puede manejar dos medidores simultáneamente: uno positivo y uno negativo. ¿Cuál se llenará primero?' },
-      { label: 'Ejemplo', text: 'Estás esperando refuerzos muy necesarios (suceso positivo) mientras una alta tormenta se acerca (suceso negativo). Contribuyes al avance de tus aliados con Oportunidades, mientras las Complicaciones hacen avanzar la tormenta.' },
+      { label: 'Ejemplo', text: 'Estás esperando refuerzos muy necesarios (suceso positivo) mientras una inundación se acerca (suceso negativo). Contribuyes al avance de tus aliados con Oportunidades, mientras las Complicaciones hacen avanzar la inundación.' },
     ],
   },
 ]
@@ -202,15 +206,9 @@ export const ESTADOS: Estado[] = [
     details: 'No puedes usar reacciones. Tus sentidos siempre cuentan como ofuscados. Las pruebas de Percepción y pruebas similares que requieran sentidos tienen desventaja.',
   },
   {
-    name: 'Empoderado',
-    summary: 'Estallido de poder sin límites al jurar un Ideal (solo Caballeros Radiantes).',
-    details: 'Obtienes ventaja en todas las pruebas y tu Investidura se recarga hasta su máximo al inicio de cada uno de tus turnos.',
-    special: 'Se elimina al final de la escena actual.',
-  },
-  {
     name: 'Inconsciente',
     summary: 'Tu valor de movimiento pasa a 0, no puedes moverte ni comunicarte.',
-    details: 'Quedas Tumbado y dejas caer lo que sujetas. No puedes interactuar con el entorno ni usar acciones o reacciones (excepto Absorber luz tormentosa y Revitalizar si eres Radiante). En combate siempre tienes turno lento pero no puedes actuar.',
+    details: 'Quedas Tumbado y dejas caer lo que sujetas. No puedes interactuar con el entorno ni usar acciones o reacciones. En combate siempre tienes turno lento pero no puedes actuar.',
     special: 'Como PJ, puedes elegir recuperar la consciencia al final de cualquiera de tus turnos (sin coste de acción) o cuando un efecto te cure al menos 1 punto de salud. Con 0 de salud, recuperas 1 al despertar.',
   },
   {
@@ -274,7 +272,7 @@ export const TIPOS_DANO: TipoDano[] = [
   {
     name: 'Espiritual',
     reducedByDesvio: false,
-    description: 'Daña tanto el yo físico como el espiritual. Causado principalmente por hojas esquirladas y algunas potencias. No se ve reducido por el desvío.',
+    description: 'Daña tanto el yo físico como el espiritual. No se ve reducido por el desvío.',
   },
   {
     name: 'Vital',
@@ -325,7 +323,7 @@ export const DANO_SECTIONS: AventuraSection[] = [
   {
     id: 'comida-agua',
     title: 'Comida y agua',
-    summary: 'En situaciones normales la DJ no pide seguimiento de reservas. Solo importa cuando el acceso puede ser limitado, como tras las líneas enemigas o en Shadesmar.',
+    summary: 'En situaciones normales la DJ no pide seguimiento de reservas. Solo importa cuando el acceso puede ser limitado, como tras las líneas enemigas o en una travesía con pocas provisiones.',
     details: [
       { label: 'Comida insuficiente', text: 'Puedes pasar un número de días sin comer igual a tu valor de Voluntad antes de sufrir efectos. Por cada día adicional sin comer, quedas Agotado [-1]. Si llegas a Agotado [-10], mueres.' },
       { label: 'Agua insuficiente', text: 'Por cada día sin beber suficiente agua, quedas Agotado [-1]. Si llegas a Agotado [-10], mueres.' },

@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Nacidos de la Bruma: texto del manual y credenciales locales de prueba (nunca en git)
+docs/nacidos-de-la-bruma/fuentes/*.txt
+docs/nacidos-de-la-bruma/entorno-pruebas.md

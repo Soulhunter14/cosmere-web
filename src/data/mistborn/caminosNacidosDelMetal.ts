@@ -76,9 +76,9 @@ export interface CaminoNacidoDelMetal {
   metasIniciales: MetaNacidoDelMetalDef[]
   /** Flat tree of the path WITHOUT the main talent, in the order of the entries of the book (alphabetical) */
   talentos: Talento[]
-  /** Hex colour for ink()/tint() (§7.8). [inferido]: the book gives no colour to the paths */
+  /** Hex colour for ink()/tint() (§7.8). [inferido]: the book gives no colour to the paths (verificado en imagen, PDF 133-165: every path banner is the same grey plate) */
   color: string
-  /** Name of the provisional Lucide icon (rendered by `mistborn.icons.tsx`). [inferido → Q18]: the book has no icons for the paths */
+  /** Name of the provisional Lucide icon (rendered by `mistborn.icons.tsx`). [inferido → Q18]: the book has no icons for the paths (verificado en imagen, PDF 133-165) */
   icon: string
   /** Erratum or discrepancy of the book about the main talent (the tree talents carry their own `Talento.notaLibro`) */
   notaLibro?: string
@@ -201,8 +201,8 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
         description: DESC_TRAZAS_DE_METAL,
       },
     ],
-    color: '#6987b1', // [inferido] steel blue, the tone of the metal of its emblematic power (acero, `METALES`)
-    icon: 'Flame', // [inferido → Q18]
+    color: '#6987b1', // [inferido] steel blue, the tone of the metal of its emblematic power (acero, `METALES`); the book colours no path (PDF 133-165)
+    icon: 'Flame', // [inferido → Q18]: no official icon for the path in the book (PDF 133-165, verificado en imagen)
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -265,7 +265,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'de otros dos poderes cuyo metal tengas disponible, sin gastar Investidura y sin necesitar ninguna acción.',
         notaLibro:
           'El diagrama (L.143 / PDF 149) resume el efecto como «usar también otro poder naciente» (uno); la entrada (L.142 / PDF 148) ' +
-          'dice «otros dos poderes para los que tengas metal disponible». Se transcribe la entrada.',
+          'dice «otros dos poderes para los que tengas metal disponible». Se transcribe la entrada (verificado en imagen, PDF 148 y 149).',
       },
       {
         name: 'Quemar instintivamente', // L.142 / PDF 148
@@ -298,8 +298,8 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
         description: DESC_TRAZAS_DE_METAL,
       },
     ],
-    color: '#8f86c9', // [inferido] mist violet (the mists, the cloak of mists of the book's art)
-    icon: 'CloudFog', // [inferido → Q18]
+    color: '#8f86c9', // [inferido] mist violet (the mists, the cloak of mists of the book's art); the book colours no path (PDF 133-165)
+    icon: 'CloudFog', // [inferido → Q18]: no official icon for the path in the book (PDF 133-165, verificado en imagen)
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -388,11 +388,11 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
         description: DESC_MENTES_DE_METAL_AMPLIADAS,
       },
     ],
-    color: '#b2623b', // [inferido] copper, the metal of the guardadores' mentes de metal (cobre, `METALES`)
-    icon: 'Container', // [inferido → Q18]
+    color: '#b2623b', // [inferido] copper, the metal of the guardadores' mentes de metal (cobre, `METALES`); the book colours no path (PDF 133-165)
+    icon: 'Container', // [inferido → Q18]: no official icon for the path in the book (PDF 133-165, verificado en imagen)
     notaLibro:
       'La entrada (L.146 / PDF 152) escribe el prerrequisito como «ruptura o de herencia»; el diagrama (L.147 / PDF 153) y los otros ' +
-      'cuatro caminos, «ruptura o herencia». Se transcribe la forma común.',
+      'cuatro caminos, «ruptura o herencia». Se transcribe la forma común (verificado en imagen, PDF 152 y 153).',
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -470,8 +470,8 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'puedes gastar 3 puntos de concentración para usar ese poder como si hubieras gastado 1 carga.',
       },
     ],
-    color: '#4f9d8a', // [inferido] verdigris: the oxidised-copper cousin of the feruquimista's copper
-    icon: 'Package', // [inferido → Q18]
+    color: '#4f9d8a', // [inferido] verdigris: the oxidised-copper cousin of the feruquimista's copper; the book colours no path (PDF 133-165)
+    icon: 'Package', // [inferido → Q18]: no official icon for the path in the book (PDF 133-165, verificado en imagen)
   },
 
   // ─────────────────────────────────────────────────────────────
@@ -551,7 +551,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'suministro recurrente, recupera su capacidad normal; con otros metales raros restauras 2 cargas por cada medio kilo de metal.',
         notaLibro:
           'El diagrama (L.157 / PDF 163) abrevia la condición como «tus dos poderes utilizan el mismo metal» y omite «talento Mentes ' +
-          'de metal ampliadas o Investido», que muestran sus flechas. Se transcribe la entrada.',
+          'de metal ampliadas o Investido», que muestran sus flechas. Se transcribe la entrada (verificado en imagen, PDF 161 y 163).',
       },
       {
         name: 'Composición recursiva', // L.155 / PDF 161
@@ -605,7 +605,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'sinergias crean tus poderes.',
         notaLibro:
           'El diagrama (L.157 / PDF 163) abrevia la condición como «tus dos poderes utilizan metales distintos» y omite «talento ' +
-          'Mentes de metal ampliadas o Investido», que muestran sus flechas. Se transcribe la entrada.',
+          'Mentes de metal ampliadas o Investido», que muestran sus flechas. Se transcribe la entrada (verificado en imagen, PDF 163 y 165).',
       },
       {
         name: 'Sinergia metálica', // L.159 / PDF 165
@@ -620,7 +620,7 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
           'decantado la mente con esas cargas.',
         notaLibro:
           'La entrada dice «Tras usar Resonancia de aleación» (L.159 / PDF 165); el talento se llama Resonancia aleada, como en el ' +
-          'diagrama (L.157 / PDF 163).',
+          'diagrama (L.157 / PDF 163; verificado en imagen, PDF 163 y 165).',
       },
       {
         name: 'Trazas de metal', // L.159 / PDF 165
@@ -629,8 +629,8 @@ export const CAMINOS_NACIDOS_DEL_METAL: CaminoNacidoDelMetal[] = [
         description: DESC_TRAZAS_DE_METAL,
       },
     ],
-    color: '#a86fa0', // [inferido] plum: between the steel blue of alomancia and the copper of feruquimia
-    icon: 'Merge', // [inferido → Q18]
+    color: '#a86fa0', // [inferido] plum: between the steel blue of alomancia and the copper of feruquimia; the book colours no path (PDF 133-165)
+    icon: 'Merge', // [inferido → Q18]: no official icon for the path in the book (PDF 133-165, verificado en imagen)
   },
 ]
 

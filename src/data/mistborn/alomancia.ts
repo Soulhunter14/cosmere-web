@@ -81,9 +81,9 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
   // ── Alomancia de aluminio · L.175 / PDF 181 ──
   {
     id: 'alomancia:aluminio', arte: 'alomancia', metal: 'aluminio', name: 'Alomancia de aluminio', atributo: 'Voluntad',
-    caminos: [...TRES_CAMINOS], eras: erasDe('aluminio'), requiereMeta: true, costoBase: 'action1', // [inferido] no tree header lists the paths of the aluminium entry (L.175 / PDF 181); the three alomantic paths are assigned (§7.5)
+    caminos: [...TRES_CAMINOS], eras: erasDe('aluminio'), requiereMeta: true, costoBase: 'action1', // L.175 / PDF 181 (verificado en imagen): no tree header lists the paths; brumoso and nacidoble are backed by the text and by the table of L.372 / PDF 378 (Era 2), nacido-de-la-bruma is [inferido] by analogy with duraluminio and electro, whose headers list it (§7.5)
     descripcion: 'En Scadrial se tiene por un poder inútil, incluso dañino: vacía de golpe tus reservas de metal, también las de las mentes de metal que decantes. Fuera de Scadrial protege de las Artes Investidas ajenas, y los saltamundos llaman «vacíos» a quienes lo queman. El libro solo lo recomienda en campañas con saltamundos.',
-    notaLibro: 'Sin árbol de talentos ni frase de caminos que lo desbloqueen (L.175 / PDF 181); sí es elegible como poder en Era 2 (tabla de L.372 / PDF 378). Los `caminos` son los tres caminos alománticos [inferido: no hay cabecera de árbol que los enumere].',
+    notaLibro: 'Sin árbol de talentos ni frase de caminos que lo desbloqueen (L.175 / PDF 181, verificado en imagen); sí es elegible como poder en Era 2 (tabla de L.372 / PDF 378: brumoso y nacidoble) y el recuadro «Elección de alomancia de aluminio» presenta al «mosquito de aluminio» como opción de personaje. Los `caminos` son los tres caminos alománticos: brumoso y nacidoble salen de esa tabla; nacido de la bruma se añade por analogía con el duraluminio y el electro, cuyas cabeceras sí lo listan [inferido: ni la entrada ni el recuadro enumeran caminos].',
     acciones: [
       {
         nombre: 'Quemar aluminio', activacion: 'action1', duracion: '1 ronda',
@@ -308,7 +308,7 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
     id: 'alomancia:cromo', arte: 'alomancia', metal: 'cromo', name: 'Alomancia de cromo', atributo: 'Voluntad',
     caminos: [...BRUMOSO_NACIDOBLE], eras: erasDe('cromo'), requiereMeta: true, costoBase: 'action1',
     descripcion: 'Con un toque vacías las reservas de poder de un nacido del metal o de otro personaje Investido, que siente un frío súbito. Sus alomantes son las sanguijuelas; en Scadrial, una banda sensata lleva una por si aparece otro usuario de las artes metálicas.',
-    notaLibro: 'La acción dice «Tira 1d4» y, a la vez, que el objeto con cargas «pierde la mitad» (L.193 / PDF 199); Sifón de mentes de metal (L.194 / PDF 200) confirma que de base se pierde la mitad y que el dado solo cuenta con ese talento. Se toma la mitad [inferido: la tirada de 1d4 de ese punto no fija las cargas].',
+    notaLibro: 'La acción dice «Tira 1d4» y, a la vez, que el objeto con cargas «pierde la mitad» (L.193 / PDF 199); Sifón de mentes de metal (L.194 / PDF 200) dice que con ese talento se pierde el resultado del dado «en lugar de la mitad», así que de base se pierde la mitad y el dado solo cuenta con ese talento. Se toma la mitad (verificado en imagen, PDF 199 y 200); la tirada de 1d4 de ese punto no fija las cargas.',
     acciones: [
       {
         nombre: 'Quemar cromo', activacion: 'action1', duracion: 'Instantánea',
@@ -337,9 +337,9 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
   // ── Alomancia de duraluminio · L.195-196 / PDF 201-202 ──
   {
     id: 'alomancia:duraluminio', arte: 'alomancia', metal: 'duraluminio', name: 'Alomancia de duraluminio', atributo: 'Voluntad',
-    caminos: [...TRES_CAMINOS], eras: erasDe('duraluminio'), requiereMeta: true, costoBase: 'special', // [inferido] the tree header (L.196 / PDF 202) lists nacido-de-la-bruma, but the table of L.372 / PDF 378 does not list this metal for it in Era 1 (see notaLibro)
+    caminos: [...TRES_CAMINOS], eras: erasDe('duraluminio'), requiereMeta: true, costoBase: 'special', // verificado en imagen, PDF 202: the tree header lists nacido-de-la-bruma, but the table of L.372 / PDF 378 does not list this metal for it in Era 1; PDF 173 leaves the end-of-Era-1 case to the GM (see notaLibro)
     descripcion: 'Si lo quemas al usar otro poder, toda tu Investidura estalla en él: un fogonazo difícil de controlar, pero capaz de saltarse los límites de la capacidad. Sin otra capacidad Investida no sirve de nada (de ahí «mosquitos de duraluminio»). El libro solo lo recomienda con saltamundos o con clavos hemalúrgicos a mano.',
-    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.196 / PDF 202), pero la tabla de L.372 / PDF 378 no lista el duraluminio para el nacido de la bruma (Era 1); la nota ‡ de L.168 / PDF 174 lo abre a finales de la Era 1 [inferido: se conserva la cabecera como opción del director a finales de la Era 1].',
+    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.196 / PDF 202), pero la tabla de L.372 / PDF 378 no lista el duraluminio para el nacido de la bruma (Era 1); la nota ‡ de L.168 / PDF 174 y el apartado «Final de la Era 1» de L.167 / PDF 173 lo abren a finales de la Era 1 y dejan a la DJ fijar cuándo y cómo se conoce. Se conserva la cabecera como opción del director a finales de la Era 1 (verificado en imagen, PDF 173, 174, 202 y 378).',
     acciones: [
       {
         nombre: 'Quemar duraluminio', activacion: 'special', duracion: 'Instantánea',
@@ -365,9 +365,9 @@ export const PODERES_ALOMANTICOS: PoderAlomantico[] = [
   // ── Alomancia de electro · L.197-198 / PDF 203-204 ──
   {
     id: 'alomancia:electro', arte: 'alomancia', metal: 'electro', name: 'Alomancia de electro', atributo: 'Voluntad',
-    caminos: [...TRES_CAMINOS], eras: erasDe('electro'), requiereMeta: true, costoBase: 'action1', // [inferido] the tree header (L.198 / PDF 204) lists nacido-de-la-bruma, but the table of L.372 / PDF 378 does not list this metal for it in Era 1 (see notaLibro)
+    caminos: [...TRES_CAMINOS], eras: erasDe('electro'), requiereMeta: true, costoBase: 'action1', // verificado en imagen, PDF 204: the tree header lists nacido-de-la-bruma, but the table of L.372 / PDF 378 does not list this metal for it in Era 1; PDF 173 leaves the end-of-Era-1 case to the GM (see notaLibro)
     descripcion: 'Ves tus «sombras de electro», tus posibles futuros inmediatos. Solo te ves a ti mismo y a tu sombra reaccionando, sin saber qué o quién la provoca, por lo que a los oráculos les cuesta interpretarlas sin práctica. Valen menos que las del atium, pero quemar electro vuelve inútil el atium contra ti.',
-    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.198 / PDF 204), pero la tabla de L.372 / PDF 378 no lista el electro para el nacido de la bruma (Era 1); la nota ‡ de L.168 / PDF 174 lo abre a finales de la Era 1 [inferido: se conserva la cabecera como opción del director a finales de la Era 1].',
+    notaLibro: 'La cabecera del árbol lo asigna a brumoso, nacidoble y nacido de la bruma (L.198 / PDF 204), pero la tabla de L.372 / PDF 378 no lista el electro para el nacido de la bruma (Era 1); la nota ‡ de L.168 / PDF 174 y el apartado «Final de la Era 1» de L.167 / PDF 173 lo abren a finales de la Era 1 y dejan a la DJ fijar cuándo y cómo se conoce. Se conserva la cabecera como opción del director a finales de la Era 1 (verificado en imagen, PDF 173, 174, 204 y 378).',
     acciones: [
       {
         nombre: 'Quemar electro', activacion: 'action1', duracion: '1 ronda',

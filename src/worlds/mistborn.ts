@@ -49,7 +49,17 @@ export const MISTBORN: WorldConfig = {
   // Tones and icons are [inferido → Q18]. Sangre koloss: +1 to the Fuerza maximum (L.38 / PDF 44); Kandra: 6 points (L.34 / PDF 40)
   ascendencias: [
     { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icono: iconoHumano, puntosAtributoBase: 12 },
-    { id: 'Kandra', label: 'Kandra', tone: tone.esmeralda, icono: iconoKandra, puntosAtributoBase: 6 },
+    {
+      id: 'Kandra', label: 'Kandra', tone: tone.esmeralda, icono: iconoKandra, puntosAtributoBase: 6,
+      // The five Blessings (L.34-35 / PDF 40-41), short names for the identity tile: light twin of BENDICIONES_KANDRA (keep both in step)
+      bendiciones: [
+        { id: 'consciencia', nombre: 'Consciencia' },
+        { id: 'potencia', nombre: 'Potencia' },
+        { id: 'presencia', nombre: 'Presencia' },
+        { id: 'estabilidad', nombre: 'Estabilidad' },
+        { id: 'fortaleza', nombre: 'Fortaleza' },
+      ],
+    },
     { id: 'Sangre koloss', label: 'Sangre koloss', tone: tone.topacio, icono: iconoSangreKoloss, eras: ['era2'], puntosAtributoBase: 12, topeAtributo: { fuerza: 6 } },
   ],
   caminoInvestido: {

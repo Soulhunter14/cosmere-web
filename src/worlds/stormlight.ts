@@ -10,6 +10,7 @@ import {
   HABILIDADES_STORMLIGHT_LEGADO, HABILIDADES_STORMLIGHT_PNJ_LEGADO, HABILIDADES_STORMLIGHT_TIRADOR_LEGADO,
 } from './skills'
 import { iconoHumano, iconoOrden, iconoOyente } from './stormlight.icons'
+import { STORMLIGHT_TOPICS } from './stormlight.topics'
 import { DATA } from './stormlight.data'
 
 export const STORMLIGHT: WorldConfig = {
@@ -49,7 +50,7 @@ export const STORMLIGHT: WorldConfig = {
   moneda: { simbolo: 'mc', nombre: 'Marcos', imagen: null, decimales: 0 },
   // No levantamientoKg: the Bolsa only has a carrying capacity today (BolsaDetailPage `getCapacity`)
   tablas: { cargaKg: [22.5, 45, 112.5, 225, 1125, 2250] },
-  enciclopedia: [], // provisional: T06c fills it with STORMLIGHT_TOPICS
+  enciclopedia: STORMLIGHT_TOPICS,
   textos: {
     sinInvestidura: 'Solo disponible para Radiantes', // CharacterDetailPage.tsx
     vacioTalentos: 'Asigna un Camino Heroico u Orden Radiante en la ficha para ver los talentos disponibles.', // TalentosDetailPage.tsx

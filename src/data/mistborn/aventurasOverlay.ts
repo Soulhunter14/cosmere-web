@@ -62,7 +62,7 @@ export const MISTBORN_AVENTURAS: AventurasOverlay = {
     add: [
       {
         name: 'Mentoría en las artes metálicas',
-        // [inferido]: el libro no fija ni duración ni coste, solo «por cada día que pases entrenando con un mentor»
+        // Verificado en imagen (L.309-310 / PDF 315-316): el libro no fija duración ni coste, solo «por cada día» de entrenamiento.
         duration: 'Por días de entrenamiento con el mentor',
         cost: '—',
         description:

@@ -21,8 +21,8 @@ export const MISTBORN: WorldConfig = {
   emblema: 'cosmere-emblem', // provisional until T46 (then 'nacidos-bruma-emblem')
   // L.372 / PDF 378. Tones are [inferido → Q18]
   eras: [
-    { id: 'era1', label: 'Era 1', tone: tone.granate, aviso: 'Era 1: El Mundo de Ceniza. El libro advierte de un tono más sombrío.' },
-    { id: 'era2', label: 'Era 2', tone: tone.zafiro, aviso: 'Era 2: Cambio y revolución. Armas de fuego, sangre koloss, ferrin y nacidobles.' },
+    { id: 'era1', label: 'Era 1', tone: tone.cuarzo, aviso: 'Era 1: El Mundo de Ceniza. El libro advierte de un tono más sombrío.' },
+    { id: 'era2', label: 'Era 2', tone: tone.topacio, aviso: 'Era 2: Cambio y revolución. Armas de fuego, sangre koloss, ferrin y nacidobles.' },
   ],
   features: {
     caminoRadiante: false,
@@ -48,7 +48,7 @@ export const MISTBORN: WorldConfig = {
   // Tones and icons are [inferido → Q18]. Sangre koloss: +1 to the Fuerza maximum (L.38 / PDF 44); Kandra: 6 points (L.34 / PDF 40)
   ascendencias: [
     { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icono: iconoHumano, puntosAtributoBase: 12 },
-    { id: 'Kandra', label: 'Kandra', tone: tone.granate, icono: iconoKandra, puntosAtributoBase: 6 },
+    { id: 'Kandra', label: 'Kandra', tone: tone.esmeralda, icono: iconoKandra, puntosAtributoBase: 6 },
     { id: 'Sangre koloss', label: 'Sangre koloss', tone: tone.topacio, icono: iconoSangreKoloss, eras: ['era2'], puntosAtributoBase: 12, topeAtributo: { fuerza: 6 } },
   ],
   caminoInvestido: { field: 'caminoMetal', label: 'Camino de nacido del metal', excluyente: true },

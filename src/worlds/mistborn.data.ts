@@ -5,10 +5,12 @@
  * Meeting-point file: later tasks add lines, they never reorder them.
  */
 import type { WorldData } from './types'
+import { TIPOS_CLAVO, REGLAS_HEMALURGIA } from '../data/mistborn/hemalurgia'
 
 export const DATA: WorldData = {
   talentos: null,
   caminosHeroicos: [],
   poderes: [],
   overlays: { aventuras: null, combat: null },
+  hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
 }

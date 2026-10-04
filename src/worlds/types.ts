@@ -15,6 +15,7 @@ import type { Tone } from '../theme'
 import type { SkillField } from '../lib/talentGraph'
 import type { HeroicPath } from '../data/heroicPaths'
 import type { Potencia } from '../data/potencias'
+import type { PoderDef } from '../data/mistborn/tipos'
 
 /** Character fields that hold an attribute value (talentGraph.ts only has `SkillField` for skills). */
 export type AttrField = 'fuerza' | 'velocidad' | 'intelecto' | 'voluntad' | 'discernimiento' | 'presencia'
@@ -36,7 +37,9 @@ export interface TopicDef {
 export type TalentRules = unknown      // TODO T34a: replace with the real type from src/lib/talentRules.ts
 export type AventurasOverlay = unknown // TODO T23: replace with the real type from src/data/overlays.ts
 export type CombatOverlay = unknown    // TODO T23: replace with the real type from src/data/overlays.ts
-export type PoderDef = unknown         // TODO T16: replace with PoderAlomantico | PoderFeruquimico from src/data/mistborn/tipos.ts (the folder does not exist until F3)
+
+/** A metallic power of Mistborn: PoderAlomantico | PoderFeruquimico (T16). A type-only import: no data reach the main chunk */
+export type { PoderDef }
 
 /** One of the 18 standard skills: which Character field holds it, how it is labelled and which attribute rolls with it. */
 export interface HabilidadDef {

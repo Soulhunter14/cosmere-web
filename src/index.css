@@ -1,6 +1,8 @@
 /* Tailwind is kept only for its preflight reset and the few legacy utility classes left in older files.
    New code uses inline styles + the tokens below. */
 @import "tailwindcss";
+/* Tailwind must not scan docs/: the spec contains Windows paths whose backslash escapes break its parser. */
+@source not "../docs";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    COSMERE design system — two themes that follow the official rulebooks:

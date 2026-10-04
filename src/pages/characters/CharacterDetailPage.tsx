@@ -340,6 +340,18 @@ function getSaludMaxima(level: number, fuerza: number): number {
   return flat + fueCount * fuerza
 }
 
+// ── Desgloses del servidor ───────────────────────────────────────────────────
+// Las líneas «base» de un desglose son las que la previsualización en edición recalcula localmente
+// (Base, atributos y «Forma: X»); el resto son talentos y se conservan tal cual.
+const ATRIBUTO_RE = /^(Fuerza|Velocidad|Intelecto|Voluntad|Discernimiento|Presencia)\b/
+const esLineaBase = (concepto: string) => concepto === 'Base' || concepto.startsWith('Forma:') || ATRIBUTO_RE.test(concepto)
+const lineasTalento = (s: StatDesglose | undefined) => (s?.lineas ?? []).filter((l) => !esLineaBase(l.concepto))
+const sumaLineas = (ls: StatDesglose['lineas']) => ls.reduce((acc, l) => acc + l.valor, 0)
+const fmtLinea = (l: StatDesglose['lineas'][number]) => `${l.valor} (${l.concepto})`
+const desgloseStr = (s: StatDesglose | undefined) => (s?.lineas ?? []).map(fmtLinea).join(' + ')
+const RANGO_MAX = 5
+const rangoDe = (level: number) => Math.min(RANGO_MAX, Math.max(1, Math.ceil(level / 5)))
+
 // ── Attribute point allowance per level ──────────────────────────────────────
 // Starting pool: 12 points. +1 at levels 3, 6, 9, 12, 15, 18 (table p.29)
 function getPuntosAtributoEsperados(level: number): number {
@@ -515,9 +527,13 @@ export function CharacterDetailPage() {
     || char.playerName
     || 'Sin jugador'
 
-  // Salud calculada client-side (nivel + fuerza). f.salud?.total es el valor
-  // del servidor — mantenido por ahora pero deprecado; usar getSaludMaxima().
-  const saludTotal = getSaludMaxima(f.level ?? 1, f.fuerza ?? 0)
+  // Salud máxima: la calcula el servidor (tabla de progreso con la Fuerza efectiva, forma incluida, más talentos
+  // como Robusto). En edición se previsualiza recalculando la parte base con el nivel y la Fuerza del formulario
+  // y conservando las líneas de talentos que devolvió el servidor.
+  const fbFuerza = formaBonus.fuerza ?? 0
+  const saludTotal = editing
+    ? getSaludMaxima(f.level ?? 1, (f.fuerza ?? 0) + fbFuerza) + sumaLineas(lineasTalento(char.salud))
+    : (char.salud?.total ?? getSaludMaxima(char.level ?? 1, (char.fuerza ?? 0) + fbFuerza))
 
   const cardRise = (i: number) => ({ '--i': i }) as CSSProperties
 
@@ -593,7 +609,7 @@ export function CharacterDetailPage() {
               </label>
               <HeroInput
                 id={levelId}
-                type="number" min={1} max={20}
+                type="number" min={1} max={30}
                 value={form?.level ?? 1}
                 onChange={set('level')}
                 style={{ width: 76, minHeight: 40, padding: '6px 10px', textAlign: 'center', ...numeral, fontSize: fs.md }}
@@ -604,7 +620,7 @@ export function CharacterDetailPage() {
           )}
           <span style={heroPill}>
             <CosmereIcon name="ornamento-rombo" size={9} style={{ color: 'var(--gold-ornament)' }} />
-            {`Rango ${Math.ceil((editing ? (form?.level ?? 1) : char.level) / 5)}`}
+            {`Rango ${rangoDe(editing ? (form?.level ?? 1) : char.level)}`}
           </span>
         </div>
 
@@ -728,51 +744,77 @@ export function CharacterDetailPage() {
 
             {/* Concentración · Investidura · Desvío · Movimiento · Recuperación · Sentidos */}
             {(() => {
-              const conc = f.concentracion ?? { total: 0, lineas: [], situacional: [] }
-              const inv  = f.investidura  ?? { total: 0, lineas: [], situacional: [] }
-              const concFormaBonus = formaBonus.concentracion ?? 0
-              const concTotal = conc.total + concFormaBonus
-              const concDesglose = [
-                ...conc.lineas.map(l => `${l.valor} (${l.concepto})`),
-                ...(concFormaBonus > 0 ? [`${concFormaBonus} (${formaActiva})`] : []),
-              ].join(' + ')
-              const invDesglose  = inv.lineas.map(l => `${l.valor} (${l.concepto})`).join(' + ')
+              const vacio: StatDesglose = { total: 0, lineas: [], situacional: [] }
+              const conc = f.concentracion ?? vacio
+              const inv  = f.investidura  ?? vacio
+              const mov  = f.movimiento   ?? vacio
+              const formaInk = FORMA_TONE.fg
+              const formaLabel = (v: number) => `${v} (Forma: ${formaActiva})`
 
-              // Concentración — calculada automáticamente (2 + VOL + talentos).
-              // En edición: preview en tiempo real. En vista: valor del servidor.
-              // maxConcentration (bonus manual) deprecado — ya no se usa.
-              const concVol = (editing ? form?.voluntad : f.voluntad) ?? 0
-              const concFb  = formaBonus.concentracion ?? 0
-              const concShown = editing ? 2 + concVol + concFb : concTotal
+              // Líneas situacionales (reacciones, infusiones…): visibles pero fuera del total.
+              const situacional = (s: StatDesglose) => s.situacional.length > 0 ? (
+                <div style={{ marginTop: 4 }}>
+                  {s.situacional.map((l, i) => (
+                    <div key={i} style={{ color: c.muted }}>
+                      {l.valor >= 0 ? '+' : ''}{l.valor}{s.unidad === 'm' ? ' m' : ''} {l.concepto}
+                      {l.descripcionCondicion ? ` · ${l.descripcionCondicion}` : ''}
+                    </div>
+                  ))}
+                </div>
+              ) : null
+
+              // Concentración — la calcula el servidor: 2 + VOL + forma (VOL y concentración directa) + talentos.
+              // En edición se previsualiza con la Voluntad del formulario, conservando las líneas de talentos.
+              const concVol = f.voluntad ?? 0
+              const concFb  = (formaBonus.voluntad ?? 0) + (formaBonus.concentracion ?? 0)
+              const concTalentos = lineasTalento(conc)
+              const concShown = editing ? 2 + concVol + concFb + sumaLineas(concTalentos) : conc.total
               const concSub = editing
-                ? [`2 (Base)`, `${concVol} (VOL)`, ...(concFb > 0 ? [`${concFb} (${formaActiva})`] : [])].join(' + ')
-                : concDesglose
+                ? [`2 (Base)`, `${concVol} (Voluntad)`, ...(concFb !== 0 ? [formaLabel(concFb)] : []), ...concTalentos.map(fmtLinea)].join(' + ')
+                : desgloseStr(conc)
 
-              // Investidura — auto para Radiantes (2 + max(DIS,PRE) + talentos).
-              // maxInvestiture (bonus manual) deprecado — ya no se usa.
-              const esRadiante = !!((editing ? form?.caminoRadiante : f.caminoRadiante))
-              const invDis = (editing ? form?.discernimiento : f.discernimiento) ?? 0
-              const invPre = (editing ? form?.presencia      : f.presencia)      ?? 0
-              const maxAtrib   = Math.max(invDis, invPre)
-              const atribLabel = invDis >= invPre ? 'DIS' : 'PRE'
-              const invShown = editing ? 2 + maxAtrib : inv.total
-              const invSub = editing ? `2 (Base) + ${maxAtrib} (${atribLabel})` : invDesglose
+              // Investidura — para Radiantes: 2 + mayor de DIS/PRE (con forma) + talentos. Misma previsualización.
+              const esRadiante = !!f.caminoRadiante
+              const fbDis = formaBonus.discernimiento ?? 0
+              const fbPre = formaBonus.presencia ?? 0
+              const invDis = f.discernimiento ?? 0
+              const invPre = f.presencia ?? 0
+              const usaDis = invDis + fbDis >= invPre + fbPre
+              const invBase = usaDis ? invDis : invPre
+              const invFb   = usaDis ? fbDis : fbPre
+              const invTalentos = lineasTalento(inv)
+              const invShown = editing ? 2 + invBase + invFb + sumaLineas(invTalentos) : inv.total
+              const invSub = editing
+                ? [`2 (Base)`, `${invBase} (${usaDis ? 'Discernimiento' : 'Presencia'})`, ...(invFb !== 0 ? [formaLabel(invFb)] : []), ...invTalentos.map(fmtLinea)].join(' + ')
+                : desgloseStr(inv)
+
+              // Desvío — el servidor toma el mayor entre armadura y forma (no se acumulan, Manual pp. 33–37)
+              // y añade los talentos situacionales (Réplica fulminante = grados en Disciplina).
+              const desv = f.desvioCalculado ?? { ...vacio, total: Math.max(f.desvio ?? 0, formaBonus.desvio ?? 0) }
+              const desvSub = (desv.lineas.length > 0 && !(desv.lineas.length === 1 && desv.lineas[0].concepto === 'Base')) || desv.situacional.length > 0 ? (
+                <>
+                  {desv.lineas.length > 0 && !(desv.lineas.length === 1 && desv.lineas[0].concepto === 'Base') && (
+                    <span style={desv.lineas.some(l => l.concepto.startsWith('Forma:')) ? { color: formaInk } : undefined}>{desgloseStr(desv)}</span>
+                  )}
+                  {situacional(desv)}
+                </>
+              ) : undefined
 
               const vel = f.velocidad ?? 0
               const vol = f.voluntad ?? 0
               const dis = f.discernimiento ?? 0
               // Effective values include forma bonuses (view only)
+              const velEff = vel + (formaBonus.velocidad ?? 0)
               const volEff = vol + (formaBonus.voluntad ?? 0)
               const disEff = dis + (formaBonus.discernimiento ?? 0)
-              const mov = f.movimiento ?? { total: 0, lineas: [], situacional: [] }
               const movTotal = mov.total
               const movStr = movTotal % 1 === 0
                 ? `${movTotal} m`
                 : `${movTotal.toString().replace('.', ',')} m`
               const dadoRec    = volEff === 0 ? '1d4'  : volEff <= 2 ? '1d6'  : volEff <= 4 ? '1d8'  : volEff <= 6 ? '1d10' : volEff <= 8 ? '1d12' : '1d20'
               const alcance    = disEff === 0 ? '1,5 m' : disEff <= 2 ? '3 m' : disEff <= 4 ? '6 m' : disEff <= 6 ? '15 m' : disEff <= 8 ? '30 m' : 'Sin límite'
-              const movBonus = mov.lineas.filter(l => l.concepto !== 'Base')
-              const formaInk = FORMA_TONE.fg
+              // La línea base del movimiento es «Velocidad (N)»; el resto son bonos de talentos que sí suman.
+              const movBonus = mov.lineas.filter(l => !l.concepto.startsWith('Velocidad'))
 
               return (
                 <div>
@@ -795,11 +837,9 @@ export function CharacterDetailPage() {
                       label="Desvío"
                       icon={<CosmereIcon name="marco-desvio" size={13} />}
                       t={tone.topacio}
-                      sub={(formaBonus.desvio ?? 0) > 0
-                        ? <span style={{ color: formaInk }}>+{formaBonus.desvio} {formaActiva}</span>
-                        : undefined}
+                      sub={desvSub}
                     >
-                      <div style={statValue(tone.topacio)}>{(f.desvio ?? 0) + (formaBonus.desvio ?? 0)}</div>
+                      <div style={statValue(tone.topacio)}>{desv.total}</div>
                     </StatCard>
 
                     <StatCard
@@ -807,9 +847,13 @@ export function CharacterDetailPage() {
                       label="Movimiento"
                       icon={<StatIcons.movimiento size={14} />}
                       t={tone.esmeralda}
-                      sub={movBonus.length > 0
-                        ? `+${movBonus.reduce((s, l) => s + l.valor, 0)} m bonus · VEL ${vel}`
-                        : `por acción · VEL ${vel}`}
+                      sub={<>
+                        {movBonus.length > 0
+                          ? `+${sumaLineas(movBonus)} m bonus · `
+                          : 'por acción · '}
+                        VEL {velEff}{velEff !== vel ? <span style={{ color: formaInk }}> (+{formaBonus.velocidad})</span> : null}
+                        {situacional(mov)}
+                      </>}
                     >
                       <div style={statValue(tone.esmeralda)}>{movStr}</div>
                     </StatCard>

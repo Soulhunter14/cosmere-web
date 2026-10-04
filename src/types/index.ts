@@ -79,6 +79,8 @@ export interface Character {
   salud: StatDesglose
   investidura: StatDesglose
   movimiento: StatDesglose
+  /** Desvío efectivo: mayor entre armadura (`desvio`) y forma de cantor, más talentos situacionales. */
+  desvioCalculado: StatDesglose
   marcosInfusas: number
   marcosOpacas: number
   agilidad: number
@@ -137,7 +139,7 @@ export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'le
 export type UpdateCharacterRequest = Omit<Character,
   'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas' |
   'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |
-  'salud' | 'investidura' | 'movimiento'
+  'salud' | 'investidura' | 'movimiento' | 'desvioCalculado'
 >
 
 // Metas

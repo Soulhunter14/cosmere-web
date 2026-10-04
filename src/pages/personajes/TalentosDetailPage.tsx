@@ -15,11 +15,10 @@ import { charactersApi } from '../../api/characters'
 import { Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, IconButton, Segmented, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest } from '../../types'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { CANTOR_COLOR, getFormasDisponibles, withFormaActiva } from '../../data/cantores'
 import { CharacterHero } from '../../components/CharacterHero'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { HeroicPathIcon } from '../../components/GameIcons'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
 import { TalentActivation, type ActivationType } from '../../components/TalentActivation'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { useAuthStore } from '../../store/authStore'
@@ -297,8 +296,6 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
   }
 
   // ── derived bits for the bars ────────────────────────────────────────────
-  const heroicPath = HEROIC_PATHS.find((p) => p.id === caminoHeroico)
-  const radiantOrder = RADIANT_ORDERS.find((o) => o.id === caminoRadiante)
   const hasAnything = models.length > 0
   const myCount = [...evaluation.learned].filter((n) => graph.byName.has(n)).length
   const formasMissing = budget.missing.some((r) => r.accepts.includes('formas'))
@@ -340,25 +337,15 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
         <h1 style={{ ...titleText, fontSize: fs['2xl'], color: onGem, marginBottom: 14, overflowWrap: 'anywhere' }}>
           {character.name}
         </h1>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
-          {heroicPath && (
-            <span style={heroPill}>
-              <HeroicPathIcon id={heroicPath.id} size={13} />
-              {heroicPath.name}
-            </span>
-          )}
-          {extraPaths.map((pid) => {
+        <CharacterIdentityPills
+          character={character}
+          variant="hero"
+          leading={<span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>}
+          between={extraPaths.map((pid) => {
             const p = HEROIC_PATHS.find((x) => x.id === pid)
             return p ? <span key={pid} style={heroPill}><HeroicPathIcon id={p.id} size={13} />{p.name}</span> : null
           })}
-          {radiantOrder && (
-            <span style={{ ...heroPill, paddingLeft: 4 }}>
-              <RadiantOrderIcon orderId={radiantOrder.id} size={16} decorative />
-              {radiantOrder.name}
-            </span>
-          )}
-        </div>
+        />
       </CharacterHero>
 
       {/* ── Sticky bar: mode + budget chip, goal strip ──────────────────── */}

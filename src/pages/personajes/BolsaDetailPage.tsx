@@ -6,12 +6,9 @@ import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
 import { Button, Card, ConfirmDialog, IconButton, SectionTitle, Sheet, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest, WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { CharacterHero } from '../../components/CharacterHero'
 import { CosmereIcon } from '../../components/CosmereIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { cosmereImage } from '../../lib/cosmereAssets'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, titleText, tone, type Tone } from '../../theme'
@@ -226,8 +223,6 @@ export function BolsaDetailPage() {
 
   if (isLoading || !character) return <Spinner />
 
-  const heroicPath = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const radiantOrder = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
   const marcosTotal = marcos.infusas + marcos.opacas
 
   const getCapacity = (fuerza: number) => {
@@ -310,22 +305,7 @@ export function BolsaDetailPage() {
           <h1 style={{ ...titleText, fontSize: fs['2xl'], color: onGem, overflowWrap: 'anywhere' }}>{character.name}</h1>
           <span style={heroPill}>Nv. {character.level}</span>
         </div>
-        {(heroicPath || radiantOrder) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
-            {heroicPath && (
-              <span style={heroPill}>
-                <HeroicPathIcon id={heroicPath.id} size={13} />
-                {heroicPath.name}
-              </span>
-            )}
-            {radiantOrder && (
-              <span style={{ ...heroPill, paddingLeft: 4 }}>
-                <RadiantOrderIcon orderId={radiantOrder.id} size={16} decorative />
-                {radiantOrder.name}
-              </span>
-            )}
-          </div>
-        )}
+        <CharacterIdentityPills character={character} variant="hero" style={{ marginTop: 12 }} />
       </CharacterHero>
 
       <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 32 }}>

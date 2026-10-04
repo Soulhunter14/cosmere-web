@@ -6,10 +6,7 @@ import { metasApi } from '../../api/metas'
 import { charactersApi } from '../../api/characters'
 import { Button, Card, ConfirmDialog, EmptyState, Field, IconButton, Input, SectionTitle, Segmented, Sheet, Spinner, Textarea } from '../../components/ui'
 import type { Meta, ConcludeMetaRequest } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { CharacterHero } from '../../components/CharacterHero'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, shadow, titleText, tone, type ToneName } from '../../theme'
@@ -345,9 +342,6 @@ export function MetasDetailPage() {
   const activas = metas.filter((m) => m.estado === 'activa')
   const concluidas = metas.filter((m) => m.estado === 'concluida')
 
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-
   const listStyle: CSSProperties = { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }
 
   return (
@@ -364,21 +358,12 @@ export function MetasDetailPage() {
         <h1 style={{ ...titleText, fontSize: fs['2xl'], color: HERO_TEXT, marginBottom: 12, overflowWrap: 'anywhere' }}>
           {character.name}
         </h1>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
-          {path && (
-            <span style={heroPill}>
-              <HeroicPathIcon id={path.id} size={13} />
-              {path.name}
-            </span>
-          )}
-          {order && (
-            <span style={heroPill}>
-              <RadiantOrderIcon orderId={order.id} size={16} decorative />
-              {order.name}
-            </span>
-          )}
-        </div>
+        <CharacterIdentityPills
+          character={character}
+          variant="hero"
+          insetIcon={false}
+          leading={<span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>}
+        />
       </CharacterHero>
 
       <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 28 }}>

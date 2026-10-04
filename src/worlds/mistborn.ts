@@ -10,6 +10,7 @@ import { tone } from '../theme'
 import type { WorldConfig } from './types'
 import { HABILIDADES_STORMLIGHT_LEGADO } from './skills'
 import { iconoCaminoMetal, iconoHumano, iconoKandra, iconoSangreKoloss } from './mistborn.icons'
+import { MISTBORN_TOPICS } from './mistborn.topics'
 
 export const MISTBORN: WorldConfig = {
   id: 'mistborn',
@@ -73,7 +74,7 @@ export const MISTBORN: WorldConfig = {
   moneda: { simbolo: 'ar', nombre: 'Arquillas', imagen: null /* T45 */, decimales: 2 },
   // L.50 / PDF 56: carrying capacity and lifting capacity by Fuerza bracket
   tablas: { cargaKg: [25, 50, 125, 250, 1250, 2500], levantamientoKg: [50, 100, 250, 500, 2500, 5000] },
-  enciclopedia: [], // provisional: T06c fills it with MISTBORN_TOPICS (T24a completes it)
+  enciclopedia: MISTBORN_TOPICS, // provisional: four topics, T24a completes the list (§7.8)
   textos: {
     sinInvestidura: 'Solo disponible para alomantes',
     // The Stormlight sentence adapted to the Mistborn paths (§7.7 #4 gives only its opening)

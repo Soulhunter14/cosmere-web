@@ -54,7 +54,8 @@ export const STORMLIGHT: WorldConfig = {
     sinInvestidura: 'Solo disponible para Radiantes', // CharacterDetailPage.tsx
     vacioTalentos: 'Asigna un Camino Heroico u Orden Radiante en la ficha para ver los talentos disponibles.', // TalentosDetailPage.tsx
   },
-  // themeBg: the values of THEME_BG in themeStore.ts, which disappears in T07
+  // themeBg: the colours themeStore.ts used to hold itself; `applyTheme` now reads them from here (T07). No data-world
+  // attribute: Stormlight has no theme block in index.css, its tokens are the base ones
   tema: { dataWorld: null, themeBg: { light: '#e8ecf1', dark: '#0a0e15' } },
   // investidura: the current StatIcons.investidura (src/lib/gameIcons.ts)
   iconos: { investidura: Gem, caminoInvestido: iconoOrden },

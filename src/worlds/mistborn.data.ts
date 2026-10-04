@@ -9,23 +9,17 @@ import type { WorldData } from './types'
 import { TIPOS_CLAVO, REGLAS_HEMALURGIA } from '../data/mistborn/hemalurgia'
 import { PODERES_FERUQUIMICOS } from '../data/mistborn'
 import { PODERES_ALOMANTICOS } from '../data/mistborn/alomancia'
+import { HEROIC_PATHS_MISTBORN } from '../data/mistborn/heroicPaths'
 
 export const DATA: WorldData = {
   talentos: null,
-  caminosHeroicos: [],
+  caminosHeroicos: HEROIC_PATHS_MISTBORN,
   poderes: [
     ...PODERES_ALOMANTICOS,
     ...PODERES_FERUQUIMICOS,
   ],
   overlays: { aventuras: MISTBORN_AVENTURAS, combat: MISTBORN_COMBATE },
   hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
-import { HEROIC_PATHS_MISTBORN } from '../data/mistborn/heroicPaths'
-
-export const DATA: WorldData = {
-  talentos: null,
-  caminosHeroicos: HEROIC_PATHS_MISTBORN,
-  poderes: [],
-  overlays: { aventuras: null, combat: null },
 }
 
 // The Investida paths are not a WorldData field: they live INSIDE TalentRules (§7.1, §7.7). T19 only makes them reachable from this

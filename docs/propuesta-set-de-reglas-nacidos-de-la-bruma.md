@@ -1840,7 +1840,7 @@ Stormlight, fuera del encargo; queda en §13.)
   llegan a la imagen de runtime, que solo copia `/app/publish`, `Dockerfile:26`). Crear `<rendersPath>` (carpeta del árbol
   principal ignorada por git; no existe en ningún worktree) y copiar tal cual las carpetas de renders del scratchpad de la sesión
   de redacción,
-  `C:\Users\xavie\AppData\Local\Temp\claude\C--Users-xavie-Documents-Repositories-personal-cosmere-web\664137b1-bed4-450a-88ae-c1b3fb8e1e0c\scratchpad\hoja\`
+  `C:/Users/xavie/AppData/Local/Temp/claude/C--Users-xavie-Documents-Repositories-personal-cosmere-web/664137b1-bed4-450a-88ae-c1b3fb8e1e0c/scratchpad/hoja/`
   (páginas 260 y 408-411, `emblem410.png` y las dos fuentes `.cff`) e `img\` (páginas 260, 261, 264-266, 268, 271, 273, 275 y 285
   y recortes de objetos y monedas), a `<rendersPath>\hoja\` y `<rendersPath>\img\`; las páginas de 260-285 y 408-411 que falten (o
   todas, si el scratchpad ya no existe) se renderizan desde `<pdfPath>` con
@@ -3579,7 +3579,7 @@ donde este documento calle, el principio P8. Directorio de trabajo
 original, del que cuelgan los nombres de las listas siguientes:
 
 ```text
-C:\Users\xavie\AppData\Local\Temp\claude\C--Users-xavie-Documents-Repositories-personal-cosmere-web\664137b1-bed4-450a-88ae-c1b3fb8e1e0c\scratchpad
+C:/Users/xavie/AppData/Local/Temp/claude/C--Users-xavie-Documents-Repositories-personal-cosmere-web/664137b1-bed4-450a-88ae-c1b3fb8e1e0c/scratchpad
 ```
 
 ### Mapas (3)

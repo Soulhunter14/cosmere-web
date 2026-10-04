@@ -4,6 +4,7 @@
  * Born empty in T06b: each F3 task (T16-T23) connects its exports to the matching field when it finishes.
  * Meeting-point file: later tasks add lines, they never reorder them.
  */
+import { MISTBORN_AVENTURAS, MISTBORN_COMBATE } from '../data/mistborn'
 import type { WorldData } from './types'
 import { TIPOS_CLAVO, REGLAS_HEMALURGIA } from '../data/mistborn/hemalurgia'
 import { PODERES_FERUQUIMICOS } from '../data/mistborn'
@@ -14,6 +15,8 @@ export const DATA: WorldData = {
   poderes: [...PODERES_FERUQUIMICOS],
   overlays: { aventuras: null, combat: null },
   hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
+  poderes: [],
+  overlays: { aventuras: MISTBORN_AVENTURAS, combat: MISTBORN_COMBATE },
 }
 
 // The Investida paths are not a WorldData field: they live INSIDE TalentRules (§7.1, §7.7). T19 only makes them reachable from this

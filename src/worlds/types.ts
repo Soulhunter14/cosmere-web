@@ -53,6 +53,9 @@ export interface HabilidadDef {
   columna: 'fisico' | 'cognitivo' | 'espiritual'
 }
 
+/** The two attributes that head each column of a skills page: the two tiles of its card and the two terms of its defense (10 + attribute + attribute) */
+export type AtributosColumna = Record<HabilidadDef['columna'], [AttrField, AttrField]>
+
 export interface WorldConfig {
   id: WorldId
   nombre: string
@@ -89,6 +92,8 @@ export interface WorldConfig {
   habilidadesTirador?: HabilidadDef[]
   /** Only Stormlight until T50 (legacy NPC table); the NPC page reads `habilidadesPnj ?? habilidades` */
   habilidadesPnj?: HabilidadDef[]
+  /** Only Stormlight until T50 (legacy NPC page grouping, audit point 7: Cognitivo = INT + DIS, Espiritual = VOL + PRE); the NPC page reads `columnasPnj ?? COLUMNAS_COSMERE` */
+  columnasPnj?: AtributosColumna
   /** Investida skills that live in a custom slot by exact name: [] | Alomancia (VOL, attack) / Feruquimia (INT) */
   habilidadesInvestidas: { nombre: string; atributo: AttrField; codigo: string; icono: LucideIcon; ataque: boolean }[]
   /** tone and icono are ReactNode-ready on purpose: a bare LucideIcon without tone would be a visual regression in Stormlight (P1) */

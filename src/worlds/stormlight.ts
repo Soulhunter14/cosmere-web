@@ -7,6 +7,7 @@ import { Gem } from 'lucide-react'
 import { tone } from '../theme'
 import type { WorldConfig } from './types'
 import {
+  COLUMNAS_STORMLIGHT_PNJ_LEGADO,
   HABILIDADES_STORMLIGHT_LEGADO, HABILIDADES_STORMLIGHT_PNJ_LEGADO, HABILIDADES_STORMLIGHT_TIRADOR_LEGADO,
 } from './skills'
 import { iconoHumano, iconoOrden, iconoOyente } from './stormlight.icons'
@@ -36,10 +37,12 @@ export const STORMLIGHT: WorldConfig = {
     equipoInicial: false,
     origenes: false,
   },
-  // The three legacy tables (see skills.ts): T50 points the three surfaces to HABILIDADES_COSMERE and deletes them
+  // The three legacy tables and the legacy grouping of the NPC page (see skills.ts): T50 points the three surfaces to
+  // HABILIDADES_COSMERE and deletes them (the NPC page then groups its attributes as the book does)
   habilidades: HABILIDADES_STORMLIGHT_LEGADO,
   habilidadesTirador: HABILIDADES_STORMLIGHT_TIRADOR_LEGADO,
   habilidadesPnj: HABILIDADES_STORMLIGHT_PNJ_LEGADO,
+  columnasPnj: COLUMNAS_STORMLIGHT_PNJ_LEGADO,
   habilidadesInvestidas: [],
   ascendencias: [
     { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icono: iconoHumano, puntosAtributoBase: 12 },

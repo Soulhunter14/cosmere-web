@@ -8,6 +8,7 @@ import { useCampaignStore } from '../../store/campaignStore'
 import type { Session } from '../../types'
 import { EmptyState, SectionTitle, Skeleton, StatTile } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
+import { WorldBadge } from '../../components/WorldBadge'
 import { cosmereImage } from '../../lib/cosmereAssets'
 import { c, card, eyebrow, font, fs, numeral, page, pill, radius, semantic, shadow, titleText, tone } from '../../theme'
 
@@ -48,11 +49,12 @@ export function HomeCampaignPage() {
         <h1 style={{ ...titleText, fontSize: fs['2xl'], color: c.text }}>
           {currentCampaign?.name ?? 'Campaña'}
         </h1>
-        <p style={{ marginTop: 10 }}>
+        <p style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <span style={{ ...pill(roleTone), textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: roleTone.fg, boxShadow: `0 0 8px ${roleTone.fg}` }} />
             {isGm ? 'Director' : 'Jugador'}
           </span>
+          {currentCampaign && <WorldBadge variant="chip" world={currentCampaign.world} era={currentCampaign.era} />}
         </p>
       </header>
 

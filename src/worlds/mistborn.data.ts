@@ -8,11 +8,15 @@ import { MISTBORN_AVENTURAS, MISTBORN_COMBATE } from '../data/mistborn'
 import type { WorldData } from './types'
 import { TIPOS_CLAVO, REGLAS_HEMALURGIA } from '../data/mistborn/hemalurgia'
 import { PODERES_FERUQUIMICOS } from '../data/mistborn'
+import { PODERES_ALOMANTICOS } from '../data/mistborn/alomancia'
 
 export const DATA: WorldData = {
   talentos: null,
   caminosHeroicos: [],
-  poderes: [...PODERES_FERUQUIMICOS],
+  poderes: [
+    ...PODERES_ALOMANTICOS,
+    ...PODERES_FERUQUIMICOS,
+  ],
   overlays: { aventuras: MISTBORN_AVENTURAS, combat: MISTBORN_COMBATE },
   hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
 }

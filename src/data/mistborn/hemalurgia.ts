@@ -60,7 +60,7 @@ export type TipoClavo = TipoClavoAtributo | TipoClavoPoder
  * the eight power spikes (rank 3), each group alphabetical as printed. Read from the page image, not from the text layer (verificado en
  * imagen, PDF 297): the rank column is a merged cell that the text layer scatters between the rows.
  * The reward table of L.288 / PDF 294 lists the same twelve metals by rank. There is no spike of atium nor of any divine metal: neither
- * table lists one [inferido: absence in both tables].
+ * table lists one (verificado en imagen, PDF 294 and 297).
  */
 export const TIPOS_CLAVO: TipoClavo[] = [
   // Rank 2, attributes (L.291 / PDF 297; reward rank L.288 / PDF 294)
@@ -93,7 +93,8 @@ export const TIPOS_CLAVO: TipoClavo[] = [
     opciones: ['feruquimia:aluminio', 'feruquimia:cromo', 'feruquimia:duraluminio', 'feruquimia:nicrosil'],
     notaLibro:
       'Observación: el clavo de bendaleo ofrece feruquimia de nicrosil (L.291 / PDF 297), mientras que la tabla de medallones feruquímicos ' +
-      'marca el nicrosil como no disponible para personajes jugadores (L.294 / PDF 300). Se transcriben las dos tablas tal cual.',
+      'marca el nicrosil como no disponible para personajes jugadores (L.294 / PDF 300). Se transcriben las dos tablas tal cual ' +
+      '(verificado en imagen, PDF 297 y 300).',
   },
   {
     metal: 'bronce', rango: 3, tipo: 'poder', roba: 'Poder alomántico mental',
@@ -259,7 +260,9 @@ export const REGLAS_HEMALURGIA: ReglaHemalurgia[] = [
     cita: 'L.290 / PDF 296',
     notaLibro:
       'El libro no dice de dónde sale la mente de metal de un poder feruquímico obtenido por clavo (el clavo no cuenta como mente de ' +
-      'metal, L.290 / PDF 296) ni menciona la meta «Fabricar tu mente de metal»: se deja a criterio de la DJ [inferido].',
+      'metal, salvo que la DJ decida lo contrario, L.290 / PDF 296) ni menciona la meta «Fabricar tu mente de metal»: se deja a criterio de la ' +
+      'DJ [inferido: el libro guarda silencio sobre el origen de esa mente de metal (verificado en imagen, PDF 296); solo dice que el clavo ' +
+      'no cuenta como mente de metal salvo decisión de la DJ].',
   },
   {
     id: 'poder-existente',

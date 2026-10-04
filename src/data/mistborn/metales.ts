@@ -71,19 +71,25 @@ export interface MetalDef {
 
 const NOTA_FIN_ERA_1 =
   'A finales de la Era 1 el aluminio, el duraluminio y el electro dejan de ser un secreto del Ministerio de Acero ' +
-  '(L.168 / PDF 174 ‡; L.171 / PDF 177 †; L.372 / PDF 378): ofrecerlos en una campaña de Era 1 es una opción del director [inferido].'
+  '(L.168 / PDF 174 ‡; L.171 / PDF 177 †; L.372 / PDF 378 *). El libro avisa de que es muy poco probable que un PJ los conozca antes de la ' +
+  'muerte del lord Legislador y deja a la DJ y al jugador acordar cuándo y cómo se enteró (L.167 / PDF 173, «Final de la Era 1»): ofrecerlos ' +
+  'en una campaña de finales de la Era 1 es una opción del director (verificado en imagen, PDF 173, 174, 177 y 378).'
 
 const NOTA_ORO =
   'El Ministerio de Acero ocultó la existencia de los brumosos de oro hasta casi el final de la Era 1 (L.167 / PDF 173; L.168 / PDF 174 ‡): ' +
-  'en la tabla de L.372 / PDF 378 el oro está en Era 1 para nacido de la bruma y feruquimista, pero no para el brumoso ' +
-  '(a finales de la era puede abrirse como opción del director [inferido]).'
+  'en la tabla de L.372 / PDF 378 el oro está en Era 1 para nacido de la bruma y feruquimista, pero no para el brumoso, y la nota * de esa ' +
+  'tabla equipara la existencia de los brumosos de oro a la del aluminio, el duraluminio y el electro a finales de la era (verificado en ' +
+  'imagen, PDF 173, 174 y 378). Abrirlo entonces al brumoso como opción del director [inferido: el libro deja el momento a acuerdo con la ' +
+  'DJ solo para el aluminio, el duraluminio y el electro; para el oro se extiende por analogía y la imagen no lo resuelve].'
 
 /**
  * Columns: `pareja`, `interno`, `empujon`, `nombreBrumoso`, `categoriaAlomancia` and `eras` come from L.168 / PDF 174; `puro`, `nombreFerrin`
  * and `categoriaFeruquimia` from L.171 / PDF 177 (pairs and eras agree in both); `rasgoFeruquimico` from the subtitle of each «Feruquimia de X»
  * entry (L.213-250 / PDF 219-256); `comun` from L.167 / PDF 173.
  * `color`: approximate tone of the metal's medallion in the diagram «Tabla de metales feruquímicos» (L.170 / PDF 176), sampled from the
- * page image; the 16 metals of the diagram only. Atium is not drawn in the book's diagrams: its tone is [inferido].
+ * page image (median of the central region of each medallion); the 16 metals of the diagram. Atium is not in that diagram: its tone is
+ * sampled the same way from the medallion of the header art of «Feruquimia de atium» (L.218 / PDF 224); same method on the aluminio
+ * header (PDF 222) gives the aluminio tone of the diagram, verificado en imagen.
  */
 export const METALES: MetalDef[] = [
   {
@@ -170,7 +176,7 @@ export const METALES: MetalDef[] = [
     // Divine metal: pairing, pure/alloy, interno/externo and Tirón/Empujón are «n/a» in both tables (L.168 / PDF 174, L.171 / PDF 177)
     id: 'atium', nombre: 'Atium', categoriaAlomancia: 'divino', categoriaFeruquimia: 'divino', puro: null, pareja: null,
     interno: null, empujon: null, nombreBrumoso: 'Vidente', nombreFerrin: 'Cronodevanador', rasgoFeruquimico: 'Juventud',
-    eras: ['era1'], comun: false, color: '#cfd3dc', // [inferido] colour: atium is not drawn in the diagrams
+    eras: ['era1'], comun: false, color: '#4a4c64', // L.218 / PDF 224: slate-violet plate of the feruchemy entry header (not in the PDF 176 diagram); verificado en imagen
   },
 ]
 
@@ -220,7 +226,10 @@ export const METALES_POR_CAMINO_Y_ERA: Record<CaminoMetalId, Record<Era, MetalId
 }
 
 export const NOTA_LIBRO_METALES_POR_CAMINO_Y_ERA =
-  'La tabla de L.372 / PDF 378 manda. El consejo para la DJ del feruquimista (L.145 / PDF 151) habla de gestionar hasta diecisiete poderes, ' +
-  'pero la tabla da 10 metales en Era 1 (el resto, a finales de la era, como opción del director [inferido]). La feruquimia de aluminio se ' +
-  'describe como disponible en ambas eras (L.216 / PDF 222): no ampliar la tabla sin confirmarlo. En las dos filas de Era 1 el asterisco ' +
-  'aparece tras «peltre» y remite a la nota sobre aluminio, duraluminio, electro y los brumosos de oro a finales de la Era 1.'
+  'La tabla de L.372 / PDF 378 manda (verificado en imagen). El consejo para la DJ del feruquimista (L.145 / PDF 151) habla de gestionar ' +
+  'hasta diecisiete poderes (los 17 metales con efecto de la tabla de L.171 / PDF 177), pero la tabla da 10 metales en Era 1. De los 7 ' +
+  'restantes, el aluminio, el duraluminio y el electro llegan a conocerse a finales de la Era 1 (opción del director, L.167 / PDF 173; nota * ' +
+  'de L.372 / PDF 378) y el bendaleo, el cadmio, el cromo y el nicrosil son de la Era 2 (L.167 / PDF 173), cuando ya no existe el feruquimista. ' +
+  'La feruquimia de aluminio se describe como disponible en ambas eras (L.216 / PDF 222): manda la tabla, no ampliarla sin confirmarlo. ' +
+  'En las dos filas de Era 1 el asterisco aparece tras «peltre» y remite a la nota sobre aluminio, duraluminio, electro y los brumosos de ' +
+  'oro a finales de la Era 1.'

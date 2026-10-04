@@ -11,7 +11,8 @@
  * - Names, prerequisites and activation icons are the book's; `description`, `descripcion` and the other prose are short paraphrases in own
  *   words, not quotations. Glyphs of «Activación:»: 1/2/3 = action1/2/3, 0 = free, r = reaction, * = special, 8 = passive.
  * - `acciones` is `[almacenar, decantar]` (the same two objects, built by `poder()`); the `duracion` of Almacenar is the rule to gain a
- *   charge. `eras` is copied from `METALES` (single source, T16). The marks `[inferido]` are on the few items the book does not state.
+ *   charge. `eras` is copied from `METALES` (single source, T16). The few items the book does not state (own names of untitled lists,
+ *   the paths of nicrosil, the medallion of atium) were checked against the page images in T25b: see the «verificado en imagen» comments.
  * - Trees: «Reflejos acelerados» is in acero and in cinc (same text, different prerequisite); «Precisión de estaño», «Armamento de brazo
  *   de peltre» and «Lanzador de peltre» share their name with the alomancy talents of T17 (§7.7 #3). 85 talents, 84 distinct names;
  *   aluminio has 3 and nicrosil none (its entry has no talents block).
@@ -149,7 +150,7 @@ const ACERO = poder({
         'la primera ronda.',
       notaLibro:
         'Errata de icono: el diagrama del árbol (L.214 / PDF 220) marca Velocista de acero con ★ (activación especial), pero la entrada ' +
-        'del talento (L.215 / PDF 221) indica ∞ (siempre activo). Se transcribe el texto de la entrada.',
+        'del talento (L.215 / PDF 221) indica ∞ (siempre activo). Se transcribe el texto de la entrada (verificado en imagen, PDF 220 y 221).',
     },
   ],
   cargasConVinculo: false,
@@ -185,7 +186,7 @@ const ALUMINIO = poder({
     efectos: ['Resistirte a la influencia te cuesta 2 puntos de concentración menos.', 'Tu Defensa espiritual aumenta en 4.'],
   },
   usosCreativos: [
-    // [inferido] names: the book lists these four ideas as bullets without a title (L.216 / PDF 222)
+    // own names: the book lists these four ideas as untitled bullets (L.216 / PDF 222, verificado en imagen)
     { nombre: 'Facilitar el encendido de un aliado', texto: 'Almacenar Identidad te hace más permeable a que un aliado te encienda con alomancia de cinc.' },
     { nombre: 'Resistir tu obstáculo', texto: 'Ayuda a resistir el impulso de sucumbir a tu obstáculo en un momento de debilidad.' },
     { nombre: 'Sellos de alma', texto: 'Hace que la Falsificación de un sello de alma se adhiera mejor a ti.' },
@@ -226,8 +227,9 @@ const ALUMINIO = poder({
   medallon: { disponibleParaPJ: true, rangoRecompensa: 1 }, // L.294 / PDF 300
   notaLibro:
     'El texto de la entrada habla de los genuinos «a lo largo de ambas eras» (L.216 / PDF 222), pero la tabla «Metales en la feruquimia» ' +
-    '(L.171 / PDF 177) da el aluminio en Era 2 † (aparece a finales de la Era 1) y la tabla de L.372 / PDF 378 no lo ofrece a ningún camino ' +
-    'de Era 1. Se conservan las eras de la tabla de metales; no ampliarlas sin confirmarlo [inferido].',
+    '(L.171 / PDF 177) da el aluminio en Era 2 † (aparece a finales de la Era 1, L.167 / PDF 173) y la tabla de L.372 / PDF 378 no lo ofrece ' +
+    'a ningún camino de Era 1. Se conservan las eras de la tabla de metales (decisión de diseño; verificado en imagen, PDF 177, 222 y 378); ' +
+    'no ampliarlas sin confirmarlo.',
 })
 
 // ── Atium · L.218-219 / PDF 224-225 ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -303,7 +305,8 @@ const ATIUM = poder({
         'Obtienes ventaja en las pruebas que usen el atributo Presencia para influir en un personaje de tu misma categoría de edad física.',
       notaLibro:
         'Errata de icono: en el diagrama del árbol (L.219 / PDF 225) los iconos de Aparentar la edad (▶, 1 acción) y de Plena forma (∞, siempre ' +
-        'activo) están intercambiados respecto a las entradas, que dan ∞ y ▶ respectivamente. Se transcribe el texto de las entradas.',
+        'activo) están intercambiados respecto a las entradas, que dan ∞ y ▶ respectivamente. Se transcribe el texto de las entradas ' +
+        '(verificado en imagen, PDF 225).',
     },
     {
       name: 'Plena forma',
@@ -314,11 +317,12 @@ const ATIUM = poder({
         'quedar Mejorado [+1 a todos los atributos] hasta el final de tu próximo turno. Puedes mantenerlo gastando 2 cargas como acción gratuita.',
       notaLibro:
         'Errata de icono: el diagrama del árbol (L.219 / PDF 225) marca Plena forma con ∞, pero su entrada (L.219 / PDF 225) indica ▶ (1 acción); ' +
-        'ver Aparentar la edad. Se transcribe el texto de la entrada.',
+        'ver Aparentar la edad. Se transcribe el texto de la entrada (verificado en imagen, PDF 225).',
     },
   ],
   cargasConVinculo: false,
-  // [inferido] el atium no aparece en la tabla de medallones (L.294 / PDF 300): no se ofrece a los personajes
+  // verificado en imagen, PDF 299-300: la DJ elige los metales del medallón de la tabla «Poderes de los medallones feruquímicos» (L.293-294 / PDF 299-300)
+  // y esa tabla no tiene fila de atium: no se ofrece a los personajes
   medallon: { disponibleParaPJ: false, rangoRecompensa: null },
 })
 
@@ -406,7 +410,8 @@ const BENDALEO = poder({
   notaLibro:
     'Consejo para la DJ (L.220 / PDF 226): en las novelas los incorporadores no almacenan nutrición e hidratación en la misma mente y suelen ' +
     'llevar dos; el JdR lo simplifica con una sola mentebendaleo. Variante opcional: dos mentes (una para nutrición y otra para hidratación) ' +
-    'repartiendo entre ellas el máximo de cargas, y la DJ decide a cuál va cada carga; incluso una mente independiente para cada medicina.',
+    'repartiendo entre ellas el máximo de cargas, y la DJ decide a cuál va cada carga; incluso una mente independiente para cada medicina ' +
+    '(verificado en imagen, PDF 226).',
 })
 
 // ── Bronce · L.222-223 / PDF 228-229 ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -1005,7 +1010,7 @@ const DURALUMINIO = poder({
         'personaje decide qué grado de amistad mantiene.',
       notaLibro:
         'Falta el icono de activación de Vínculo instantáneo en el diagrama del árbol (L.235 / PDF 241); la entrada del talento ' +
-        '(L.235 / PDF 241) indica 3 acciones. Se transcribe el texto de la entrada.',
+        '(L.235 / PDF 241) indica 3 acciones. Se transcribe el texto de la entrada (verificado en imagen, PDF 241).',
     },
   ],
   cargasConVinculo: false,
@@ -1169,7 +1174,7 @@ const ESTANO = poder({
       texto: 'Almacenas un sentido para mitigar efectos sensoriales indeseados (por ejemplo, guardar el gusto o el olfato para soportar una comida desagradable).',
     },
     {
-      // [inferido] name: the book closes the list with a paragraph without a title (L.238 / PDF 244)
+      // own name: the book closes the list with a paragraph without a title (L.238 / PDF 244, verificado en imagen)
       nombre: 'Sentidos especiales',
       texto:
         'Los sentidos almacenables no se limitan a los mundanos: la alomancia de bronce da la capacidad de sentir los pulsos de las capacidades ' +
@@ -1239,7 +1244,7 @@ const ESTANO = poder({
     'Consejo para la DJ (L.239 / PDF 245): en las novelas los susurravientos solo guardan un sentido por mentestaño y suelen llevar al menos ' +
     'cinco; el JdR lo simplifica con una sola mentestaño para todos los sentidos. Variante opcional: una mentestaño independiente por ' +
     'sentido, repartiendo entre ellas el máximo de cargas; al almacenar solo se ganan cargas para el sentido de esa mente y al decantarla ' +
-    'solo se mejora ese sentido.',
+    'solo se mejora ese sentido (verificado en imagen, PDF 245).',
 })
 
 // ── Hierro · L.241-242 / PDF 247-248 ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -1467,8 +1472,11 @@ const LATON = poder({
 // ── Nicrosil · L.246 / PDF 252 ───────────────────────────────────────────────────────────────────────────────────────────────────
 const NICROSIL = poder({
   metal: 'nicrosil',
-  // [inferido] the entry has no «Es posible desbloquear este árbol…» phrase; the criterion is §7.5 (the three feruchemy paths can choose it)
-  caminos: ['ferrin', 'nacidoble', 'feruquimista'],
+  // L.246 / PDF 252 (verificado en imagen): the entry has no «Es posible desbloquear este árbol…» phrase (no tree). Corrected from the three
+  // paths of §7.5 to ferrin and nacidoble: the sidebar «Elección del nicrosil como ferrin» names the ferrin, the table of L.372 / PDF 378 gives
+  // nicrosil only to the Era 2 paths (ferrin, nacidoble) and not to the Era 1 feruquimista, nicrosil is «ERA 2» without † (L.171 / PDF 177),
+  // and the other Era-2-only metals (bendaleo, cadmio, cromo; L.220, 224, 232 / PDF 226, 230, 238) list «ferrin y nacidoble»
+  caminos: ['ferrin', 'nacidoble'],
   descripcion:
     'Almacena la propia facultad de blandir Investidura: mientras almacenas, una de tus capacidades Investidas mengua; más tarde podrás ' +
     'decantarla para potenciar su eficacia de forma temporal, con un control y una seguridad asombrosos frente a los estallidos instantáneos ' +
@@ -1526,7 +1534,9 @@ const NICROSIL = poder({
     'La entrada no trae árbol de talentos ni la frase «Es posible desbloquear este árbol mediante el talento principal de los caminos de…» ' +
     '(L.246 / PDF 252); el poder se puede elegir igualmente («Elección del nicrosil como ferrin», L.246 / PDF 252: casi nadie lo hace, porque ' +
     'solo es útil si también puedes emplear otra capacidad Investida, p. ej. en una campaña de saltamundos o con clavos hemalúrgicos). ' +
-    'La app lo ofrece a los tres caminos de feruquimia [inferido]. Tampoco está disponible en medallones para personajes jugadores ' +
+    'La app lo ofrece a ferrin y nacidoble: el recuadro habla de los ferrins, la tabla de L.372 / PDF 378 lo da en Era 2 a ferrin y nacidoble y ' +
+    'no al feruquimista (solo de Era 1), y los demás metales feruquímicos que solo son de Era 2 (bendaleo, cadmio, cromo) listan «ferrin y ' +
+    'nacidoble» (verificado en imagen, PDF 177, 252 y 378). Tampoco está disponible en medallones para personajes jugadores ' +
     '(L.294 / PDF 300).',
 })
 

@@ -13,10 +13,8 @@ export const DATA: WorldData = {
   talentos: null,
   caminosHeroicos: [],
   poderes: [...PODERES_FERUQUIMICOS],
-  overlays: { aventuras: null, combat: null },
-  hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
-  poderes: [],
   overlays: { aventuras: MISTBORN_AVENTURAS, combat: MISTBORN_COMBATE },
+  hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
 }
 
 // The Investida paths are not a WorldData field: they live INSIDE TalentRules (§7.1, §7.7). T19 only makes them reachable from this

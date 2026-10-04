@@ -12,3 +12,8 @@ export const DATA: WorldData = {
   poderes: [],
   overlays: { aventuras: null, combat: null },
 }
+
+// The ancestries are not a WorldData field: the kandra and sangre koloss trees feed `TalentRules.arbolesAscendencia` (§7.7). T20 only
+// makes them reachable from this lazy module; T34a composes `MISTBORN_TALENTOS.arbolesAscendencia` from the `arbol` of each
+// `ASCENDENCIAS_MB` entry.
+export { ASCENDENCIAS_MB, ARBOL_KANDRA, ARBOL_SANGRE_KOLOSS } from '../data/mistborn/origenes'

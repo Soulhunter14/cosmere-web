@@ -5,5 +5,6 @@
  */
 export * from './eras'
 export * from './metales'
+export * from './origenes'
 export * from './progresionArtes'
 export * from './tipos'

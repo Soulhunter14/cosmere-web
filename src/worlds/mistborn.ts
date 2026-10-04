@@ -75,7 +75,7 @@ export const MISTBORN: WorldConfig = {
   moneda: { simbolo: 'ar', nombre: 'Arquillas', imagen: null /* T45 */, decimales: 2 },
   // L.50 / PDF 56: carrying capacity and lifting capacity by Fuerza bracket
   tablas: { cargaKg: [25, 50, 125, 250, 1250, 2500], levantamientoKg: [50, 100, 250, 500, 2500, 5000] },
-  enciclopedia: MISTBORN_TOPICS, // provisional: four topics, T24a completes the list (§7.8)
+  enciclopedia: MISTBORN_TOPICS, // the seven topics of §7.8 (T24a); the glyphs of the emblems are provisional Lucide until T46
   textos: {
     sinInvestidura: 'Solo disponible para alomantes',
     // The Stormlight sentence adapted to the Mistborn paths (§7.7 #4 gives only its opening)

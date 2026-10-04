@@ -1,8 +1,12 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Anvil } from 'lucide-react'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppLayout } from './components/AppLayout'
 import { WorldGate } from './components/WorldGate'
+import { EmptyState, PageHeader, Spinner } from './components/ui'
+import { page } from './theme'
 import { LoginPage } from './pages/auth/LoginPage'
 import { RegisterPage } from './pages/auth/RegisterPage'
 import { CampaignListPage } from './pages/campaigns/CampaignListPage'
@@ -23,6 +27,29 @@ import { TalentosDetailPage } from './pages/personajes/TalentosDetailPage'
 import { BolsaDetailPage } from './pages/personajes/BolsaDetailPage'
 import { HistoriaPage } from './pages/historia/HistoriaPage'
 import { GmPage } from './pages/gm/GmPage'
+
+// Encyclopedia pages of Nacidos de la bruma (T24a): one chunk per page, requested only when its route renders, so none of
+// their data reach the main chunk (§8, risk 6). Each route sits behind a WorldGate by capability, so a world without that
+// capability (Stormlight) is redirected and never requests the chunk.
+const OrigenesPage = lazy(() => import('./pages/encyclopedia/mistborn/OrigenesPage').then((m) => ({ default: m.OrigenesPage })))
+const CaminosMetalPage = lazy(() => import('./pages/encyclopedia/mistborn/CaminosMetalPage').then((m) => ({ default: m.CaminosMetalPage })))
+
+// PROVISIONAL until T24b: the pages of the metallic arts do not exist yet. T24b replaces the two constants below with the
+// lazy ArtesMetalicasPage and PoderMetalPage; the routes that use them stay as they are.
+function PaginaPendiente() {
+  return (
+    <div style={page}>
+      <PageHeader title="Artes metálicas" subtitle="Alomancia, feruquimia y hemalurgia" />
+      <EmptyState
+        icon={<Anvil size={24} aria-hidden />}
+        title="Próximamente"
+        description="La referencia de las artes metálicas aún no está disponible en la enciclopedia."
+      />
+    </div>
+  )
+}
+const ArtesMetalicasPage = PaginaPendiente
+const PoderMetalPage = PaginaPendiente
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -55,6 +82,10 @@ export default function App() {
               <Route path="encyclopedia/combat" element={<CombatPage />} />
               <Route path="encyclopedia/aventuras" element={<AventurasPage />} />
               <Route path="encyclopedia/potencias" element={<WorldGate feature="potencias"><PotenciasPage /></WorldGate>} />
+              <Route path="encyclopedia/origenes" element={<WorldGate feature="origenes"><Suspense fallback={<Spinner />}><OrigenesPage /></Suspense></WorldGate>} />
+              <Route path="encyclopedia/nacidos-del-metal" element={<WorldGate feature="artesMetalicas"><Suspense fallback={<Spinner />}><CaminosMetalPage /></Suspense></WorldGate>} />
+              <Route path="encyclopedia/artes-metalicas" element={<WorldGate feature="artesMetalicas"><Suspense fallback={<Spinner />}><ArtesMetalicasPage /></Suspense></WorldGate>} />
+              <Route path="encyclopedia/artes-metalicas/:arte/:metal" element={<WorldGate feature="artesMetalicas"><Suspense fallback={<Spinner />}><PoderMetalPage /></Suspense></WorldGate>} />
               <Route path="gm" element={<GmPage />} />
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}

@@ -129,7 +129,8 @@ export function CampaignListPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: () => campaignsApi.create(newName),
+    // Provisional: until the creation form lets the user pick the setting, every new campaign is Stormlight.
+    mutationFn: () => campaignsApi.create({ name: newName, world: 'stormlight', era: null }),
     onSuccess: (campaign) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] })
       setCurrentCampaign(campaign)

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CampaignDetail } from '../types'
+import type { CampaignDetail, Era } from '../types'
 
 interface CampaignState {
   currentCampaign: CampaignDetail | null
@@ -19,3 +19,6 @@ export const useCampaignStore = create<CampaignState>()(
     { name: 'cosmere-campaign', partialize: (s) => ({ currentCampaign: s.currentCampaign, isGm: s.isGm }) }
   )
 )
+
+// Era of the current campaign. `null` in Stormlight and also when the persisted campaign (localStorage) predates eras.
+export const useEra = (): Era | null => useCampaignStore((s) => s.currentCampaign?.era ?? null)

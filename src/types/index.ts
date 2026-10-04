@@ -11,6 +11,11 @@ export interface LoginResponse {
 }
 
 // Campaigns
+// Setting of a campaign: fixed when it is created and inherited by its characters.
+export type WorldId = 'stormlight' | 'mistborn'
+// Mistborn era (L.372 / PDF 378): required in 'mistborn', null in 'stormlight'; fixed when the campaign is created.
+export type Era = 'era1' | 'era2'
+
 export interface Campaign {
   id: number
   name: string
@@ -18,6 +23,8 @@ export interface Campaign {
   createdAt: string
   nextSessionDate?: string
   nextSessionTitle?: string
+  world: WorldId
+  era: Era | null
 }
 
 export interface CampaignDetail extends Campaign {

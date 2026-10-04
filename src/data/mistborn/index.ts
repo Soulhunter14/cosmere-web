@@ -4,6 +4,7 @@
  * Meeting-point file: each F3 task adds its `export *` line, nobody reorders them.
  */
 export * from './eras'
+export * from './feruquimia'
 export * from './metales'
 export * from './origenes'
 export * from './progresionArtes'

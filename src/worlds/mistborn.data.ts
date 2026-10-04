@@ -6,11 +6,12 @@
  */
 import type { WorldData } from './types'
 import { TIPOS_CLAVO, REGLAS_HEMALURGIA } from '../data/mistborn/hemalurgia'
+import { PODERES_FERUQUIMICOS } from '../data/mistborn'
 
 export const DATA: WorldData = {
   talentos: null,
   caminosHeroicos: [],
-  poderes: [],
+  poderes: [...PODERES_FERUQUIMICOS],
   overlays: { aventuras: null, combat: null },
   hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
 }

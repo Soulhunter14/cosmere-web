@@ -51,7 +51,22 @@ export const MISTBORN: WorldConfig = {
     { id: 'Kandra', label: 'Kandra', tone: tone.esmeralda, icono: iconoKandra, puntosAtributoBase: 6 },
     { id: 'Sangre koloss', label: 'Sangre koloss', tone: tone.topacio, icono: iconoSangreKoloss, eras: ['era2'], puntosAtributoBase: 12, topeAtributo: { fuerza: 6 } },
   ],
-  caminoInvestido: { field: 'caminoMetal', label: 'Camino de nacido del metal', excluyente: true },
+  caminoInvestido: {
+    field: 'caminoMetal',
+    label: 'Camino de nacido del metal',
+    excluyente: true,
+    // The five metalborn paths in the order of the book (chapter 5): light twin of CAMINOS_NACIDOS_DEL_METAL (id, name, colour). That module
+    // carries the talent trees and stays in the lazy chunk (§8, risk 6), so the pills read this copy: keep both in step. The colours are
+    // [inferido → Q18]: the book colours no path (verificado en imagen, PDF 133-165)
+    caminos: [
+      { id: 'brumoso', nombre: 'Brumoso', color: '#6987b1' },
+      { id: 'nacido-de-la-bruma', nombre: 'Nacido de la bruma', color: '#8f86c9' },
+      { id: 'feruquimista', nombre: 'Feruquimista', color: '#b2623b' },
+      { id: 'ferrin', nombre: 'Ferrin', color: '#4f9d8a' },
+      { id: 'nacidoble', nombre: 'Nacidoble', color: '#a86fa0' },
+    ],
+    insignia: false, // the book has no icons for the paths: a plain Lucide glyph (Q18)
+  },
   // Keys of the server's `recursos` (§2, `RecursosPermitidos`); arquillas has 2 decimals (óbolo = 0.01 ar, banknote = 10 ar;
   // L.254 / PDF 260). The icons of the three are provisional [inferido → Q18]: the book has none
   recursos: [

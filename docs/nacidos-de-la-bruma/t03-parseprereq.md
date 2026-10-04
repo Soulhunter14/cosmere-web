@@ -40,3 +40,17 @@ los prerrequisitos (mayúsculas y tildes; el punto final se tolera).
 
 Discrepancias anotadas: `allTalentNames` está en `talentGraph.ts:199-202` (no hacia la 251); el informe 05 §2.2 daba el
 nombre de la `skill` de la fila «Armamento…» completo, pero el real termina en «Armamento ligero».
+
+## Añadido por T20 (para T35)
+La prerrequisito de Resistencia koloss es «ascendencia de sangre koloss» (con «de», literal del libro). La regex del punto 4
+dejaría «de sangre koloss»: usar `/^ascendencia\s+(?:de\s+)?/i` y mapear «humana» → `Humano`, «kandra» → `Kandra` y
+«sangre koloss» → `Sangre koloss` (los nombres de ascendencia los aporta `rules`, P8).
+
+## Añadido por T17 y T18 (para T35 y T34a)
+Cláusulas que hoy salen `unknown` y bloquearían el talento: «pericia en un arma Defensiva o en una armadura con un desvío de
+3 o más» (Equipo de atraedor); «al menos otro poder o capacidad Investida» (Estallido controlado); «al menos otros dos
+poderes o capacidades Investidas» (Estallido selectivo); OR de talentos con el segundo sin prefijo («talento Nube de cobre
+ampliada o Cobertura espontánea»; «talento A o B» en Chispa auténtica) o con el prefijo repetido («talento Agarre drenante o
+talento Drenaje reactivo»); `skillAny` («Armamento pesado 1 o más o Armamento ligero 1 o más», «Agilidad 2 o más o
+Atletismo 2 o más», Hurto…); `poder Feruquimia de X`. «Objeto inamovible» tiene «Talento Golpe vigoroso» con T mayúscula
+(literal del libro; el motor compara con `/i`).

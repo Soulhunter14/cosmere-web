@@ -5,12 +5,14 @@
  * Meeting-point file: later tasks add lines, they never reorder them.
  */
 import type { WorldData } from './types'
+import { TIPOS_CLAVO, REGLAS_HEMALURGIA } from '../data/mistborn/hemalurgia'
 
 export const DATA: WorldData = {
   talentos: null,
   caminosHeroicos: [],
   poderes: [],
   overlays: { aventuras: null, combat: null },
+  hemalurgia: { tipos: TIPOS_CLAVO, reglas: REGLAS_HEMALURGIA },
 }
 
 // The Investida paths are not a WorldData field: they live INSIDE TalentRules (§7.1, §7.7). T19 only makes them reachable from this

@@ -16,6 +16,7 @@ import type { SkillField } from '../lib/talentGraph'
 import type { HeroicPath } from '../data/heroicPaths'
 import type { Potencia } from '../data/potencias'
 import type { PoderDef } from '../data/mistborn/tipos'
+import type { TipoClavo, ReglaHemalurgia } from '../data/mistborn/hemalurgia'
 
 /** Character fields that hold an attribute value (talentGraph.ts only has `SkillField` for skills). */
 export type AttrField = 'fuerza' | 'velocidad' | 'intelecto' | 'voluntad' | 'discernimiento' | 'presencia'
@@ -122,4 +123,6 @@ export interface WorldData {
   /** Stormlight: POTENCIAS (a Potencia has `ordenes`); Mistborn: the alomantic and feruchemical powers (T17/T18) */
   poderes: (Potencia | PoderDef)[]
   overlays: { aventuras: AventurasOverlay | null; combat: CombatOverlay | null }
+  /** Mistborn only (T22): spike types and rules of the hemalurgy encyclopedia section. Text only: hemalurgy is not a character art in v1 (§3 o) */
+  hemalurgia?: { tipos: TipoClavo[]; reglas: ReglaHemalurgia[] }
 }

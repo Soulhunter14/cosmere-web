@@ -1,13 +1,8 @@
 import type { ActivationType } from '../components/TalentActivation'
+import type { Talento } from '../lib/talentTypes'
 
-export interface Talento {
-  name: string
-  cost: ActivationType
-  prereq?: string
-  description: string
-  /** Nota sobre una errata del libro (discrepancia entre el diagrama y el texto): explica qué dice cada fuente, sin cambiar `prereq`. */
-  notaLibro?: string
-}
+/** `Talento` lives in src/lib/talentTypes.ts since T34a (Cosmere core); re-exported so that no import of it changes */
+export type { Talento } from '../lib/talentTypes'
 
 export interface Potencia {
   id: string

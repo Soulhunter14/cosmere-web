@@ -1,11 +1,19 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CampaignDetail, Era } from '../types'
+import { useQuery } from '@tanstack/react-query'
+import type { CampaignDetail, Era, WorldId } from '../types'
+import { getWorld } from '../worlds'
+import type { WorldConfig } from '../worlds/types'
 
 interface CampaignState {
   currentCampaign: CampaignDetail | null
   setCurrentCampaign: (campaign: CampaignDetail | null) => void
   isGm: boolean
+  /**
+   * `tema.dataWorld` of the current campaign's world: `null` (no data-world attribute on <html>) or the world id.
+   * Persisted so that the pre-paint script of index.html can read it without knowing any world id (§7.2, T07).
+   */
+  dataWorld: WorldId | null
 }
 
 export const useCampaignStore = create<CampaignState>()(
@@ -13,12 +21,42 @@ export const useCampaignStore = create<CampaignState>()(
     (set) => ({
       currentCampaign: null,
       isGm: false,
+      dataWorld: null,
       setCurrentCampaign: (campaign) =>
-        set({ currentCampaign: campaign, isGm: campaign?.role === 'gm' }),
+        set({
+          currentCampaign: campaign,
+          isGm: campaign?.role === 'gm',
+          dataWorld: getWorld(campaign?.world).tema.dataWorld,
+        }),
     }),
-    { name: 'cosmere-campaign', partialize: (s) => ({ currentCampaign: s.currentCampaign, isGm: s.isGm }) }
+    {
+      name: 'cosmere-campaign',
+      partialize: (s) => ({ currentCampaign: s.currentCampaign, isGm: s.isGm, dataWorld: s.dataWorld }),
+    }
   )
 )
 
 // Era of the current campaign. `null` in Stormlight and also when the persisted campaign (localStorage) predates eras.
 export const useEra = (): Era | null => useCampaignStore((s) => s.currentCampaign?.era ?? null)
+
+// World of the current campaign. getWorld resolves '', null, undefined and unknown ids (e.g. a campaign persisted
+// before worlds existed) to Stormlight, so no world literal is needed here.
+export const useWorld = (): WorldId => useCampaignStore((s) => getWorld(s.currentCampaign?.world).id)
+
+// Light, synchronous configuration of the current campaign's world (capabilities, labels, tables, theme, icons).
+export const useWorldConfig = (): WorldConfig => getWorld(useWorld())
+
+// Heavy, lazy data of the current campaign's world, cached forever. `initialData`: where the data already travel in
+// the main bundle (Stormlight, `syncData`) `isPending` is false from the first render, so no new Spinner appears (P1);
+// only a world without `syncData` loads through `import()`. `structuralSharing: false`: the data are large and immutable.
+export function useWorldData() {
+  const cfg = useWorldConfig()
+  return useQuery({
+    queryKey: ['world-data', cfg.id],
+    queryFn: cfg.loadData,
+    initialData: cfg.syncData,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    structuralSharing: false,
+  })
+}

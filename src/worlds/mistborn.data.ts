@@ -29,3 +29,9 @@ export { CAMINOS_NACIDOS_DEL_METAL } from '../data/mistborn/caminosNacidosDelMet
 // makes them reachable from this lazy module; T34a composes `MISTBORN_TALENTOS.arbolesAscendencia` from the `arbol` of each
 // `ASCENDENCIAS_MB` entry.
 export { ASCENDENCIAS_MB, ARBOL_KANDRA, ARBOL_SANGRE_KOLOSS } from '../data/mistborn/origenes'
+// The talent grids and summaries are not a WorldData field either: they feed `TalentRules.grids` and `.summaries` (§7.7, §8). T38-1 only
+// makes them reachable from this lazy module (T38-2 adds the 32 grids of the powers to the same record); T34a composes
+// `MISTBORN_TALENTOS.grids = { ...pick(TALENT_GRIDS, <reused heroico keys>), ...TALENT_GRIDS_MISTBORN }` and
+// `MISTBORN_TALENTOS.summaries = { ...TALENT_SUMMARIES, ...TALENT_SUMMARIES_MISTBORN }` from them.
+export { TALENT_GRIDS_MISTBORN } from '../data/mistborn/talentGrids'
+export { TALENT_SUMMARIES_MISTBORN } from '../data/mistborn/talentSummaries'

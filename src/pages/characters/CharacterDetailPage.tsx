@@ -1,17 +1,18 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  AudioWaveform, Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap,
+  Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
+import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import {
   Button, Card, ConfirmDialog, IconButton, Input, SectionTitle, Select, Sheet, Spinner, TabPanel, Tabs, Textarea,
 } from '../../components/ui'
 import type { Character, StatDesglose, UpdateCharacterRequest } from '../../types'
-import type { HabilidadDef } from '../../worlds/types'
+import type { AttrField, HabilidadDef } from '../../worlds/types'
+import { isAvailable } from '../../worlds'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { POTENCIAS } from '../../data/potencias'
@@ -75,6 +76,11 @@ const tile: CSSProperties = {
 }
 
 const FORMA_TONE = toneFrom(CANTOR_COLOR)
+
+// Components of Nacidos de la bruma: lazy, so neither they nor the data they import by file (caminosNacidosDelMetal, origenes)
+// reach the main chunk (§7.4 rule 4, §8 risk 6). Each one is rendered only while its picker is open.
+const CaminoMetalPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.CaminoMetalPicker })))
+const BendicionPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.BendicionPicker })))
 
 /* ─── Local primitives ──────────────────────────────────────────────────── */
 
@@ -416,11 +422,6 @@ const buildSections = (habilidades: HabilidadDef[]) => COLUMNAS.map((col) => ({
     .map((h): [string, string, string, string] => [h.field, h.label, h.atributo, h.codigo]),
 }))
 
-const ASCENDENCIAS: { id: string; label: string; tone: Tone; icon: ReactNode }[] = [
-  { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icon: <UserRound size={20} /> },
-  { id: 'Oyente', label: 'Oyente', tone: tone.amatista, icon: <AudioWaveform size={20} /> },
-]
-
 const BACKGROUND_FIELDS = [
   ['proposito', 'Propósito'], ['obstaculo', 'Obstáculo'],
   ['apariencia', 'Apariencia'], ['notas', 'Notas'],
@@ -441,12 +442,15 @@ export function CharacterDetailPage() {
   const location = useLocation()
   const { isGm, currentCampaign } = useCampaignStore()
   const cfg = useWorldConfig()
+  const era = useEra()
   const sections = useMemo(() => buildSections(cfg.habilidades), [cfg.habilidades])
+  // Ancestries of the world that exist in the era of the campaign (the era only filters options, §3 b)
+  const ascendencias = useMemo(() => cfg.ascendencias.filter((a) => isAvailable(a, era)), [cfg.ascendencias, era])
   const { user: currentUser } = useAuthStore()
   const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
   const [form, setForm] = useState<Character | null>(null)
   const [tab, setTab] = useState<Tab>('caracteristicas')
-  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | null>(null)
+  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'bendicion' | null>(null)
   const [enCombate, setEnCombate] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const nameId = useId()
@@ -479,6 +483,29 @@ export function CharacterDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
   })
 
+  // Identity changes that save at once, outside edit mode (the metalborn path and the Blessings, §7.4 rule 5): one PUT with the whole
+  // character plus the change, optimistic by prefix so that every cached copy of it (with or without `enCombate`, §2) moves together.
+  // The base is the copy fetched out of combat, never `form`
+  const identidadMutation = useMutation({
+    mutationFn: (cambio: Partial<Pick<Character, 'caminoMetal' | 'caminoInicial' | 'bendiciones'>>) => {
+      const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? char
+      if (!base) return Promise.reject(new Error('The character is not loaded'))
+      return charactersApi.update(cId, chId, { ...base, ...cambio } as UpdateCharacterRequest)
+    },
+    onMutate: async (cambio) => {
+      const prefix = ['character', cId, chId]
+      await qc.cancelQueries({ queryKey: prefix })
+      const previas = qc.getQueriesData<Character>({ queryKey: prefix })
+      qc.setQueriesData<Character>({ queryKey: prefix }, (old) => old && { ...old, ...cambio })
+      return { previas }
+    },
+    onError: (_error, _cambio, ctx) => ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['character', cId, chId] })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+
   if (isLoading || !char) {
     return (
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -494,13 +521,19 @@ export function CharacterDetailPage() {
   const f = (editing && form ? form : char) as Character
 
   // ── Forma (Oyente/Cantor) ──────────────────────────────────────────────────
-  const isCantor = char.ascendencia === 'Oyente'
+  const isCantor = cfg.features.formasCantor && char.ascendencia === 'Oyente'
   const rawTalentos: string[] = (() => { try { return JSON.parse(char.talentos || '[]') } catch { return [] } })()
   const formasDisponibles = isCantor ? getFormasDisponibles(rawTalentos) : []
   const formaActiva = isCantor ? getFormaActiva(rawTalentos) : null
   const formaActivaData = formaActiva ? (formasDisponibles.find((fo) => fo.nombre === formaActiva) ?? null) : null
   const formaBonus: FormaBonusMap = formaActivaData?.bonusAtributos ?? {}
-  const fbOf = (k: string) => formaBonus[k as FormaBonusKey] ?? 0
+  // Attribute bonus of any origin: from the server when the world says so (Blessings, Tamaño desmedido…, §5.1) and from the cantor form otherwise.
+  // `bonoInk`/`bonoSr` tell them apart on screen: the form keeps its own colour and the «por forma» of today, the server's bonuses are not forms
+  const fbOf = (k: string) => cfg.features.bonosServidor
+    ? (char.bonosAtributos?.[k as AttrField] ?? 0)
+    : (formaBonus[k as FormaBonusKey] ?? 0)
+  const bonoInk = cfg.features.bonosServidor ? c.brand : FORMA_TONE.fg
+  const bonoSr = cfg.features.bonosServidor ? ' por bonos' : ' por forma'
   const set = (k: keyof UpdateCharacterRequest) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => prev ? { ...prev, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value } : prev)
 
@@ -688,13 +721,23 @@ export function CharacterDetailPage() {
               )}
             </div>
 
-            {/* Identity — Ascendencia · Camino Heroico · Camino Radiante */}
+            {/* Identity — Ascendencia · Camino Heroico · Camino Investido del mundo (Orden / Camino de nacido del metal) · Bendición */}
             {(() => {
-              const asc = ASCENDENCIAS.find((a) => a.id === f.ascendencia)
+              const asc = cfg.ascendencias.find((a) => a.id === f.ascendencia)
               const path = HEROIC_PATHS.find((p) => p.id === f.caminoHeroico)
-              const order = RADIANT_ORDERS.find((o) => o.id === f.caminoRadiante)
+              // The Investida path of the world: the character field that holds it, its name, colour and icon come from the configuration (P4)
+              const caminoInv = cfg.caminoInvestido
+              const invDef = caminoInv?.caminos.find((p) => p.id === f[caminoInv.field])
               const pathTone = path ? toneFrom(path.color) : undefined
-              const orderTone = order ? toneFrom(order.color) : undefined
+              const invTone = invDef ? toneFrom(invDef.color) : undefined
+              // A radiant order is changed by the director in edit mode, with the rest of the form. A metalborn path is assigned by the
+              // director OUTSIDE edit mode, with an immediate save (§7.4 rule 5, Q6)
+              const invPick = caminoInv?.field === 'caminoMetal'
+                ? (!editing && isGm ? () => setPicker('caminoMetal') : undefined)
+                : (editing && isGm ? () => setPicker('radiante') : undefined)
+              // Blessings (kandra): the owner or the director pick them outside edit mode, with an immediate save. For anyone but the
+              // director, once one is saved the picker opens read-only (Q16)
+              const bendiciones = asc?.bendiciones
               return (
                 <div>
                   <SectionTitle>Identidad</SectionTitle>
@@ -704,7 +747,7 @@ export function CharacterDetailPage() {
                       label="Ascendencia"
                       value={asc?.label}
                       t={asc?.tone}
-                      media={<IconBox t={asc?.tone}>{asc ? asc.icon : <UserRound size={20} />}</IconBox>}
+                      media={<IconBox t={asc?.tone}>{asc ? asc.icono(20) : <UserRound size={20} />}</IconBox>}
                       onPick={editing ? () => setPicker('ascendencia') : undefined}
                     />
                     <IdentityItem
@@ -715,16 +758,32 @@ export function CharacterDetailPage() {
                       media={<IconBox t={pathTone}><HeroicPathIcon id={path?.id} size={20} /></IconBox>}
                       onPick={editing && isGm ? () => setPicker('heroico') : undefined}
                     />
-                    <IdentityItem
-                      index={2}
-                      label="Orden"
-                      value={order?.name}
-                      t={orderTone}
-                      media={order
-                        ? <RadiantOrderIcon orderId={order.id} size={40} decorative />
-                        : <IconBox><CosmereIcon name="cosmere-emblem" size={20} /></IconBox>}
-                      onPick={editing && isGm ? () => setPicker('radiante') : undefined}
-                    />
+                    {caminoInv && (
+                      <IdentityItem
+                        index={2}
+                        label={caminoInv.label}
+                        value={invDef?.nombre}
+                        t={invTone}
+                        media={invDef
+                          ? (caminoInv.insignia
+                            ? cfg.iconos.caminoInvestido(invDef.id, 40)
+                            : <IconBox t={invTone}>{cfg.iconos.caminoInvestido(invDef.id, 20)}</IconBox>)
+                          : <IconBox><CosmereIcon name="cosmere-emblem" size={20} /></IconBox>}
+                        onPick={invPick}
+                      />
+                    )}
+                    {bendiciones && (
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <IdentityItem
+                          index={3}
+                          label={f.bendiciones.length > 1 ? 'Bendiciones' : 'Bendición'}
+                          value={f.bendiciones.length > 0 ? f.bendiciones.map((id) => bendiciones.find((b) => b.id === id)?.nombre ?? id).join(' · ') : undefined}
+                          t={asc?.tone}
+                          media={<IconBox t={asc?.tone}>{asc?.icono(20)}</IconBox>}
+                          onPick={!editing && canEdit ? () => setPicker('bendicion') : undefined}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -791,10 +850,10 @@ export function CharacterDetailPage() {
               const vel = f.velocidad ?? 0
               const vol = f.voluntad ?? 0
               const dis = f.discernimiento ?? 0
-              // Effective values include forma bonuses (view only)
-              const velEff = vel + (formaBonus.velocidad ?? 0)
-              const volEff = vol + (formaBonus.voluntad ?? 0)
-              const disEff = dis + (formaBonus.discernimiento ?? 0)
+              // Effective values include the attribute bonuses (cantor form, or the server's bonuses in worlds that use them), view only
+              const velEff = vel + fbOf('velocidad')
+              const volEff = vol + fbOf('voluntad')
+              const disEff = dis + fbOf('discernimiento')
               const movTotal = mov.total
               const movStr = movTotal % 1 === 0
                 ? `${movTotal} m`
@@ -839,7 +898,7 @@ export function CharacterDetailPage() {
                         {movBonus.length > 0
                           ? `+${sumaLineas(movBonus)} m bonus · `
                           : 'por acción · '}
-                        VEL {velEff}{velEff !== vel ? <span style={{ color: formaInk }}> (+{formaBonus.velocidad})</span> : null}
+                        VEL {velEff}{velEff !== vel ? <span style={{ color: bonoInk }}> (+{fbOf('velocidad')})</span> : null}
                         {situacional(mov)}
                       </>}
                     >
@@ -851,7 +910,7 @@ export function CharacterDetailPage() {
                       label="Dado de recuperación"
                       icon={<StatIcons.recuperacion size={14} />}
                       t={tone.granate}
-                      sub={<>VOL {volEff}{volEff !== vol ? <span style={{ color: formaInk }}> (+{formaBonus.voluntad})</span> : null}</>}
+                      sub={<>VOL {volEff}{volEff !== vol ? <span style={{ color: bonoInk }}> (+{fbOf('voluntad')})</span> : null}</>}
                     >
                       <div style={{ ...statValue(tone.granate), fontFamily: font.mono, letterSpacing: 0 }}>{dadoRec}</div>
                     </StatCard>
@@ -861,7 +920,7 @@ export function CharacterDetailPage() {
                       label="Alcance sentidos"
                       icon={<StatIcons.sentidos size={14} />}
                       t={tone.circon}
-                      sub={<>DIS {disEff}{disEff !== dis ? <span style={{ color: formaInk }}> (+{formaBonus.discernimiento})</span> : null}</>}
+                      sub={<>DIS {disEff}{disEff !== dis ? <span style={{ color: bonoInk }}> (+{fbOf('discernimiento')})</span> : null}</>}
                     >
                       <div style={statValue(tone.circon, disEff >= 9 ? fs.lg : fs.xl + 2)}>{alcance}</div>
                     </StatCard>
@@ -1012,8 +1071,8 @@ export function CharacterDetailPage() {
                             <div style={{ ...numeral, fontSize: fs['2xl'] + 2, color: c.text }}>
                               {attrTotal}
                               {attrFb > 0 && (
-                                <sup style={{ fontSize: fs.xs, fontWeight: 700, color: FORMA_TONE.fg, marginLeft: 3 }}>
-                                  +{attrFb}<span className="sr-only"> por forma</span>
+                                <sup style={{ fontSize: fs.xs, fontWeight: 700, color: bonoInk, marginLeft: 3 }}>
+                                  +{attrFb}<span className="sr-only">{bonoSr}</span>
                                 </sup>
                               )}
                             </div>
@@ -1239,7 +1298,7 @@ export function CharacterDetailPage() {
         open={picker === 'ascendencia'}
         title="Ascendencia"
         value={form?.ascendencia ?? ''}
-        options={ASCENDENCIAS.map((a) => ({ id: a.id, label: a.label, tone: a.tone, icon: a.icon }))}
+        options={ascendencias.map((a) => ({ id: a.id, label: a.label, tone: a.tone, icon: a.icono(20) }))}
         onChange={(id) => setForm((prev) => prev ? { ...prev, ascendencia: id } : prev)}
         onClose={() => setPicker(null)}
       />
@@ -1346,6 +1405,33 @@ export function CharacterDetailPage() {
         }}
         onClose={() => setPicker(null)}
       />
+
+      {/* Nacidos de la bruma: lazy pickers, mounted only while open (§7.4 rule 4). They save at once (identidadMutation) and are never opened in edit mode */}
+      {picker === 'caminoMetal' && (
+        <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>
+          <CaminoMetalPicker
+            open
+            onClose={() => setPicker(null)}
+            era={era}
+            ascendencia={char.ascendencia}
+            caminoMetal={char.caminoMetal}
+            caminoInicial={char.caminoInicial}
+            tieneCaminoHeroico={!!char.caminoHeroico}
+            onConfirm={(caminoMetal, caminoInicial) => { identidadMutation.mutate({ caminoMetal, caminoInicial }); setPicker(null) }}
+          />
+        </Suspense>
+      )}
+      {picker === 'bendicion' && (
+        <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>
+          <BendicionPicker
+            open
+            onClose={() => setPicker(null)}
+            value={char.bendiciones}
+            isGm={isGm}
+            onConfirm={(bendiciones) => { identidadMutation.mutate({ bendiciones }); setPicker(null) }}
+          />
+        </Suspense>
+      )}
 
       <ConfirmDialog
         open={confirmDiscard}

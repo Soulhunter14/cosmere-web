@@ -117,6 +117,11 @@ export interface WorldConfig {
     eras?: Era[]
     puntosAtributoBase: number
     topeAtributo?: Partial<Record<AttrField, number>>
+    /**
+     * The ancestry carries Blessings (the kandra, L.34-35 / PDF 40-41): id and short name of each, for the identity tile of the sheet. Light twin
+     * of `BENDICIONES_KANDRA` (data/mistborn/origenes.ts), which stays in the lazy chunk of the picker (§8, risk 6): keep both in step
+     */
+    bendiciones?: { id: string; nombre: string }[]
   }[]
   /** The Investida path the world adds to the heroic paths: radiant order (Stormlight) or metalborn path (Mistborn) */
   caminoInvestido: {

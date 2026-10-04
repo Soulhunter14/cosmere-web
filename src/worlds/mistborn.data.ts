@@ -5,10 +5,11 @@
  * Meeting-point file: later tasks add lines, they never reorder them.
  */
 import type { WorldData } from './types'
+import { PODERES_FERUQUIMICOS } from '../data/mistborn'
 
 export const DATA: WorldData = {
   talentos: null,
   caminosHeroicos: [],
-  poderes: [],
+  poderes: [...PODERES_FERUQUIMICOS],
   overlays: { aventuras: null, combat: null },
 }

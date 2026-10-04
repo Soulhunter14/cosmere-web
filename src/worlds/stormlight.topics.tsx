@@ -1,8 +1,8 @@
 /**
  * Encyclopedia topics of the Stormlight world (WorldConfig.enciclopedia): the tiles of the encyclopedia index,
  * moved out of EncyclopediaPage (T06c). A .tsx apart from stormlight.ts because the emblems are JSX; it exports only
- * the list (no components), so fast refresh is not affected. T09 makes EncyclopediaPage read it through
- * `useWorldConfig().enciclopedia`; until then the page keeps its own identical copy.
+ * the list (no components), so fast refresh is not affected. EncyclopediaPage reads it through
+ * `useWorldConfig().enciclopedia` (T09).
  */
 import { Swords } from 'lucide-react'
 import { CosmereIcon } from '../components/CosmereIcon'

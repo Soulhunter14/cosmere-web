@@ -23,7 +23,7 @@ import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
 import { TalentActivation, type ActivationType } from '../../components/TalentActivation'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { useAuthStore } from '../../store/authStore'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { c, eyebrow, font, fs, radius, titleText, tone } from '../../theme'
 import {
   buildTalentGraph, cascadeRemove, cheapestRoute, evaluate, graphOptionsFromCharacter, parseStoredTalentos,
@@ -77,6 +77,8 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
   const qKey = useMemo(() => ['character', cId, charId] as const, [cId, charId])
   const user = useAuthStore((s) => s.user)
   const isGm = useCampaignStore((s) => s.isGm)
+  // Capabilities and texts of the world of the campaign: Ideales jurados and formas of cantor are Roshar features
+  const cfg = useWorldConfig()
   const canEditIdeals = isGm || (!!user && character.ownerId === user.id)
   const [searchParams, setSearchParams] = useSearchParams()
   const contentW = useContentWidth()
@@ -444,7 +446,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
           <EmptyState
             icon={<Sparkles size={24} aria-hidden />}
             title="Sin camino asignado"
-            description="Asigna un Camino Heroico u Orden Radiante en la ficha para ver los talentos disponibles."
+            description={cfg.textos.vacioTalentos}
           />
         )}
 
@@ -485,7 +487,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
             evaluation={evaluation}
             onOpenTalent={setSheetId}
             onShowInTree={showInTree}
-            onChangeForma={graph.isCantor ? () => setFormaOpen(true) : undefined}
+            onChangeForma={graph.isCantor && cfg.features.formasCantor ? () => setFormaOpen(true) : undefined}
           />
         )}
 
@@ -502,8 +504,10 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
                     graph={graph}
                     evaluation={evaluation}
                     {...atlasCommon}
-                    keyOwnedNote={ideales > 0 ? `${ideales} ${plural(ideales, 'Ideal jurado', 'Ideales jurados')}` : 'cuenta como jurado'}
-                    outro={!m.noJugable && (
+                    keyOwnedNote={cfg.features.idealesJurados
+                      ? (ideales > 0 ? `${ideales} ${plural(ideales, 'Ideal jurado', 'Ideales jurados')}` : 'cuenta como jurado')
+                      : undefined}
+                    outro={!m.noJugable && cfg.features.idealesJurados && (
                       <IdealesControl value={ideales} canEdit={canEditIdeals} onChange={(v) => idealesMutation.mutate(v)} saving={idealesMutation.isPending} />
                     )}
                   />
@@ -517,7 +521,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
                     graph={graph}
                     evaluation={evaluation}
                     {...atlasCommon}
-                    keyExtra={
+                    keyExtra={cfg.features.formasCantor ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: c.muted, fontWeight: 600 }}>
                           <Music size={13} aria-hidden />
@@ -525,7 +529,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
                         </span>
                         <Button variant="secondary" size="sm" onClick={() => setFormaOpen(true)} aria-haspopup="dialog" aria-label="Cambiar forma activa">Cambiar</Button>
                       </span>
-                    }
+                    ) : undefined}
                     intro={
                       <>
                         {formaData?.esPoder && (
@@ -621,14 +625,16 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
 
       <BudgetSheet open={budgetOpen} onClose={() => setBudgetOpen(false)} budget={budget} route={route} level={character.level} />
 
-      <FormaPickerSheet
-        open={formaOpen}
-        onClose={() => setFormaOpen(false)}
-        formas={formasDisponibles}
-        activa={evaluation.formaActiva}
-        accent={cantorAccent}
-        onActivate={activateForma}
-      />
+      {cfg.features.formasCantor && (
+        <FormaPickerSheet
+          open={formaOpen}
+          onClose={() => setFormaOpen(false)}
+          formas={formasDisponibles}
+          activa={evaluation.formaActiva}
+          accent={cantorAccent}
+          onActivate={activateForma}
+        />
+      )}
 
       <ConfirmDialog
         open={!!djConfirm}
@@ -735,6 +741,7 @@ function IdealesControl({ value, canEdit, onChange, saving }: { value: number; c
 const ACCENT_NEUTRAL = accentOf('#60a5fa')
 
 function StateLegend() {
+  const { features } = useWorldConfig()
   const item: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.muted }
   const box = (look: CSSProperties, child: ReactNode) => (
     <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 30, height: 20, padding: '0 4px', borderRadius: 5, ...look }}>{child}</span>
@@ -750,7 +757,9 @@ function StateLegend() {
         <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: null, minLevel: 1 }} accent={a} compact={false} />)}a 2 talentos</li>
         <li style={item}>{box({ background: c.s3, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: 'nivel', minLevel: 6 }} accent={a} compact={false} />)}nivel 6 como pronto</li>
         <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <span style={{ fontSize: fs.eyebrow, fontWeight: 750, color: c.muted }}>DJ</span>)}lo decide la DJ</li>
-        <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <IdealGlyph size={12} />)}jurar un Ideal</li>
+        {features.idealesJurados && (
+          <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <IdealGlyph size={12} />)}jurar un Ideal</li>
+        )}
         <li style={item}>
           <span aria-hidden style={{ width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${c.subtle}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: fs.eyebrow, fontWeight: 750, color: c.muted, lineHeight: 1 }}>o</span>
           basta uno

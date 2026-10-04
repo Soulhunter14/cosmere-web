@@ -4,14 +4,17 @@ import { GmMessagesPage } from './GmMessagesPage'
 import { CaminapiedrasPage } from './CaminapiedrasPage'
 import { GlobalNpcListPage } from './GlobalNpcListPage'
 import { Tabs, TabPanel } from '../../components/ui'
+import { useWorldConfig } from '../../store/campaignStore'
+import type { WorldConfig } from '../../worlds/types'
 
-const TABS = [
+type Tab = 'npcs' | 'messages' | 'caminapiedras'
+
+/** `feature`: the tab is only offered when the world of the campaign declares that capability (WorldConfig.features) */
+const TABS: readonly { id: Tab; label: string; feature?: keyof WorldConfig['features'] }[] = [
   { id: 'npcs', label: 'NPCs' },
   { id: 'messages', label: 'Mensajes' },
-  { id: 'caminapiedras', label: 'Aventura' },
-] as const
-
-type Tab = typeof TABS[number]['id']
+  { id: 'caminapiedras', label: 'Aventura', feature: 'pestanaAventura' },
+]
 
 const TAB_ICONS: Record<Tab, typeof Users> = {
   npcs: Users,
@@ -22,7 +25,11 @@ const TAB_ICONS: Record<Tab, typeof Users> = {
 const ID_PREFIX = 'gm'
 
 export function GmPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('npcs')
+  const [selectedTab, setSelectedTab] = useState<Tab>('npcs')
+  const { features } = useWorldConfig()
+  const tabs = TABS.filter((tab) => !tab.feature || features[tab.feature])
+  // A tab the world does not offer can never be the active one
+  const activeTab = tabs.some((tab) => tab.id === selectedTab) ? selectedTab : tabs[0].id
 
   return (
     <div>
@@ -31,12 +38,12 @@ export function GmPage() {
           idPrefix={ID_PREFIX}
           ariaLabel="Secciones del director"
           value={activeTab}
-          onChange={setActiveTab}
+          onChange={setSelectedTab}
           stretch
           tone="rubi"
           /* Director area identity: rubí frame, glyphs and selected label */
           style={{ border: '1px solid var(--gm-border)' }}
-          tabs={TABS.map((tab) => {
+          tabs={tabs.map((tab) => {
             const Icon = TAB_ICONS[tab.id]
             return {
               id: tab.id,

@@ -12,3 +12,7 @@ export const DATA: WorldData = {
   poderes: [],
   overlays: { aventuras: null, combat: null },
 }
+
+// The Investida paths are not a WorldData field: they live INSIDE TalentRules (§7.1, §7.7). T19 only makes them reachable from this
+// lazy module; T34a composes `MISTBORN_TALENTOS.caminosInvestidos` from this export.
+export { CAMINOS_NACIDOS_DEL_METAL } from '../data/mistborn/caminosNacidosDelMetal'

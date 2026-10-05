@@ -56,6 +56,11 @@ export interface TalentRules {
   bonosCuentanParaRequisitos: boolean
   /** Character field that stores the Investida path of the world; graphOptionsFromCharacter reads it (§7.7 #3) */
   campoCaminoInvestido: 'caminoRadiante' | 'caminoMetal'
+  /**
+   * Visible name of the goal that opens the trees of an Investida path with a flat tree and of its powers (T36, §7.7 #3); the engine adds
+   * «pendiente» / «completada» to it. Optional: a world without goal-locked trees leaves it out and the engine says «Meta»
+   */
+  nombreMeta?: string
 }
 
 /** Skill name as written in prerequisites → Character field. «Saber» is the book's name for conocimiento. */

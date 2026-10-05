@@ -130,7 +130,8 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
   const pendingScroll = useRef<string | null>(null)
 
   // ── engine ───────────────────────────────────────────────────────────────
-  const { caminoHeroico, caminoRadiante, ascendencia } = character
+  // The metalborn path, the starting path and the powers build trees too (§7.7 #3): changing them on the sheet rebuilds the graph
+  const { caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes } = character
   const stored = useMemo(() => parseStoredTalentos(character.talentos), [character.talentos])
   const extraKey = useMemo(() => {
     const names = new Set(splitStoredTalentos(stored).names)
@@ -138,8 +139,8 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
   }, [stored, caminoHeroico, rules])
   const extraPaths = useMemo(() => (extraKey ? extraKey.split(',') : []), [extraKey])
   const graph = useMemo(
-    () => buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, extraPaths), rules),
-    [caminoHeroico, caminoRadiante, ascendencia, extraPaths, rules],
+    () => buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes }, extraPaths, rules), rules),
+    [caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes, extraPaths, rules],
   )
   const tState = useMemo(() => talentStateFromCharacter(character, { confirmedStory }, graph.rules), [character, confirmedStory, graph.rules])
   const evaluation = useMemo(() => evaluate(graph, tState), [graph, tState])
@@ -154,9 +155,11 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
   const needExplore = showOthers || [goal?.nodeId, sheetId, selectedId].some((id) => !!id && !graph.byId.has(id))
   const exploreGraph = useMemo(
     () => (needExplore && otherPathIds.length
-      ? buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, [...extraPaths, ...otherPathIds]), rules)
+      ? buildTalentGraph(graphOptionsFromCharacter(
+        { caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes }, [...extraPaths, ...otherPathIds], rules,
+      ), rules)
       : null),
-    [needExplore, otherPathIds, extraPaths, caminoHeroico, caminoRadiante, ascendencia, rules],
+    [needExplore, otherPathIds, extraPaths, caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes, rules],
   )
   const exploreEval = useMemo(() => (exploreGraph ? evaluate(exploreGraph, tState) : null), [exploreGraph, tState])
   const exploreModels = useMemo(

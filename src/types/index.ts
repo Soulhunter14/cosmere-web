@@ -309,6 +309,8 @@ export interface GlobalNpc {
   imageUrl?: string
   createdAt: string
   updatedAt: string
+  /** World of the adversary: the server fixes it from the campaign it is created in and returns it; it never travels in a request body (§5.2) */
+  world: WorldId
 }
 
 // Sessions

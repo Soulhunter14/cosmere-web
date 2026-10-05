@@ -98,7 +98,9 @@ export const MISTBORN: WorldConfig = {
     { clave: 'feruquimia.cargasMax', label: 'Cargas máx.', grupo: 'feruquimia' },
     { clave: 'feruquimia.mentesALaVez', label: 'Mentes a la vez', grupo: 'feruquimia' },
   ],
-  moneda: { simbolo: 'ar', nombre: 'Arquillas', imagen: null /* T45 */, decimales: 2 },
+  // T45: official illustrations «Dinero de la Era 1 / Era 2» (L.254 / PDF 260), src/assets/cosmere/img/dinero-era1.webp and dinero-era2.webp.
+  // `imagen` is their common name: the consumer appends the era of the campaign, cosmereImage(`${imagen}-${era}`) (Era 1 pouch, Era 2 wallet).
+  moneda: { simbolo: 'ar', nombre: 'Arquillas', imagen: 'dinero', decimales: 2 },
   // L.50 / PDF 56: carrying capacity and lifting capacity by Fuerza bracket
   tablas: { cargaKg: [25, 50, 125, 250, 1250, 2500], levantamientoKg: [50, 100, 250, 500, 2500, 5000] },
   enciclopedia: MISTBORN_TOPICS, // the seven topics of §7.8 (T24a); the glyphs of the emblems are provisional Lucide until T46

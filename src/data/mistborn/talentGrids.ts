@@ -24,6 +24,9 @@
  * alomancia.ts, feruquimia.ts), which the check script compares one by one. Rows and lanes follow the printed cards, not the alphabetical
  * order of the entries. For the 32 powers (T38-2) the lane and row read from each image were also compared with the coordinates of the card
  * titles in the text layer of the PDF: both agree on every card except the staggered diagram marked [inferido] below.
+ * T38b (visual review): the 47 grids, and the 10 specialties shared with Stormlight that keep the `heroico:*` grids of `src/data/talentGrids.ts`,
+ * were looked at again in the 200 DPI renders of their diagrams and compared with the card rectangles of the PDF drawing layer (lane = a column
+ * of cards, row = position in that column): no cell had to move.
  * Light module with no imports at run time: it only travels in the lazy `mistborn.data` chunk (§8, risk 6).
  */
 import type { TalentGrid } from '../talentGrids'
@@ -328,8 +331,9 @@ export const TALENT_GRIDS_MISTBORN: Record<string, TalentGrid> = {
     ],
   },
   // Alomancia de cobre · diagram L.192 / PDF 198
-  // [inferido] Each lane stacks on its own here: the second-tier cards are printed at different heights (Ahumador eficiente above
-  // Coordinación encubierta); stored as the two tiers of the tree, both on row 1 (the order in which alomancia.ts lists the talents)
+  // [inferido] The two lanes stack their cards independently and the second-tier cards are printed at different heights (Ahumador eficiente
+  // above Coordinación encubierta): stored as the two tiers of the tree, both on row 1, like the Stormlight grid of Rastreador, whose lanes are
+  // also offset (src/data/talentGrids.ts). T38b kept it: the strictly printed order would need a 3rd row with an empty cell and no tier meaning
   'poder:alomancia:cobre': {
     cols: 2,
     rows: 2,

@@ -1,13 +1,14 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, type CSSProperties } from 'react'
-import { Sparkles, ChevronRight, TriangleAlert } from 'lucide-react'
+import { Sparkles, ChevronRight, RefreshCw, TriangleAlert } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useWorldData } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { EmptyState, PageHeader, Spinner } from '../../components/ui'
+import { Button, EmptyState, ErrorMessage, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
 import { buildTalentGraph, graphOptionsFromCharacter, talentBudget } from '../../lib/talentGraph'
+import type { TalentRules } from '../../lib/talentRules'
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
 import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, tone } from '../../theme'
@@ -16,12 +17,12 @@ import { onGem } from '../../lib/hero'
 /* White initial on the deep character gradient (lib/avatar: >= 10:1 on every palette), as in MetasPage/BolsaPage. */
 const ON_GEM = onGem
 
-function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
-  // Book budget (shared engine, see lib/talentGraph.ts): allowed / used / excess / falta.
+function CharacterSelectCard({ character, rules, onSelect }: { character: Character; rules: TalentRules; onSelect: () => void }) {
+  // Book budget (shared engine, see lib/talentGraph.ts): allowed / used / excess / falta. The graph is the one of the world's rules.
   const budget = useMemo(() => {
-    const graph = buildTalentGraph(graphOptionsFromCharacter(character))
+    const graph = buildTalentGraph(graphOptionsFromCharacter(character), rules)
     return talentBudget(character, graph)
-  }, [character])
+  }, [character, rules])
 
   return (
     <button
@@ -105,8 +106,12 @@ export function TalentosPage({ detailBasePath = 'personajes/talentos' }: { detai
     queryKey: ['characters', cId],
     queryFn: () => charactersApi.getAll(cId),
   })
+  // The talent data of the world of the campaign. Stormlight's are `initialData` of useWorldData, so there it never waits (no new
+  // Spinner); Mistborn's come with the lazy chunk of its world
+  const { data: worldData, isPending: worldPending } = useWorldData()
+  const rules = worldData?.talentos ?? null
 
-  if (isLoading) return <Spinner />
+  if (isLoading || worldPending) return <Spinner />
 
   const visible = isGm ? characters : characters.filter((c) => c.ownerId === user?.id)
 
@@ -128,11 +133,20 @@ export function TalentosPage({ detailBasePath = 'personajes/talentos' }: { detai
           title="Sin personajes"
           description="Crea un personaje primero."
         />
+      ) : !rules ? (
+        // The chunk did not load: never budget the characters with the rules of another world. A failed `import()` stays failed for the
+        // rest of the document (the browser keeps the failure), so a `refetch()` could not recover it: only reloading the page does
+        <div>
+          <ErrorMessage message="No se pudieron cargar los talentos." style={{ marginBottom: 16 }} />
+          <Button onClick={() => window.location.reload()} icon={<RefreshCw size={15} aria-hidden />}>
+            Recargar la página
+          </Button>
+        </div>
       ) : (
         <ul aria-label="Personajes" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {visible.map((ch, i) => (
             <li key={ch.id} className="rise" style={{ '--i': Math.min(i, 10) } as CSSProperties}>
-              <CharacterSelectCard character={ch} onSelect={() => goToDetail(ch)} />
+              <CharacterSelectCard character={ch} rules={rules} onSelect={() => goToDetail(ch)} />
             </li>
           ))}
         </ul>

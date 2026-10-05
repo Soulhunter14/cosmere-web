@@ -7,3 +7,8 @@ export { CaminoMetalPicker } from './CaminoMetalPicker'
 export type { CaminoMetalPickerProps } from './CaminoMetalPicker'
 export { BendicionPicker } from './BendicionPicker'
 export type { BendicionPickerProps } from './BendicionPicker'
+export { MetalPicker } from './MetalPicker'
+export type { MetalPickerProps } from './MetalPicker'
+// The «al elegir camino» flow (T28): pure functions that CharacterDetailPage loads with `await import()` inside its mutations
+export { planAplicarCaminoMetal, planQuitarCaminoMetal, enlazarMetas, metalesDelCamino, faltanHuecosCognitivos, idPoder } from './caminoMetalFlujo'
+export type { EntornoCaminoMetal, SeleccionCaminoMetal, MetaPendiente, PlanCaminoMetal } from './caminoMetalFlujo'

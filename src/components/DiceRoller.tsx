@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useId, useRef, useSyncExternalStore, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import { useState, useCallback, useEffect, useId, useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowUp, Check, ChevronDown, History, X, type LucideIcon } from 'lucide-react'
 import {
@@ -10,9 +10,11 @@ import { diceRollsApi, type DiceRollResponse } from '../api/diceRolls'
 import { charactersApi } from '../api/characters'
 import { useCampaignHub } from '../hooks/useCampaignHub'
 import { useDialogA11y } from '../hooks/useDialogA11y'
-import { useCampaignStore } from '../store/campaignStore'
+import { useCampaignStore, useWorldConfig } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
 import type { Character } from '../types'
+import type { SkillField } from '../lib/talentGraph'
+import type { AttrField, HabilidadDef, WorldConfig } from '../worlds/types'
 import { Avatar, Button, EmptyState, Field, IconButton, Input, Segmented, Select, Stepper, Tabs, type TabItem } from './ui'
 import { PlotIcon } from './GameIcons'
 import { cosmereImage } from '../lib/cosmereAssets'
@@ -22,40 +24,14 @@ import { c, eyebrow, font, fs, pill, radius, shadow, tint, tone, z, type Tone } 
 
 // ── Constantes ─────────────────────────────────────────────────────────────
 
-const SKILLS = [
-  'Agilidad', 'Armas ligeras', 'Armas pesadas', 'Atletismo',
-  'Deducción', 'Disciplina', 'Engaño', 'Hurto',
-  'Intimidación', 'Liderazgo', 'Manufactura', 'Medicina',
-  'Percepción', 'Perspicacia', 'Persuasión', 'Saber',
-  'Sigilo', 'Supervivencia',
-]
-
 const DAMAGE_DICE = [4, 6, 8, 10, 12, 20]
 
-// Mapa nombre de habilidad (UI) → [campo habilidad, campo atributo]
-const SKILL_TO_FIELDS: Partial<Record<string, [keyof Character, keyof Character]>> = {
-  'Agilidad':      ['agilidad',     'velocidad'],
-  'Armas ligeras': ['armasLigeras', 'velocidad'],
-  'Armas pesadas': ['armasPesadas', 'fuerza'],
-  'Atletismo':     ['atletismo',    'fuerza'],
-  'Deducción':     ['deduccion',    'intelecto'],
-  'Disciplina':    ['disciplina',   'voluntad'],
-  'Engaño':        ['engano',       'presencia'],
-  'Hurto':         ['hurto',        'velocidad'],
-  'Intimidación':  ['intimidacion', 'presencia'],
-  'Liderazgo':     ['liderazgo',    'presencia'],
-  'Manufactura':   ['manufactura',  'intelecto'],
-  'Medicina':      ['medicina',     'intelecto'],
-  'Percepción':    ['percepcion',   'discernimiento'],
-  'Perspicacia':   ['perspicacia',  'discernimiento'],
-  'Persuasión':    ['persuasion',   'presencia'],
-  'Saber':         ['conocimiento', 'intelecto'],
-  'Sigilo':        ['sigilo',       'velocidad'],
-  'Supervivencia': ['supervivencia','discernimiento'],
-}
+// Weapon skills of the Combate tab. They are looked up by FIELD in the skill table of the world (T43) because their label changes
+// from one world to another («Armas ligeras» / «Armamento ligero»)
+const ARMAS: SkillField[] = ['armasLigeras', 'armasPesadas', 'agilidad']
 
 // Mapa código de atributo (guardado en habilidades personalizadas) → campo del Character
-const ATTR_CODE_TO_FIELD: Record<string, keyof Character> = {
+const ATTR_CODE_TO_FIELD: Record<string, AttrField> = {
   FUE: 'fuerza',
   VEL: 'velocidad',
   INT: 'intelecto',
@@ -64,13 +40,55 @@ const ATTR_CODE_TO_FIELD: Record<string, keyof Character> = {
   PRE: 'presencia',
 }
 
-/** Devuelve el modificador del personaje para la habilidad dada: habilidad + atributo asociado */
-function getCharMod(char: Character, skillName: string): number | null {
-  const fields = SKILL_TO_FIELDS[skillName]
-  if (fields !== undefined) {
-    const skillVal = (char[fields[0]] as number) ?? 0
-    const attrVal  = (char[fields[1]] as number) ?? 0
-    return skillVal + attrVal
+/** What the roller reads from the world of the campaign: its `WorldConfig`, never a world id (P4) */
+interface RollerWorld {
+  /** Skill table of the roller: `habilidadesTirador ?? habilidades` (Stormlight keeps its legacy table until T50) */
+  habilidades: HabilidadDef[]
+  /** Labels of that table, in its order: what the skill selectors list */
+  skills: string[]
+  /** Labels of the weapon skills of the Combate tab, found by field in that table */
+  armas: string[]
+  /** Investida skills that can attack (Alomancia) */
+  ataquesInvestidos: WorldConfig['habilidadesInvestidas']
+  /** `features.bonosServidor`: add the attribute bonus the server computes (`character.bonosAtributos`) to every modifier */
+  bonosAtributos: boolean
+  /** `features.artesMetalicas`: the Investiture does not come back with rest */
+  artesMetalicas: boolean
+}
+
+function useRollerWorld(): RollerWorld {
+  const cfg = useWorldConfig()
+  return useMemo(() => {
+    const habilidades = cfg.habilidadesTirador ?? cfg.habilidades
+    return {
+      habilidades,
+      skills: habilidades.map((h) => h.label),
+      armas: ARMAS.flatMap((field) => habilidades.find((h) => h.field === field)?.label ?? []),
+      ataquesInvestidos: cfg.habilidadesInvestidas.filter((h) => h.ataque),
+      bonosAtributos: cfg.features.bonosServidor,
+      artesMetalicas: cfg.features.artesMetalicas,
+    }
+  }, [cfg])
+}
+
+/** Prefix of the `derivadosSet` keys of an Investida skill: its name without accents and in lower case («Alomancia» → `alomancia`, as the `grupo` of `WorldConfig.derivados`) */
+const arteDe = (nombre: string) => nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/** «dado d8»; the table of the arts (L.163 / PDF 169) gives 1 = «sin tirada» with no degrees */
+const formatDado = (caras: number) => (caras > 1 ? `dado d${caras}` : 'sin dado')
+
+/**
+ * Devuelve el modificador del personaje para la habilidad dada: habilidad + atributo asociado.
+ * `bonosAtributos` (`features.bonosServidor`) suma además el bono de atributo que calcula el servidor (`character.bonosAtributos`:
+ * Bendiciones kandra, Tamaño desmedido…) al atributo de la habilidad, estándar o personalizada. `habilidades` = tabla del tirador del mundo.
+ */
+function getCharMod(char: Character, skillName: string, bonosAtributos: boolean, habilidades: HabilidadDef[]): number | null {
+  const bono = (attr: AttrField) => (bonosAtributos ? (char.bonosAtributos?.[attr] ?? 0) : 0)
+  const hab = habilidades.find((h) => h.label === skillName)
+  if (hab) {
+    const skillVal = (char[hab.field] as number) ?? 0
+    const attrVal  = (char[hab.atributo] as number) ?? 0
+    return skillVal + attrVal + bono(hab.atributo)
   }
   // Habilidades personalizadas
   for (let i = 1; i <= 6; i++) {
@@ -80,20 +98,20 @@ function getCharMod(char: Character, skillName: string): number | null {
     if (nombre && nombre.trim().toLowerCase() === skillName.trim().toLowerCase()) {
       const attrField = ATTR_CODE_TO_FIELD[attrCode?.toUpperCase?.() ?? '']
       const attrVal = attrField ? ((char[attrField] as number) ?? 0) : 0
-      return (valor ?? 0) + attrVal
+      return (valor ?? 0) + attrVal + (attrField ? bono(attrField) : 0)
     }
   }
   return null
 }
 
-/** Lista de habilidades del personaje (estándar + personalizadas no vacías) */
-function getCharSkills(char: Character): string[] {
+/** Lista de habilidades del personaje (las del tirador del mundo + personalizadas no vacías) */
+function getCharSkills(char: Character, skills: string[]): string[] {
   const custom: string[] = []
   for (let i = 1; i <= 6; i++) {
     const nombre = char[`habilidadPersonalizada${i}` as keyof Character] as string
     if (nombre?.trim()) custom.push(nombre.trim())
   }
-  return [...SKILLS, ...custom.filter((s) => !SKILLS.includes(s))]
+  return [...skills, ...custom.filter((s) => !skills.includes(s))]
 }
 
 /* Dado de trama: Oportunidad is the book's blue (brand), Complicación climbs topacio → heliodoro → rubí. */
@@ -522,7 +540,8 @@ function HistoryEntry({ r }: { r: AnyRollResult }) {
 
 // Tab: Habilidad
 function SkillTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?: Character | null }) {
-  const skills = char ? getCharSkills(char) : SKILLS
+  const world = useRollerWorld()
+  const skills = char ? getCharSkills(char, world.skills) : world.skills
   const [skillName, setSkillName] = useState(skills[0])
   const [modifier, setModifier] = useState(0)
   const [advantage, setAdvantage] = useState<AdvantageMode>('normal')
@@ -533,11 +552,11 @@ function SkillTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?:
   useEffect(() => {
     if (!char) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- existing auto-fill behaviour, kept as-is in the rebrand
-    setModifier(getCharMod(char, skillName) ?? 0)
-  }, [char, skillName])
+    setModifier(getCharMod(char, skillName, world.bonosAtributos, world.habilidades) ?? 0)
+  }, [char, skillName, world])
 
   const handleRoll = () => {
-    const effectiveMod = char ? (getCharMod(char, skillName) ?? 0) : modifier
+    const effectiveMod = char ? (getCharMod(char, skillName, world.bonosAtributos, world.habilidades) ?? 0) : modifier
     const r = rollSkill({ skillName, modifier: effectiveMod, advantage, useTrama })
     setResult(r)
     onRoll(r)
@@ -564,7 +583,7 @@ function SkillTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?:
             />
           </Field>
         ) : (
-          <AutoModifier label="Modificador" value={getCharMod(char, skillName) ?? 0} />
+          <AutoModifier label="Modificador" value={getCharMod(char, skillName, world.bonosAtributos, world.habilidades) ?? 0} />
         )}
       </div>
 
@@ -681,6 +700,7 @@ function DamageTab({ onRoll }: { onRoll: (r: AnyRollResult) => void }) {
 
 // Tab: Recuperación
 function RecoveryTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?: Character | null }) {
+  const world = useRollerWorld()
   const [voluntad, setVoluntad] = useState(char?.voluntad ?? 3)
   const [medicineBonus, setMedicineBonus] = useState(0)
   const [result, setResult] = useState<ReturnType<typeof rollRecovery> | null>(null)
@@ -771,6 +791,7 @@ function RecoveryTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; cha
             </div>
             <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>
               Distribuye entre <strong style={{ color: c.text }}>Salud</strong> y/o <strong style={{ color: c.text }}>Concentración</strong> como prefieras.
+              {world.artesMetalicas && <> La Investidura no se recupera con el descanso: usa <strong style={{ color: c.text }}>Beber vial</strong>.</>}
             </p>
             {result.medicineBonus !== 0 && (
               <p style={{ ...breakdownStyle, marginTop: 0 }}>
@@ -801,7 +822,8 @@ const legendStyle = (color: string): CSSProperties => ({ ...eyebrow, float: 'lef
 
 // Tab: Enfrentada
 function ContestedTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?: Character | null }) {
-  const charSkills = char ? getCharSkills(char) : SKILLS
+  const world = useRollerWorld()
+  const charSkills = char ? getCharSkills(char, world.skills) : world.skills
   const [atkName, setAtkName] = useState(char?.name ?? 'Atacante')
   const [atkSkill, setAtkSkill] = useState(charSkills[0])
   const [defName, setDefName] = useState('Defensor')
@@ -815,11 +837,11 @@ function ContestedTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; ch
     if (!char) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- existing sync behaviour, kept as-is in the rebrand
     setAtkName(char.name)
-    setAtkMod(getCharMod(char, atkSkill) ?? 0)
-  }, [char, atkSkill])
+    setAtkMod(getCharMod(char, atkSkill, world.bonosAtributos, world.habilidades) ?? 0)
+  }, [char, atkSkill, world])
 
   const handleRoll = () => {
-    const effectiveAtkMod = char ? (getCharMod(char, atkSkill) ?? 0) : atkMod
+    const effectiveAtkMod = char ? (getCharMod(char, atkSkill, world.bonosAtributos, world.habilidades) ?? 0) : atkMod
     const r = rollContested({ attackerName: atkName, defenderName: defName, attackerMod: effectiveAtkMod, defenderMod: defMod, useTrama })
     setResult(r)
     onRoll(r)
@@ -849,7 +871,7 @@ function ContestedTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; ch
               <Input type="number" value={atkMod} onChange={(e) => setAtkMod(Number(e.target.value))} style={numberInput} />
             </Field>
           ) : (
-            <AutoModifier label="Modificador" value={getCharMod(char, atkSkill) ?? 0} />
+            <AutoModifier label="Modificador" value={getCharMod(char, atkSkill, world.bonosAtributos, world.habilidades) ?? 0} />
           )}
         </fieldset>
 
@@ -1007,10 +1029,19 @@ function FreeTab({ onRoll }: { onRoll: (r: AnyRollResult) => void }) {
   )
 }
 
+// With more than three attack skills (Mistborn adds Alomancia) the selector takes two columns at every width: labels such as
+// «Armamento pesado» do not fit four in a row, not even in the 600px of the dialog; with three (Stormlight) it keeps its single row
+const attackSkillsGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }
+
 // Tab: Combate (ataque + daño simultáneos)
 function CombatTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?: Character | null }) {
-  const WEAPON_SKILLS = ['Armas ligeras', 'Armas pesadas', 'Agilidad']
-  const [skillName, setSkillName] = useState('Armas ligeras')
+  const world = useRollerWorld()
+  // The weapon skills of the world's table, then the Investida skills that attack (Alomancia) the character has; the director with no
+  // character picked gets them all and types the modifier. A skill that is no longer on offer (another character picked) falls back to the first
+  const investidas = world.ataquesInvestidos.filter((h) => !char || getCharMod(char, h.nombre, world.bonosAtributos, world.habilidades) !== null)
+  const WEAPON_SKILLS = [...world.armas, ...investidas.map((h) => h.nombre)]
+  const [pickedSkill, setSkillName] = useState(world.armas[0])
+  const skillName = WEAPON_SKILLS.includes(pickedSkill) ? pickedSkill : WEAPON_SKILLS[0]
   const [attackMod, setAttackMod] = useState(0)
   const [advantage, setAdvantage] = useState<AdvantageMode>('normal')
   const [diceCount, setDiceCount] = useState(1)
@@ -1020,15 +1051,27 @@ function CombatTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?
   const [useTrama, setUseTrama] = useState(true)
   const [result, setResult] = useState<ReturnType<typeof rollCombat> | null>(null)
 
+  // Die and reach of an Investida attack: the server computes them for the character (`derivadosSet`, L.163 / PDF 169)
+  const investida = investidas.find((h) => h.nombre === skillName)
+  const dado = investida ? char?.derivadosSet[`${arteDe(investida.nombre)}.dado`]?.total : undefined
+  const alcance = investida ? char?.derivadosSet[`${arteDe(investida.nombre)}.alcance`] : undefined
+  const detalleInvestida = investida && [dado !== undefined && formatDado(dado), alcance && `alcance ${alcance.total} ${alcance.unidad ?? 'm'}`].filter(Boolean).join(' · ')
+
   // Auto-rellenar modificador de ataque desde el personaje
   useEffect(() => {
     if (!char) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- existing auto-fill behaviour, kept as-is in the rebrand
-    setAttackMod(getCharMod(char, skillName) ?? 0)
-  }, [char, skillName])
+    setAttackMod(getCharMod(char, skillName, world.bonosAtributos, world.habilidades) ?? 0)
+  }, [char, skillName, world])
+
+  // Preselect the die of the Investida attack; the damage dice stay free to change afterwards
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- same auto-fill from the character as the modifier above
+    if (dado !== undefined && DAMAGE_DICE.includes(dado)) setDiceFaces(dado)
+  }, [dado])
 
   const handleRoll = () => {
-    const effectiveAttackMod = char ? (getCharMod(char, skillName) ?? 0) : attackMod
+    const effectiveAttackMod = char ? (getCharMod(char, skillName, world.bonosAtributos, world.habilidades) ?? 0) : attackMod
     const r = rollCombat({ skillName, attackModifier: effectiveAttackMod, advantage, diceCount, diceFaces, damageModifier: damageMod, damageAdvantage, useTrama })
     setResult(r)
     onRoll(r)
@@ -1046,7 +1089,9 @@ function CombatTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?
           options={WEAPON_SKILLS.map((s) => ({ value: s, label: s }))}
           value={skillName}
           onChange={setSkillName}
+          style={WEAPON_SKILLS.length > 3 ? attackSkillsGrid : undefined}
         />
+        {detalleInvestida && <p style={helperStyle}>{skillName}: {detalleInvestida}</p>}
       </div>
 
       {/* Modificador ataque — oculto cuando hay personaje (se auto-rellena) */}
@@ -1055,7 +1100,7 @@ function CombatTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?
           <Input type="number" value={attackMod} onChange={(e) => setAttackMod(Number(e.target.value))} style={{ ...numberInput, maxWidth: 160 }} />
         </Field>
       ) : (
-        <AutoModifier label="Mod. ataque" value={getCharMod(char, skillName) ?? 0} style={{ maxWidth: 160 }} />
+        <AutoModifier label="Mod. ataque" value={getCharMod(char, skillName, world.bonosAtributos, world.habilidades) ?? 0} style={{ maxWidth: 160 }} />
       )}
 
       {/* Ventaja */}

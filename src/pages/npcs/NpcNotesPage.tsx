@@ -418,8 +418,8 @@ export function NpcNotesPage() {
   })
 
   const { data: globalNpcs = [] } = useQuery({
-    queryKey: ['global-npcs'],
-    queryFn: () => globalNpcsApi.getAll(),
+    queryKey: ['global-npcs', cId],
+    queryFn: () => globalNpcsApi.getAll(cId),
   })
 
   const createMutation = useMutation({

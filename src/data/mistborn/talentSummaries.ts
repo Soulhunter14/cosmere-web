@@ -39,7 +39,7 @@ export const TALENT_SUMMARIES_MISTBORN: Record<string, string> = {
   'Investido': 'Sumas tu rango a tu Investidura máxima.',
   'Portentoso': 'Tus poderes cuentan con un grado extra de Alomancia para el alcance, y mantenerlos cuesta 1 punto de Investidura menos.',
   'Quemar instintivamente': 'Tras cada descanso largo eliges un poder alomántico: antes de cada escena puedes usar su acción Quemar.',
-  'Savantismo alomántico': 'Completar la meta «Convertirse en sabio» amplifica tu poder en 2 puntos de Investidura, pero Desprovisto de él sufres abstinencia.',
+  'Savantismo alomántico': 'Completar la meta «Convertirse en sabio» amplifica tu poder en 2 puntos de Investidura, y al estar Desprovisto de él sufres abstinencia.',
   'Trazas de metal': 'Aunque te queden 0 puntos de Investidura o estés Desprovisto, sigues pudiendo usar la versión naciente de tus poderes alománticos.',
   'Mezcla metálica': 'Al hacer una prueba para un poder alomántico, gastas una Oportunidad para usar también otro poder naciente.',
   'Quemar selectivamente': 'Puedes usar un poder alomántico quedando Desprovisto de él en lugar de gastar Investidura.',
@@ -142,7 +142,7 @@ export const TALENT_SUMMARIES_MISTBORN: Record<string, string> = {
   'Tengo justo lo necesario': 'Gastas 1 punto de concentración para obtener un objeto como si lo hubieras comprado antes (equipo, planos de un edificio, una carta…).',
   // ── Investigador · Agente (shared specialty; Oportunista is the main talent of Agente) · diagram L.80 / PDF 86 ──
   'Oportunista': 'Una vez por ronda repites un dado de trama y te quedas con el segundo resultado.',
-  'Ojo avizor': 'Cuando un aliado al que puedes influir, a 6 m o menos, tira un dado de trama, usas Oportunista sobre ese dado como si fuera tuyo.',
+  'Ojo avizor': 'Usas Oportunista sobre el dado de trama de un aliado dispuesto a que lo hagas y que esté a 6 m o menos de ti.',
   'Haz que hablen': 'Gastas 1 punto de concentración para tirar Deducción contra la Defensa espiritual de un personaje y descubrir sus motivaciones; durante la escena puedes subir la apuesta al aprovecharlas.',
   'Análisis rápido': 'Gastas 2 puntos de concentración para obtener 2 acciones para pruebas cognitivas con Usar una habilidad, Obtener ventaja o un talento de Agente.',
   'Recopilar pruebas': 'Pericia en Códigos legales; superar una prueba cognitiva contra un objetivo te deja Concentrado.',
@@ -195,7 +195,7 @@ export const TALENT_SUMMARIES_MISTBORN: Record<string, string> = {
   'Cuerpo y mente': 'Pericia en arma, una habilidad extra de Ilustración y la posibilidad de elegir con ella habilidades físicas.',
   'Conoce tu momento': 'Desde que empieza cada ronda hasta tu turno, tus defensas suben 2.',
   'Contemplación profunda': 'Reasignas hasta 2 habilidades y pericias de Ilustración.',
-  'Conocimientos aplicados': 'Después de que Obtienes ventaja, el objetivo debe resistirse a tu influencia o sufrir una desventaja en su próxima prueba.',
+  'Conocimientos aplicados': 'Después de que uses Obtener ventaja, el objetivo debe resistirse a tu influencia o sufrir una desventaja en su próxima prueba.',
   'Contingencia': 'Gastas 2 puntos de concentración para retirar una Complicación de la prueba de un aliado situado a 6 m o menos.',
   'Punto de inflexión': 'Gastas 2 puntos de concentración para tirar Deducción contra la Defensa cognitiva del líder enemigo, con ventaja si juegas un turno lento; si la superas, tus aliados y tú obtenéis 1 acción en vuestro siguiente turno.',
   // ── Soldado · Guerrero (shared specialty; Posición vigilante is the main talent of Guerrero, diagram L.112 / PDF 118) · diagram L.113 / PDF 119 ──
@@ -207,7 +207,7 @@ export const TALENT_SUMMARIES_MISTBORN: Record<string, string> = {
   'Precaución': 'No puedes quedar Sorprendido mientras te quede concentración; cuando la pierdes de forma involuntaria, reduces la pérdida en tus grados en Disciplina.',
   'Acometidas veloces': 'Con 1 punto de concentración encadenas una segunda Acometida con la misma arma.',
   // ── Oficial · Líder (shared specialty; Mando decisivo is the main talent of Líder) · diagram L.120 / PDF 126 ──
-  'Mando decisivo': 'Gastas 1 punto de concentración para dar a un aliado a 6 m o menos un dado de mando d4, que puede añadir al resultado de uno de sus dados de su próxima prueba.',
+  'Mando decisivo': 'Gastas 1 punto de concentración para dar a un aliado a 6 m o menos un dado de mando d4, que puede añadir al resultado de uno de los dados de su próxima prueba.',
   'A través de la refriega': 'Un aliado a 6 m o menos puede usar Destrabarse u Obtener ventaja como reacción.',
   'Abastecimiento adecuado': 'Obtienes pericia en Logística militar; gastas 2 puntos de concentración para añadir una Oportunidad a tu prueba para una solicitud de recursos.',
   'Mando confiado': 'Aumentas la magnitud de tu dado de mando y, gastando 1 punto de concentración, sumas su resultado a una tirada de d20 de Intimidación, Liderazgo o Persuasión.',
@@ -375,7 +375,7 @@ export const TALENT_SUMMARIES_MISTBORN: Record<string, string> = {
   'Dejarse llevar': 'Almacenando determinación, resistir influencias cuesta 1 de concentración más, a cambio de ventaja en Perspicacia y Persuasión.',
   'Esencia indomable': 'Al recobrar el conocimiento, cada carga que gastes te da un dado de recuperación.',
   'Intensidad de propósito': 'Decantando determinación, una Oportunidad deja Resueltos a ti y a tus aliados y Agotados [−1] a tus enemigos.',
-  'Resolución inquebrantable': 'Decantas determinación con cargas extra: efectos más breves pero más intensos, ignoras lesiones y quedas Mejorado [Voluntad].',
+  'Resolución inquebrantable': 'Decantas determinación invirtiendo cargas adicionales: efectos más breves pero más intensos, e ignoras lesiones.',
   'Voluntad curtida': 'La primera vez que decantas determinación, quedas Resuelto o ignoras una lesión temporal.',
   // ── Feruquimia de estaño (Precisión de estaño also appears in the alomantic tree) · diagram L.239 / PDF 245 ──
   'Almacenamiento multisensorial': 'Almacenas tantos sentidos como tu rango; cada sentido extra cuesta una carga y te deja Mermado [Discernimiento −1].',
@@ -386,7 +386,7 @@ export const TALENT_SUMMARIES_MISTBORN: Record<string, string> = {
   // ── Feruquimia de hierro · diagram L.242 / PDF 248 ──
   'Evasión liviana': 'Almacenando peso, reduces el daño por golpe o laceración y te apartas 3 m sin provocar Acometidas reactivas.',
   'Golpe vigoroso': 'Decantando peso, golpeas con arma cuerpo a cuerpo o sin armas: más daño y, si el objetivo es menor, lo empujas.',
-  'Maestro ajustador': 'Antes de una acción o suceso que almacenar o decantar peso pudiera afectar, gastas 1 punto de concentración para hacerlo; puedes mantener la decantación gastando cargas.',
+  'Maestro ajustador': 'Antes de una acción o suceso que almacenar o decantar peso pudiera afectar, gastas 1 punto de concentración para hacerlo.',
   'Masa crítica': 'Decantas peso con cargas de más para obtener efectos más potentes pero más breves.',
   'Objeto inamovible': 'Si alguien más pequeño te golpea cuerpo a cuerpo, lo tumbas.',
   'Pies ligeros': 'Almacenando peso, tienes ventaja en las pruebas de Velocidad que no sean ataques y saltas mucho más.',

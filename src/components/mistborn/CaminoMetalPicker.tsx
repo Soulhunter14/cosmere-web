@@ -3,20 +3,24 @@
  * filtered by the era of the campaign and disabled for the ancestries that cannot take them, plus the «Camino inicial» choice when the
  * character already has a heroic path (L.17-18 / PDF 23-24, §3 k, §7.4 step 2).
  *
- * Only the director opens it, and only outside edit mode (Q6, §7.4 rule 5). It writes `caminoMetal` and `caminoInicial` and nothing
- * else: the rest of the flow (starting skill, powers, goals) is T28. Loaded lazily from components/mistborn/index.ts and importing its
+ * Only the director opens it, and only outside edit mode (Q6, §7.4 rule 5). It is the first step of the flow «al elegir camino» (T28):
+ * `onConfirm` hands the path, its starting role and the art and mode of its MetalPicker to the sheet, which saves everything with an
+ * immediate mutation. With `onQuitar` it also offers to remove the path, and with `personaje` and `entorno` it warns when the chosen
+ * path finds no free cognitive slot for its Investida skill (Q4). Loaded lazily from components/mistborn/index.ts and importing its
  * data BY FILE, so none of it reaches the main chunk (§8, risk 6).
  */
 import { useId, useState } from 'react'
-import { TriangleAlert } from 'lucide-react'
+import { Trash2, TriangleAlert } from 'lucide-react'
 import { Button, Segmented, Sheet } from '../ui'
-import { CAMINOS_NACIDOS_DEL_METAL, type CaminoNacidoDelMetal } from '../../data/mistborn/caminosNacidosDelMetal'
+import { CAMINOS_NACIDOS_DEL_METAL, type CaminoNacidoDelMetal, type SeleccionMeta } from '../../data/mistborn/caminosNacidosDelMetal'
+import type { ArteMetal } from '../../data/mistborn/metales'
 import { ASCENDENCIAS_MB } from '../../data/mistborn/origenes'
-import type { Era } from '../../types'
+import type { Character, Era } from '../../types'
 import { useWorldConfig } from '../../store/campaignStore'
 import { isAvailable } from '../../worlds'
 import { c, eyebrow, fs, pill, radius, tone, toneFrom } from '../../theme'
 import { FilaOpcion } from './FilaOpcion'
+import { faltanHuecosCognitivos, metalesDelCamino, type EntornoCaminoMetal } from './caminoMetalFlujo'
 
 export interface CaminoMetalPickerProps {
   open: boolean
@@ -31,7 +35,13 @@ export interface CaminoMetalPickerProps {
   caminoInicial: '' | 'heroico' | 'metal'
   /** The character has a heroic path: the picker asks which of the two is the starting one */
   tieneCaminoHeroico: boolean
-  onConfirm: (caminoMetal: string, caminoInicial: 'heroico' | 'metal') => void
+  /** `metales`: art(s) and goal mode of the MetalPicker that follows when the path is a different one (§7.5) */
+  onConfirm: (caminoMetal: string, caminoInicial: 'heroico' | 'metal', metales: { arte: ArteMetal | 'ambas'; modo: SeleccionMeta }) => void
+  /** Removes the path the character has (the sheet asks for confirmation first, §7.4); without it there is no such button */
+  onQuitar?: () => void
+  /** The character and the slot layout of the sheet: with both, a path whose Investida skill finds no free cognitive slot is warned (Q4) */
+  personaje?: Character
+  entorno?: EntornoCaminoMetal
 }
 
 /** «Un poder alomántico», «Todos los poderes feruquímicos», «Un poder alomántico y un poder feruquímico»: the «Artes metálicas» column of L.19 / PDF 25 */
@@ -43,10 +53,13 @@ function textoPoderes(p: CaminoNacidoDelMetal['poderes']): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1)
 }
 
-export function CaminoMetalPicker({ open, onClose, era, ascendencia, caminoMetal, caminoInicial, tieneCaminoHeroico, onConfirm }: CaminoMetalPickerProps) {
+export function CaminoMetalPicker({
+  open, onClose, era, ascendencia, caminoMetal, caminoInicial, tieneCaminoHeroico, onConfirm, onQuitar, personaje, entorno,
+}: CaminoMetalPickerProps) {
   const cfg = useWorldConfig()
   const notaId = useId()
   const motivoId = useId()
+  const huecosId = useId()
 
   // The era only filters the options (§3 b); the ancestry disables them: the kandra take none (L.18 / PDF 24) and the other
   // restrictions come from the main talent of each path (nacido de la bruma and feruquimista: human only, L.141 / PDF 147, L.146 / PDF 152)
@@ -62,6 +75,11 @@ export function CaminoMetalPicker({ open, onClose, era, ascendencia, caminoMetal
   // Without a heroic path the metalborn one is the starting path, with no question (§7.4 step 2)
   const inicialEfectivo = tieneCaminoHeroico ? inicial : 'metal'
   const hayCambio = seleccion !== '' && (seleccion !== caminoMetal || inicialEfectivo !== caminoInicial)
+  const elegido = caminos.find((p) => p.id === seleccion)
+  // A different path goes on to its MetalPicker; the same one only changes its starting role and saves at once
+  const otroCamino = caminoMetal === '' || seleccion !== caminoMetal
+  // Investida skills of the chosen path without a free cognitive slot once the current path is removed: the director frees one (Q4)
+  const faltan = personaje && entorno && elegido && otroCamino ? faltanHuecosCognitivos(personaje, elegido.id, entorno) : []
 
   return (
     <Sheet
@@ -73,7 +91,15 @@ export function CaminoMetalPicker({ open, onClose, era, ascendencia, caminoMetal
       footer={
         <>
           <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
-          <Button size="lg" style={{ flex: 2 }} disabled={!hayCambio} onClick={() => onConfirm(seleccion, inicialEfectivo)}>Asignar camino</Button>
+          <Button
+            size="lg"
+            style={{ flex: 2 }}
+            disabled={!hayCambio || !elegido || faltan.length > 0}
+            aria-describedby={faltan.length > 0 ? huecosId : undefined}
+            onClick={() => elegido && onConfirm(seleccion, inicialEfectivo, metalesDelCamino(elegido))}
+          >
+            {otroCamino ? 'Continuar' : 'Guardar'}
+          </Button>
         </>
       }
     >
@@ -137,6 +163,33 @@ export function CaminoMetalPicker({ open, onClose, era, ascendencia, caminoMetal
           <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5, marginTop: 8 }}>
             El camino inicial da su talento principal sin ocupar un hueco de talento. Si es el de nacido del metal, además obtienes un grado
             gratuito en su habilidad inicial (si la tiene); si es el heroico, el talento principal del camino de nacido del metal ocupa un hueco.
+          </p>
+        </div>
+      )}
+
+      {faltan.length > 0 && (
+        <p
+          id={huecosId}
+          role="note"
+          style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 16, padding: '10px 14px', borderRadius: radius.sm,
+            background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`, fontSize: fs.sm, color: c.text, lineHeight: 1.5,
+          }}
+        >
+          <TriangleAlert size={17} aria-hidden style={{ color: tone.topacio.fg, flexShrink: 0, marginTop: 1 }} />
+          <span>
+            No queda ningún hueco libre de habilidad cognitiva para {faltan.join(' y ')}. Libera {faltan.length > 1 ? 'dos' : 'uno'} en la pestaña
+            Atributos, en modo edición, y vuelve a asignar el camino.
+          </span>
+        </p>
+      )}
+
+      {onQuitar && caminoMetal !== '' && (
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${c.border}` }}>
+          <Button variant="danger" icon={<Trash2 size={16} aria-hidden />} onClick={onQuitar}>Quitar camino</Button>
+          <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5, marginTop: 8 }}>
+            Quita el talento principal, la habilidad Investida y los poderes obtenidos por el camino; los poderes de otro origen y las metas
+            se conservan.
           </p>
         </div>
       )}

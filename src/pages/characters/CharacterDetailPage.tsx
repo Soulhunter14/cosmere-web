@@ -1,15 +1,17 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
   Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
+import { metasApi } from '../../api/metas'
 import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import {
-  Button, Card, ConfirmDialog, IconButton, Input, SectionTitle, Select, Sheet, Spinner, TabPanel, Tabs, Textarea,
+  Button, Card, ConfirmDialog, ErrorMessage, IconButton, Input, SectionTitle, Select, Sheet, Spinner, TabPanel, Tabs, Textarea,
 } from '../../components/ui'
+import type { EntornoCaminoMetal, MetalPickerProps, SeleccionCaminoMetal } from '../../components/mistborn'
 import type { Character, StatDesglose, UpdateCharacterRequest } from '../../types'
 import type { AttrField, HabilidadDef } from '../../worlds/types'
 import { isAvailable } from '../../worlds'
@@ -81,6 +83,10 @@ const FORMA_TONE = toneFrom(CANTOR_COLOR)
 // reach the main chunk (§7.4 rule 4, §8 risk 6). Each one is rendered only while its picker is open.
 const CaminoMetalPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.CaminoMetalPicker })))
 const BendicionPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.BendicionPicker })))
+const MetalPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.MetalPicker })))
+
+/** A metalborn path chosen in CaminoMetalPicker that waits for its metals (MetalPicker, §7.4 step 4) */
+interface CaminoPendiente { camino: string; caminoInicial: 'heroico' | 'metal'; arte: MetalPickerProps['arte']; modo: MetalPickerProps['modo'] }
 
 /* ─── Local primitives ──────────────────────────────────────────────────── */
 
@@ -450,9 +456,12 @@ export function CharacterDetailPage() {
   const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
   const [form, setForm] = useState<Character | null>(null)
   const [tab, setTab] = useState<Tab>('caracteristicas')
-  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'bendicion' | null>(null)
+  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'metal' | 'bendicion' | null>(null)
   const [enCombate, setEnCombate] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  // Flow «al elegir camino» (§7.4): the path that waits for its metals, and the confirmation of a removal or of a change of path
+  const [caminoPendiente, setCaminoPendiente] = useState<CaminoPendiente | null>(null)
+  const [confirmarCamino, setConfirmarCamino] = useState<{ tipo: 'quitar' } | { tipo: 'cambiar'; camino: string; seleccion: SeleccionCaminoMetal } | null>(null)
   const nameId = useId()
   const levelId = useId()
   const fieldId = useId()
@@ -483,28 +492,93 @@ export function CharacterDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, chId] }),
   })
 
-  // Identity changes that save at once, outside edit mode (the metalborn path and the Blessings, §7.4 rule 5): one PUT with the whole
-  // character plus the change, optimistic by prefix so that every cached copy of it (with or without `enCombate`, §2) moves together.
-  // The base is the copy fetched out of combat, never `form`
+  // Immediate identity changes, outside edit mode (§7.4 rule 5): one PUT with the whole character plus the change, optimistic by prefix
+  // so that every cached copy of it (with or without `enCombate`, §2) moves together. The base is the copy fetched out of combat, never
+  // `form`. These three helpers are shared by the mutations below: snapshot (before), optimistic merge and restore (if it fails)
+  const prefijoFicha = ['character', cId, chId]
+  const instantanea = async () => {
+    await qc.cancelQueries({ queryKey: prefijoFicha })
+    return { previas: qc.getQueriesData<Character>({ queryKey: prefijoFicha }) }
+  }
+  const optimista = (cambio: Partial<Character>) => qc.setQueriesData<Character>({ queryKey: prefijoFicha }, (old) => old && { ...old, ...cambio })
+  const restaurar = (ctx: { previas: [QueryKey, Character | undefined][] } | undefined) => ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data))
+
+  // The Blessings (T27). The metalborn path has its own mutations below: it also writes talents, skills and powers and creates goals
   const identidadMutation = useMutation({
-    mutationFn: (cambio: Partial<Pick<Character, 'caminoMetal' | 'caminoInicial' | 'bendiciones'>>) => {
+    mutationFn: (cambio: Partial<Pick<Character, 'bendiciones'>>) => {
       const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? char
       if (!base) return Promise.reject(new Error('The character is not loaded'))
       return charactersApi.update(cId, chId, { ...base, ...cambio } as UpdateCharacterRequest)
     },
     onMutate: async (cambio) => {
-      const prefix = ['character', cId, chId]
-      await qc.cancelQueries({ queryKey: prefix })
-      const previas = qc.getQueriesData<Character>({ queryKey: prefix })
-      qc.setQueriesData<Character>({ queryKey: prefix }, (old) => old && { ...old, ...cambio })
-      return { previas }
+      const ctx = await instantanea()
+      optimista(cambio)
+      return ctx
     },
-    onError: (_error, _cambio, ctx) => ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onError: (_error, _cambio, ctx) => restaurar(ctx),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['character', cId, chId] })
       qc.invalidateQueries({ queryKey: ['characters', cId] })
     },
   })
+
+  // What the metalborn-path flow needs from the sheet: where the custom skills of each attribute go (the cognitive ones, 2 and 5) and
+  // the attribute of each Investida skill of the world (§7.4 step 3)
+  const entornoCamino: EntornoCaminoMetal = { huecos: ATRIBUTO_SLOTS, investidas: cfg.habilidadesInvestidas }
+
+  // «Al elegir camino de nacido del metal» (§7.4, T28): steps 1-3 and 5-6; step 4 is the MetalPicker, whose choice arrives in `seleccion`.
+  // A different path first undoes the current one in the same PUT; the same path with `seleccion.poderes === null` only changes its
+  // starting role. Only outside edit mode. The plan is computed ONCE from the copy out of combat (never `form`) before the optimistic
+  // merge, so writing it into the cached copies and into the PUT gives the same character. The flow and its data load lazily, with the
+  // pickers (§7.4 rule 4, §8 risk 6)
+  const aplicarCaminoMetal = useMutation({
+    mutationFn: async ({ camino, seleccion }: { camino: string; seleccion: SeleccionCaminoMetal }) => {
+      const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? char
+      if (!base) throw new Error('The character is not loaded')
+      const { planAplicarCaminoMetal, enlazarMetas } = await import('../../components/mistborn')
+      const plan = planAplicarCaminoMetal(base, camino, seleccion, entornoCamino)
+      if (plan.faltan.length > 0) throw new Error(`No free cognitive slot for ${plan.faltan.join(', ')}`)
+      // Optimistic update by prefix (§2): the sheet moves at once, also with ?enCombate=true; the goal ids arrive with the refetch
+      optimista(plan.cambio)
+      // 5. The goals of the path, whose ids go into `metaId` of the powers they train; 6. one PUT. If it fails, the goals go away too
+      const creadas: number[] = []
+      try {
+        for (const meta of plan.metas) creadas.push((await metasApi.create(cId, chId, { titulo: meta.titulo, descripcion: meta.descripcion })).id)
+        const cambio = plan.cambio.poderes ? { ...plan.cambio, poderes: enlazarMetas(plan.cambio.poderes, plan.metas, creadas) } : plan.cambio
+        return await charactersApi.update(cId, chId, { ...base, ...cambio } as UpdateCharacterRequest)
+      } catch (error) {
+        await Promise.allSettled(creadas.map((metaId) => metasApi.delete(cId, chId, metaId)))
+        throw error
+      }
+    },
+    onMutate: instantanea,
+    onError: (_error, _vars, ctx) => restaurar(ctx),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['character', cId, chId] })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+      // The new goals show up in Metas at once, not after the 30 s of staleTime
+      qc.invalidateQueries({ queryKey: ['metas', cId, chId] })
+    },
+  })
+
+  // «Quitar camino» (§7.4): the inverse cleanup, the same kind of immediate change (the sheet confirms it first with a ConfirmDialog)
+  const quitarCaminoMetal = useMutation({
+    mutationFn: async () => {
+      const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? char
+      if (!base) throw new Error('The character is not loaded')
+      const { planQuitarCaminoMetal } = await import('../../components/mistborn')
+      const cambio = planQuitarCaminoMetal(base)
+      optimista(cambio)
+      return charactersApi.update(cId, chId, { ...base, ...cambio } as UpdateCharacterRequest)
+    },
+    onMutate: instantanea,
+    onError: (_error, _vars, ctx) => restaurar(ctx),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['character', cId, chId] })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+  const caminoOcupado = aplicarCaminoMetal.isPending || quitarCaminoMetal.isPending
 
   if (isLoading || !char) {
     return (
@@ -731,9 +805,14 @@ export function CharacterDetailPage() {
               const pathTone = path ? toneFrom(path.color) : undefined
               const invTone = invDef ? toneFrom(invDef.color) : undefined
               // A radiant order is changed by the director in edit mode, with the rest of the form. A metalborn path is assigned by the
-              // director OUTSIDE edit mode, with an immediate save (§7.4 rule 5, Q6)
+              // director OUTSIDE edit mode, with an immediate save (§7.4 rule 5, Q6); not again while the previous save is running
               const invPick = caminoInv?.field === 'caminoMetal'
-                ? (!editing && isGm ? () => setPicker('caminoMetal') : undefined)
+                ? (!editing && isGm ? () => {
+                    if (caminoOcupado) return
+                    aplicarCaminoMetal.reset()
+                    quitarCaminoMetal.reset()
+                    setPicker('caminoMetal')
+                  } : undefined)
                 : (editing && isGm ? () => setPicker('radiante') : undefined)
               // Blessings (kandra): the owner or the director pick them outside edit mode, with an immediate save. For anyone but the
               // director, once one is saved the picker opens read-only (Q16)
@@ -785,6 +864,13 @@ export function CharacterDetailPage() {
                       </div>
                     )}
                   </div>
+                  {/* The immediate save of the Investida path failed: the optimistic copy was already rolled back */}
+                  {caminoInv && (aplicarCaminoMetal.isError || quitarCaminoMetal.isError) && (
+                    <ErrorMessage
+                      message={`No se ha podido guardar el ${caminoInv.label.toLowerCase()}. Inténtalo de nuevo.`}
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
                 </div>
               )
             })()}
@@ -1406,7 +1492,7 @@ export function CharacterDetailPage() {
         onClose={() => setPicker(null)}
       />
 
-      {/* Nacidos de la bruma: lazy pickers, mounted only while open (§7.4 rule 4). They save at once (identidadMutation) and are never opened in edit mode */}
+      {/* Nacidos de la bruma: lazy pickers, mounted only while open (§7.4 rule 4). They save at once and are never opened in edit mode */}
       {picker === 'caminoMetal' && (
         <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>
           <CaminoMetalPicker
@@ -1417,10 +1503,76 @@ export function CharacterDetailPage() {
             caminoMetal={char.caminoMetal}
             caminoInicial={char.caminoInicial}
             tieneCaminoHeroico={!!char.caminoHeroico}
-            onConfirm={(caminoMetal, caminoInicial) => { identidadMutation.mutate({ caminoMetal, caminoInicial }); setPicker(null) }}
+            personaje={char}
+            entorno={entornoCamino}
+            onQuitar={() => { setPicker(null); setConfirmarCamino({ tipo: 'quitar' }) }}
+            onConfirm={(camino, caminoInicial, metales) => {
+              if (editing) return
+              if (camino === char.caminoMetal) {
+                // The same path: only its starting role changes (main talent and free degree); there are no metals to choose
+                setPicker(null)
+                aplicarCaminoMetal.mutate({ camino, seleccion: { caminoInicial, poderes: null, paraMeta: [] } })
+              } else {
+                // Step 4 of the flow: the metals of the new path
+                setCaminoPendiente({ camino, caminoInicial, ...metales })
+                setPicker('metal')
+              }
+            }}
           />
         </Suspense>
       )}
+      {picker === 'metal' && caminoPendiente && (
+        <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={560}><Spinner /></Sheet>}>
+          <MetalPicker
+            open
+            onClose={() => { setPicker(null); setCaminoPendiente(null) }}
+            arte={caminoPendiente.arte}
+            modo={caminoPendiente.modo}
+            era={era}
+            caminoMetal={caminoPendiente.camino}
+            // Powers the character keeps from another origin (spike, lerasium alloy, medallion); those of the current path go away with it
+            yaElegidos={char.poderes.filter((p) => p.origen !== 'camino').map((p) => `${p.arte}:${p.metal}`)}
+            onConfirm={(poderes, paraMeta) => {
+              const { camino, caminoInicial } = caminoPendiente
+              const seleccion: SeleccionCaminoMetal = { caminoInicial, poderes, paraMeta }
+              setPicker(null)
+              setCaminoPendiente(null)
+              if (editing) return
+              // Changing an assigned path removes what the previous one gave, so it asks first (every removal is confirmed)
+              if (char.caminoMetal) setConfirmarCamino({ tipo: 'cambiar', camino, seleccion })
+              else aplicarCaminoMetal.mutate({ camino, seleccion })
+            }}
+          />
+        </Suspense>
+      )}
+      <ConfirmDialog
+        open={confirmarCamino?.tipo === 'quitar'}
+        title={`¿Quitar el ${(cfg.caminoInvestido?.label ?? 'camino').toLowerCase()}?`}
+        message="Se quitarán el talento principal, la habilidad Investida y los poderes obtenidos por el camino. Los poderes de otro origen y las metas ya creadas se conservan."
+        confirmLabel="Quitar camino"
+        tone="danger"
+        icon="trash"
+        onConfirm={() => { setConfirmarCamino(null); if (!editing) quitarCaminoMetal.mutate() }}
+        onCancel={() => setConfirmarCamino(null)}
+      />
+      <ConfirmDialog
+        open={confirmarCamino?.tipo === 'cambiar'}
+        title="¿Cambiar de camino?"
+        message={(() => {
+          const nombre = (id: string) => cfg.caminoInvestido?.caminos.find((p) => p.id === id)?.nombre ?? id
+          const nuevo = confirmarCamino?.tipo === 'cambiar' ? nombre(confirmarCamino.camino) : ''
+          return `Se quitarán el talento principal, la habilidad Investida y los poderes obtenidos por el camino de ${nombre(char.caminoMetal)}, y se aplicará el de ${nuevo}. Los poderes de otro origen y las metas ya creadas se conservan.`
+        })()}
+        confirmLabel="Cambiar camino"
+        tone="danger"
+        icon="warning"
+        onConfirm={() => {
+          const pendiente = confirmarCamino
+          setConfirmarCamino(null)
+          if (pendiente?.tipo === 'cambiar' && !editing) aplicarCaminoMetal.mutate({ camino: pendiente.camino, seleccion: pendiente.seleccion })
+        }}
+        onCancel={() => setConfirmarCamino(null)}
+      />
       {picker === 'bendicion' && (
         <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>
           <BendicionPicker

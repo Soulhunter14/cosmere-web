@@ -9,7 +9,7 @@
  * - parsePrereq(text, known?, rules?)    → PrereqClause[]  typed clauses of a prerequisite string.
  * - allTalentNames(rules?)               → every talent name in the data (used to split «o» safely).
  * - buildTalentGraph(options, rules?)    → TalentGraph     one node per occurrence (id = `${treeId}/${name}`), identity by name.
- * - graphOptionsFromCharacter(ch, extra?)→ options for buildTalentGraph from a Character.
+ * - graphOptionsFromCharacter(ch, extra?, rules?) → options for buildTalentGraph from a Character.
  * - talentStateFromCharacter(ch, extra?, rules?) → TalentState for evaluate / cheapestRoute / cascadeRemove.
  * - evaluate(graph, state)               → TalentEvaluation per-node state, gates, distance, minLevel, missing texts.
  * - cheapestRoute(graph, state, targetId, opts?) → RouteResult ordered steps, skills, earliest level, gates, «o» branches.
@@ -48,6 +48,14 @@
  *   rules it was built from (`graph.rules`), which talentBudget and cheapestRoute read. No world is named and no world id is
  *   compared here: data are told apart by their shape (`'ordenes' in p` = Potencia, `'surges' in c` = RadiantOrder, an ancestry
  *   tree that is a plain list = the singer tree).
+ * - Investida paths with a flat tree, powers and ancestry trees (T36, §7.7 #3): an Investida path that is not a radiant order
+ *   gets one tree `caminoInvestido:<id>` (its main talent is the key node, auto-granted when it is the starting path); each power
+ *   of the character that is not a Potencia gets a tree `poder:<arte>:<metal>`; an ancestry with a calendar of its own
+ *   (rules.arbolesAscendencia, not the singer list) gets a tree `ascendencia:<slug>` whose auto-granted talents are owned for free.
+ *   The goal gate (`meta`, implicit): the trees of the powers stay closed until that power is complete, and the talents of the
+ *   path other than its main talent until at least one goal of the path is concluded (L.75 / PDF 81; Q26). The starting path is
+ *   the heroic one unless `caminoInvestidoInicial` (Character.caminoInicial, Q7): then the main talent of the Investida path fills
+ *   the level-1 main slot and the heroic main talent costs a talent like any other.
  */
 
 import type { Character, PoderPersonaje } from '../types'
@@ -165,6 +173,24 @@ function arbolCantorDe(rules: TalentRules): TalentoCantor[] | null {
   for (const arbol of Object.values(rules.arbolesAscendencia)) if (Array.isArray(arbol)) return arbol
   return null
 }
+/** An Investida path with a flat tree (main talent plus a list of talents): every CaminoInvestidoDef that is not a RadiantOrder */
+type CaminoPlano = Exclude<CaminoInvestidoDef, RadiantOrder>
+/** Calendar and tree of an ancestry (`autoGranted`, `hitos`, `acepta`, `talentos`): every entry of rules.arbolesAscendencia that is not the singer list */
+type ArbolAscendencia = Exclude<TalentRules['arbolesAscendencia'][string], TalentoCantor[]>
+/** The Investida path with a flat tree whose id is `id`, else null. Radiant orders never: they keep the `radiante:*` block (P1) */
+function caminoPlanoDe(rules: TalentRules, id: string | null | undefined): CaminoPlano | null {
+  if (!id) return null
+  return rules.caminosInvestidos.find((c): c is CaminoPlano => !esOrdenRadiante(c) && c.id === id) ?? null
+}
+/** Calendar and tree of an ancestry by the slug of Character.ascendencia («Sangre koloss» → sangre-koloss); null without one, or for the singer list */
+function arbolDeAscendencia(rules: TalentRules, ascendencia: string | null | undefined): ArbolAscendencia | null {
+  const key = slug(ascendencia ?? '')
+  if (!key || !Object.hasOwn(rules.arbolesAscendencia, key)) return null
+  const arbol = rules.arbolesAscendencia[key]
+  return Array.isArray(arbol) ? null : arbol
+}
+/** Colour of the trees that have no colour of their own in the data: the ancestry trees (as the singer one) and the powers outside a path */
+const COLOR_SIN_CAMINO = '#a78bfa'
 
 type CatalogKind = 'heroicoPrincipal' | 'heroico' | 'radiante' | 'cantor' | 'caminoInvestido' | 'poder' | 'ascendencia'
 interface Catalog {
@@ -180,6 +206,14 @@ interface Catalog {
   poderByNorm: Map<string, string>
   /** `${arte}:${metal}` → visible name of the power («Alomancia de acero») */
   poderNombre: Map<string, string>
+  /** `${arte}:${metal}` of the powers that are born complete and have no goal (`requiereMeta: false`, «Atium intuitivo», L.133 / PDF 139) */
+  poderSinMeta: Set<string>
+  /**
+   * Every kind of talent the world has, in this order: the seven kinds of the Stormlight data (ALL_KINDS), then the kinds whose trees
+   * only exist with that data shape (flat Investida paths, powers that are not a Potencia, ancestry calendars). A level slot accepts
+   * them all; Stormlight keeps exactly the seven, so its slots do not change (P1)
+   */
+  slotKinds: SlotKind[]
 }
 /** One catalog per world, cached by `rules.id` */
 const catalogCache = new Map<TalentRules['id'], Catalog>()
@@ -224,12 +258,18 @@ function catalog(rules: TalentRules): Catalog {
   }
   for (const n of names) nonTalent.delete(n)
   const poderesDef = rules.poderes.filter((p): p is PoderDef => !esPotencia(p))
+  const slotKinds: SlotKind[] = [...ALL_KINDS]
+  if (rules.caminosInvestidos.some((c) => !esOrdenRadiante(c))) slotKinds.push('caminoInvestido')
+  if (poderesDef.length) slotKinds.push('poder')
+  if (Object.values(rules.arbolesAscendencia).some((a) => !Array.isArray(a))) slotKinds.push('ascendencia')
   const cat: Catalog = {
     names, kind, nonTalent,
     skillByNorm: new Map(Object.entries(rules.skillNameMap).map(([k, v]) => [norm(k), v])),
     surgeByNorm: new Set<string>([...SURGE_NAMES, ...rules.poderes.filter(esPotencia).map((p) => p.name)].map(norm)),
     poderByNorm: new Map(poderesDef.map((p) => [norm(p.name), poderKey(p)])),
     poderNombre: new Map(poderesDef.map((p) => [poderKey(p), p.name])),
+    poderSinMeta: new Set(poderesDef.filter((p) => !p.requiereMeta).map(poderKey)),
+    slotKinds,
   }
   catalogCache.set(rules.id, cat)
   return cat
@@ -270,6 +310,12 @@ export type PrereqClause =
   | (ClauseBase & { kind: 'poderes'; modo: 'mismoMetal' | 'metalesDistintos'; talento: string | null })
   /** at least `min` powers other than the ones the same prerequisite names in its `poder` clauses */
   | (ClauseBase & { kind: 'otrosPoderes'; min: number })
+  /**
+   * Goal gate, always implicit (T36, §7.7 #3; never parsed from a text): the tree stays closed until its goal is concluded, that is,
+   * until the power `poderId` is complete (a power tree) or, with `poderId` null, until a power of the path that needs a goal is (the
+   * talents of an Investida path other than its main talent: L.75 / PDF 81, Q26; a path whose powers are all born complete is open)
+   */
+  | (ClauseBase & { kind: 'meta'; poderId: string | null })
   | (ClauseBase & { kind: 'unknown' })
 
 const GTE = '§GTE§'
@@ -397,31 +443,55 @@ function clauseTalentNames(cl: PrereqClause): string[] | null {
 
 // ── Graph ────────────────────────────────────────────────────────────────────
 
-export type TreeKind = 'heroico' | 'radiante' | 'potencia' | 'cantor'
+/** Generic kinds (§7.7 #3): 'caminoInvestido' = an Investida path with a flat tree, 'poder' = a power that is not a Potencia, 'ascendencia' = an ancestry tree with a calendar of its own */
+export type TreeKind = 'heroico' | 'radiante' | 'potencia' | 'cantor' | 'caminoInvestido' | 'poder' | 'ascendencia'
+
+/** A power as the graph needs it to build its tree: Character.poderes works as is, and exploration may add powers the character lacks */
+export type PoderDelGrafo = Pick<PoderPersonaje, 'arte' | 'metal'>
 
 export interface TalentGraphOptions {
-  /** starting heroic path id (its main talent is the free level-1 talent) */
+  /** heroic path id: the starting path (its main talent is the free level-1 talent) unless `caminoInvestidoInicial` is */
   caminoHeroico?: string | null
   /** other heroic paths the character entered (their main talent costs 1 talent) */
   extraHeroicPaths?: readonly string[]
   caminoRadiante?: string | null
   isCantor?: boolean
+  /** id of the Investida path of the world (the field rules.campoCaminoInvestido); only a path with a flat tree gets a block here */
+  caminoInvestido?: string | null
+  /** the Investida path is the starting path (Character.caminoInicial, Q7): its main talent is auto-granted and fills the main slot */
+  caminoInvestidoInicial?: boolean
+  /** powers whose trees are built (`${arte}:${metal}`); they gate nothing: the state's powers do */
+  poderes?: readonly PoderDelGrafo[]
+  /** Character.ascendencia: an ancestry with a calendar of its own in rules.arbolesAscendencia gets its tree */
+  ascendencia?: string | null
 }
 
 export interface TalentTree {
-  /** 'heroico:<path>' (main talent), 'heroico:<path>:<specialty>', 'radiante:<order>', 'potencia:<id>', 'cantor' */
+  /**
+   * 'heroico:<path>' (main talent), 'heroico:<path>:<specialty>', 'radiante:<order>', 'potencia:<id>', 'cantor',
+   * 'caminoInvestido:<path>' (main talent plus the flat tree), 'poder:<arte>:<metal>', 'ascendencia:<slug>'
+   */
   id: string
   kind: TreeKind
-  /** heroic path id, radiant order id (bond and its surges) or 'cantor' */
+  /**
+   * heroic path id, radiant order id (bond and its surges), 'cantor', Investida path id (its tree and the trees of the powers it
+   * unlocks), power id (a power no path of the character unlocks) or ancestry slug
+   */
   pathId: string
   pathName: string
-  /** specialty name, 'Talento principal', spren bond label, surge name or 'Cantor' */
+  /**
+   * specialty name, 'Talento principal', spren bond label, surge name, 'Cantor', name of the Investida path (its flat tree), name of the
+   * power (`sectionId` = `${arte}:${metal}`) or name of the ancestry
+   */
   section: string
   sectionId: string
   color: string
   order: number
   nodeIds: string[]
-  /** key talent of the path: heroic main talent, Primer Ideal (bond and surges) or Cambiar de forma */
+  /**
+   * key talent of the path: heroic main talent, Primer Ideal (bond and surges), Cambiar de forma, main talent of the Investida path
+   * (its tree and the trees of the powers it unlocks; a power tree has no key node of its own) or main talent of the ancestry
+   */
   keyNodeId: string | null
   isStartingPath: boolean
   /** 'noJugable': order without talents (Forjadores de Vínculos); 'pendiente': surge not transcribed yet */
@@ -549,13 +619,17 @@ export function buildTalentGraph(options: TalentGraphOptions, rules: TalentRules
     return node
   }
 
+  // The Investida path with a flat tree, and whether it is the starting path: then no heroic path is (Q7)
+  const camino = caminoPlanoDe(rules, options.caminoInvestido)
+  const caminoInicial = !!camino && !!options.caminoInvestidoInicial
+
   // Heroic paths: starting path first, then the extra ones
   const pathIds = [...new Set([options.caminoHeroico, ...(options.extraHeroicPaths ?? [])].filter((x): x is string => !!x))]
   let startingPathId: string | null = null
   for (const pid of pathIds) {
     const path = rules.caminosHeroicos.find((p) => p.id === pid)
     if (!path) continue
-    const starting = pid === options.caminoHeroico
+    const starting = pid === options.caminoHeroico && !caminoInicial
     if (starting) startingPathId = path.id
     const root = addTree({
       id: `heroico:${path.id}`, kind: 'heroico', pathId: path.id, pathName: path.name,
@@ -606,6 +680,48 @@ export function buildTalentGraph(options: TalentGraphOptions, rules: TalentRules
     }
   }
 
+  // Goal gate (§7.7 #3): appended after the clauses of the text, like the implicit level of the Primer Ideal
+  const conMeta = (node: TalentNode, poderId: string | null) => {
+    node.clauses.push({ kind: 'meta', raw: rules.nombreMeta ?? 'Meta', poderId, implicit: true })
+  }
+
+  // Investida path with a flat tree: one tree, its main talent (key node) plus its talents, closed by the goal of the path
+  let caminoKeyId: string | null = null
+  if (camino) {
+    const tree = addTree({
+      id: `caminoInvestido:${camino.id}`, kind: 'caminoInvestido', pathId: camino.id, pathName: camino.name,
+      section: camino.name, sectionId: camino.id, color: camino.color, isStartingPath: caminoInicial,
+    })
+    const key = addNode(tree, {
+      name: camino.mainTalent, activation: camino.mainTalentActivation, description: camino.mainTalentEffect,
+      prereq: camino.mainTalentPrerequisites, notaLibro: notaOf(camino),
+    }, 0, true)
+    tree.keyNodeId = caminoKeyId = key.id
+    if (caminoInicial) {
+      startingPathId = camino.id
+      autoGranted.push(camino.mainTalent)
+    }
+    camino.talentos.forEach((t, i) => conMeta(addNode(tree, {
+      name: t.name, activation: t.cost, description: t.description, prereq: t.prereq, notaLibro: notaOf(t),
+    }, i + 1, false), null))
+  }
+
+  // Powers that are not a Potencia: one tree each, in the order of the rules, closed until that power is complete. A tree hangs from
+  // the main talent of the path when the path unlocks it (`caminos`); a power without talents has no tree
+  const conPoder = new Set((options.poderes ?? []).map(poderKey))
+  for (const def of rules.poderes) {
+    if (esPotencia(def) || !conPoder.has(poderKey(def)) || !def.talentos.length) continue
+    const delCamino = camino && def.caminos.includes(camino.id) ? camino : null
+    const tree = addTree({
+      id: `poder:${poderKey(def)}`, kind: 'poder', pathId: delCamino?.id ?? poderKey(def), pathName: delCamino?.name ?? def.name,
+      section: def.name, sectionId: poderKey(def), color: delCamino?.color ?? COLOR_SIN_CAMINO,
+      keyNodeId: delCamino ? caminoKeyId : null, isStartingPath: !!delCamino && caminoInicial,
+    })
+    def.talentos.forEach((t, i) => conMeta(addNode(tree, {
+      name: t.name, activation: t.cost, description: t.description, prereq: t.prereq, notaLibro: notaOf(t),
+    }, i, false), poderKey(def)))
+  }
+
   // Singer tree (the ancestry tree that the rules keep as a plain list)
   const isCantor = !!options.isCantor
   const arbolCantor = arbolCantorDe(rules)
@@ -617,6 +733,21 @@ export function buildTalentGraph(options: TalentGraphOptions, rules: TalentRules
     }, i, t.nombre === CAMBIAR_DE_FORMA))
     tree.keyNodeId = byName.get(CAMBIAR_DE_FORMA)?.[0]?.id ?? null
     autoGranted.push(CAMBIAR_DE_FORMA)
+  }
+
+  // Ancestry tree with a calendar of its own: its auto-granted talents are owned for free (the first one is its main talent)
+  const arbolAsc = arbolDeAscendencia(rules, options.ascendencia)
+  if (arbolAsc && arbolAsc.talentos.length) {
+    const asc = (options.ascendencia ?? '').trim()
+    const tree = addTree({
+      id: `ascendencia:${slug(asc)}`, kind: 'ascendencia', pathId: slug(asc), pathName: asc, section: asc, sectionId: slug(asc),
+      color: COLOR_SIN_CAMINO,
+    })
+    arbolAsc.talentos.forEach((t, i) => addNode(tree, {
+      name: t.name, activation: t.cost, description: t.description, prereq: t.prereq, notaLibro: notaOf(t),
+    }, i, t.name === arbolAsc.autoGranted[0]))
+    tree.keyNodeId = tree.nodeIds.find((id) => byId.get(id)?.isKey) ?? null
+    autoGranted.push(...arbolAsc.autoGranted)
   }
 
   // Parent links (per clause), children
@@ -670,15 +801,28 @@ export function buildTalentGraph(options: TalentGraphOptions, rules: TalentRules
   }
 }
 
+/**
+ * Options from a Character, for the rules of its world (default Stormlight). The Investida path is the field rules.campoCaminoInvestido.
+ * Starting path (Character.caminoInicial, decision (k), Q7): 'metal' = the Investida path; '' (characters older than the column, and
+ * Stormlight) = the heroic path if there is one, else the Investida path. A value whose path is gone falls to the other path, as the
+ * server normalises it (§5.2); only an Investida path with a flat tree can be the starting one, so a radiant order never is (P1).
+ */
 export function graphOptionsFromCharacter(
-  ch: Pick<Character, 'caminoHeroico' | 'caminoRadiante' | 'ascendencia'>,
+  ch: Pick<Character, 'caminoHeroico' | 'caminoRadiante' | 'ascendencia' | 'caminoMetal' | 'caminoInicial'> & { poderes: readonly PoderDelGrafo[] },
   extraHeroicPaths: readonly string[] = [],
+  rules: TalentRules = STORMLIGHT_TALENTOS,
 ): TalentGraphOptions {
+  const caminoHeroico = ch.caminoHeroico || null
+  const caminoInvestido = ch[rules.campoCaminoInvestido] || null
   return {
-    caminoHeroico: ch.caminoHeroico || null,
+    caminoHeroico,
     extraHeroicPaths,
     caminoRadiante: ch.caminoRadiante || null,
     isCantor: isCantorAncestry(ch.ascendencia),
+    caminoInvestido,
+    caminoInvestidoInicial: !!caminoPlanoDe(rules, caminoInvestido) && (ch.caminoInicial === 'metal' || !caminoHeroico),
+    poderes: ch.poderes ?? [],
+    ascendencia: ch.ascendencia,
   }
 }
 
@@ -758,6 +902,8 @@ export type Gate =
   | (GateBase & { kind: 'atributo'; atributo: AttrField; min: number; current: number })
   | (GateBase & { kind: 'poderes'; modo: 'mismoMetal' | 'metalesDistintos' })
   | (GateBase & { kind: 'otrosPoderes'; min: number; current: number })
+  /** goal gate (implicit): `poderIds` = the power of the tree, or the powers of the path the character has; `completo` = some of them is complete */
+  | (GateBase & { kind: 'meta'; poderIds: string[]; completo: boolean })
   | (GateBase & { kind: 'unknown' })
 
 export interface NodeEval {
@@ -772,8 +918,11 @@ export interface NodeEval {
   minLevel: number
   /** has story conditions still to confirm: show the DJ ConfirmDialog before learning */
   needsConfirmation: boolean
-  /** single badge for the grid, priority NV > Ideal > DJ (null when none applies) */
-  gateBadge: 'nivel' | 'ideal' | 'dj' | null
+  /**
+   * single badge for the grid, priority goal > NV > Ideal > DJ (null when none applies): a tree closed by its goal stays closed at
+   * any level, so the goal speaks first (T36, §7.7 #3-#4)
+   */
+  gateBadge: 'meta' | 'nivel' | 'ideal' | 'dj' | null
 }
 
 export interface TalentEvaluation {
@@ -921,6 +1070,25 @@ function gateFor(ctx: Ctx, node: TalentNode, cl: PrereqClause, ci: number): Gate
         status: current >= cl.min ? 'met' : 'unmet',
       }
     }
+    case 'meta': {
+      // A power tree: that power complete. The tree of a path: a goal of the path concluded (Q26), that is, a power of the path (origin
+      // 'camino') that needs a goal is complete; a power born complete (no goal) opens it only when no power of the path needs one
+      const poderes = ctx.state.poderes ?? []
+      const sinMeta = catalog(ctx.graph.rules).poderSinMeta
+      const delCamino = poderes.filter((pp) => pp.origen === 'camino')
+      const conMeta = delCamino.filter((pp) => !sinMeta.has(poderKey(pp)))
+      const propios = cl.poderId ? poderes.filter((pp) => poderKey(pp) === cl.poderId) : conMeta.length ? conMeta : delCamino
+      const completo = propios.some((pp) => pp.completo)
+      const label = `${ctx.graph.rules.nombreMeta ?? 'Meta'} ${completo ? 'completada' : 'pendiente'}`
+      const nombre = cl.poderId ? catalog(ctx.graph.rules).poderNombre.get(cl.poderId) ?? cl.poderId : ''
+      const text = completo ? label
+        : !cl.poderId ? `${label}: ningún poder de tu camino está completo todavía`
+        : propios.length ? `${label}: el poder ${nombre} aún no está completo` : `${label}: no tienes el poder ${nombre}`
+      return {
+        ...base, kind: 'meta', poderIds: cl.poderId ? [cl.poderId] : propios.map(poderKey), completo, label, text,
+        status: completo ? 'met' : 'unmet',
+      }
+    }
     default:
       return { ...base, kind: 'unknown', label: cl.raw, text: `Requisito no reconocido: ${cl.raw}`, status: 'unmet' }
   }
@@ -1053,6 +1221,7 @@ export function evaluate(graph: TalentGraph, state: TalentState): TalentEvaluati
     if (plan) for (const id of plan.via.values()) routeGates.push(...(gatesOf.get(id) ?? []))
     else routeGates.push(...gates)
     const minLevel = levelFloor(routeGates)
+    const metaPending = routeGates.some((g) => g.kind === 'meta' && g.status !== 'met')
     const idealPending = routeGates.some((g) => g.kind === 'ideal' && g.learned && !g.sworn)
     const djPending = routeGates.some((g) => g.status === 'confirm')
     nodes.set(node.id, {
@@ -1063,7 +1232,7 @@ export function evaluate(graph: TalentGraph, state: TalentState): TalentEvaluati
       distance: plan ? plan.names.size : null,
       minLevel,
       needsConfirmation: gates.some((g) => g.status === 'confirm'),
-      gateBadge: minLevel > ctx.level ? 'nivel' : idealPending ? 'ideal' : djPending ? 'dj' : null,
+      gateBadge: metaPending ? 'meta' : minLevel > ctx.level ? 'nivel' : idealPending ? 'ideal' : djPending ? 'dj' : null,
     })
   }
 
@@ -1118,7 +1287,7 @@ export interface RouteResult {
   gateLevel: number
   /** earliest level also counting the talent slots still free (1 talent per level) */
   earliestLevel: number
-  /** non-talent gates still pending along the route: Ideal sworn, DJ, level, skill(s), attribute, ancestry, powers */
+  /** non-talent gates still pending along the route: Ideal sworn, DJ, level, skill(s), attribute, ancestry, powers, goal */
   gates: Gate[]
   alternatives: RouteAlternative[]
 }
@@ -1275,12 +1444,14 @@ export function cascadeRemove(graph: TalentGraph, state: TalentState, name: stri
 
 // ── talentBudget ─────────────────────────────────────────────────────────────
 
-/** What kind of talent a slot can hold. */
-export type SlotKind = 'principal' | 'heroico' | 'radiante' | 'cantor' | 'formas' | 'cambiarForma' | 'otro'
+/** What kind of talent a slot can hold. The last three are the generic kinds of T36 (§7.7 #3), as in TreeKind */
+export type SlotKind = 'principal' | 'heroico' | 'radiante' | 'cantor' | 'formas' | 'cambiarForma' | 'otro' | 'caminoInvestido' | 'poder' | 'ascendencia'
+/** The seven kinds of the Stormlight data: the start of every world's `slotKinds` (catalog), which a level slot accepts */
 const ALL_KINDS: SlotKind[] = ['principal', 'heroico', 'radiante', 'cantor', 'formas', 'cambiarForma', 'otro']
 const KIND_LABEL: Record<SlotKind, string> = {
   principal: 'talento principal', heroico: 'heroico', radiante: 'radiante', cantor: 'cantor',
   formas: 'Formas de…', cambiarForma: 'Cambiar de forma', otro: 'otro',
+  caminoInvestido: 'camino Investido', poder: 'poder', ascendencia: 'ascendencia',
 }
 
 export interface TalentSlot {
@@ -1319,26 +1490,48 @@ export interface TalentBudget {
   excessDetail: string
 }
 
-/** Typed talent slots of a character at `level` (book Cap. 1 + Cap. 2); the starting path's name comes from `rules` (default Stormlight). */
+/**
+ * Typed talent slots of a character at `level` (book Cap. 1 + Cap. 2); the starting path's name comes from `rules` (default Stormlight).
+ * The starting path is heroic or an Investida path with a flat tree (its main talent is then the 'principal' one, Q27 b). Ancestry slots:
+ * the calendar of rules.arbolesAscendencia when the ancestry has one (§7.7 #3: a level-1 slot for each auto-granted talent, which holds
+ * it, then one per milestone with what it accepts); otherwise the human / singer calendar, as it has always been (P1).
+ */
 export function talentSlotsAt(level: number, ascendencia: string, startingPathId?: string | null, rules: TalentRules = STORMLIGHT_TALENTOS): TalentSlot[] {
   const L = Math.max(1, Math.floor(level || 1))
   const cantor = isCantorAncestry(ascendencia)
-  const principalName = startingPathId ? rules.caminosHeroicos.find((p) => p.id === startingPathId)?.name ?? startingPathId : null
+  const principalName = startingPathId
+    ? rules.caminosHeroicos.find((p) => p.id === startingPathId)?.name ?? caminoPlanoDe(rules, startingPathId)?.name ?? startingPathId
+    : null
   const slots: TalentSlot[] = [{
     level: 1, source: 'principal', mandatory: false, orRank: false,
     label: `Nivel 1 · talento principal${principalName ? ` (${principalName})` : ''}`,
     accepts: startingPathId ? ['principal'] : ['principal', 'heroico'],
   }]
-  for (const hito of [1, 6, 11, 16, 21]) {
-    if (hito > L) break
-    if (!cantor) slots.push({ level: hito, source: 'ascendencia', label: `Nivel ${hito} · humano: talento heroico`, accepts: ['heroico'], mandatory: false, orRank: false })
-    else if (hito === 1) {
-      slots.push({ level: 1, source: 'ascendencia', label: 'Nivel 1 · cantor: Cambiar de forma', accepts: ['cambiarForma'], mandatory: false, orRank: false })
-      slots.push({ level: 1, source: 'ascendencia', label: 'Nivel 1 · cantor: un talento de Formas (obligatorio)', accepts: ['formas'], mandatory: true, orRank: false })
-    } else slots.push({ level: hito, source: 'ascendencia', label: `Nivel ${hito} · cantor: talento cantor o heroico`, accepts: ['cantor', 'formas', 'cambiarForma', 'heroico'], mandatory: false, orRank: false })
+  const arbol = arbolDeAscendencia(rules, ascendencia)
+  if (arbol) {
+    // «Nivel 1 · kandra: Forma natural», «Nivel 6 · sangre koloss: talento koloss o heroico», «Nivel 6 · humano: talento heroico»
+    const quien = (ascendencia ?? '').trim().toLowerCase()
+    const propio = quien.split(/\s+/).pop() ?? quien
+    for (const t of arbol.autoGranted)
+      slots.push({ level: 1, source: 'ascendencia', label: `Nivel 1 · ${quien}: ${t}`, accepts: ['ascendencia'], mandatory: false, orRank: false })
+    const que = arbol.acepta.map((k) => (k === 'ascendencia' ? propio : KIND_LABEL[k])).join(' o ')
+    for (const hito of arbol.hitos) {
+      if (hito > L) continue
+      slots.push({ level: hito, source: 'ascendencia', label: `Nivel ${hito} · ${quien}: talento ${que}`, accepts: [...arbol.acepta], mandatory: false, orRank: false })
+    }
+  } else {
+    for (const hito of [1, 6, 11, 16, 21]) {
+      if (hito > L) break
+      if (!cantor) slots.push({ level: hito, source: 'ascendencia', label: `Nivel ${hito} · humano: talento heroico`, accepts: ['heroico'], mandatory: false, orRank: false })
+      else if (hito === 1) {
+        slots.push({ level: 1, source: 'ascendencia', label: 'Nivel 1 · cantor: Cambiar de forma', accepts: ['cambiarForma'], mandatory: false, orRank: false })
+        slots.push({ level: 1, source: 'ascendencia', label: 'Nivel 1 · cantor: un talento de Formas (obligatorio)', accepts: ['formas'], mandatory: true, orRank: false })
+      } else slots.push({ level: hito, source: 'ascendencia', label: `Nivel ${hito} · cantor: talento cantor o heroico`, accepts: ['cantor', 'formas', 'cambiarForma', 'heroico'], mandatory: false, orRank: false })
+    }
   }
+  const kinds = catalog(rules).slotKinds
   for (let lv = 2; lv <= L; lv++)
-    slots.push({ level: lv, source: 'nivel', label: lv > 20 ? `Nivel ${lv} · talento o rango de habilidad` : `Nivel ${lv}`, accepts: ALL_KINDS, mandatory: false, orRank: lv > 20 })
+    slots.push({ level: lv, source: 'nivel', label: lv > 20 ? `Nivel ${lv} · talento o rango de habilidad` : `Nivel ${lv}`, accepts: kinds, mandatory: false, orRank: lv > 20 })
   const srcOrder = { principal: 0, ascendencia: 1, nivel: 2 }
   return slots.sort((a, b) => a.level - b.level || srcOrder[a.source] - srcOrder[b.source])
 }
@@ -1350,16 +1543,22 @@ function slotKindOf(name: string, graph: TalentGraph): SlotKind {
   if (occs?.length) {
     const heroic = occs.find((o) => o.kind === 'heroico')
     if (heroic) return heroic.isKey && heroic.pathId === graph.startingPathId ? 'principal' : 'heroico'
-    return occs[0].kind === 'cantor' ? 'cantor' : 'radiante'
+    const first = occs[0]
+    // the main talent of the starting Investida path holds the main slot, as the heroic one does (Q27 b)
+    if (first.kind === 'caminoInvestido') return first.isKey && first.pathId === graph.startingPathId ? 'principal' : 'caminoInvestido'
+    if (first.kind === 'poder' || first.kind === 'ascendencia' || first.kind === 'cantor') return first.kind
+    return 'radiante'
   }
   const k = catalog(graph.rules).kind.get(name)
+  if (k === 'caminoInvestido' || k === 'poder' || k === 'ascendencia') return k
   return k === 'heroicoPrincipal' || k === 'heroico' ? 'heroico' : k === 'radiante' ? 'radiante' : k === 'cantor' ? 'cantor' : 'otro'
 }
 
 /**
  * Book budget: 1 talent per level (the level-1 one is the starting path's main talent), ancestry bonus
  * at levels 1/6/11/16/21 (human: heroic; singer: Cambiar de forma + one «Formas de…» at 1, then cantor or
- * heroic), levels 21+ talent OR skill rank. Every talent costs, Radiant ones included.
+ * heroic; an ancestry with a calendar of its own in the rules: its auto-granted talents at 1, then its milestones), levels 21+ talent
+ * OR skill rank. Every talent costs, Radiant ones included; the auto-granted ones fill their own slots.
  */
 export function talentBudget(
   character: { level: number; ascendencia: string; talentos: string | readonly string[] },
@@ -1395,7 +1594,7 @@ export function talentBudget(
   }
   const unplaced = talentOrder.filter((n) => !tryPlace(n, new Set()))
 
-  const rows: BudgetRow[] = slots.map((s, i) => ({ ...s, acceptsLabel: s.accepts.length === ALL_KINDS.length ? 'cualquiera' : s.accepts.map((k) => KIND_LABEL[k]).join(' o '), filledBy: holder[i] }))
+  const rows: BudgetRow[] = slots.map((s, i) => ({ ...s, acceptsLabel: s.accepts.length === cat.slotKinds.length ? 'cualquiera' : s.accepts.map((k) => KIND_LABEL[k]).join(' o '), filledBy: holder[i] }))
   const allowed = slots.length
   const used = counted.length
   const excess = used - allowed

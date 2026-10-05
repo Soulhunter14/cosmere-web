@@ -20,7 +20,7 @@ const ON_GEM = onGem
 function CharacterSelectCard({ character, rules, onSelect }: { character: Character; rules: TalentRules; onSelect: () => void }) {
   // Book budget (shared engine, see lib/talentGraph.ts): allowed / used / excess / falta. The graph is the one of the world's rules.
   const budget = useMemo(() => {
-    const graph = buildTalentGraph(graphOptionsFromCharacter(character), rules)
+    const graph = buildTalentGraph(graphOptionsFromCharacter(character, [], rules), rules)
     return talentBudget(character, graph)
   }, [character, rules])
 

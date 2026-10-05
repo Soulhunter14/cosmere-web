@@ -48,6 +48,8 @@ export const MISTBORN_TALENTOS: TalentRules = {
   // Permanent increases of the attributes (Bendiciones, Tamaño desmedido, Guardián del conocimiento) count for prerequisites (L.28 / PDF 34)
   bonosCuentanParaRequisitos: true,
   campoCaminoInvestido: 'caminoMetal',
+  // The goal that opens the tree of the metalborn path and the trees of its powers (L.75 / PDF 81; T36): «Meta de nacido del metal pendiente»
+  nombreMeta: 'Meta de nacido del metal',
 }
 
 export const DATA: WorldData = {

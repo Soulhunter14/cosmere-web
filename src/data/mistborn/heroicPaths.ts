@@ -234,15 +234,17 @@ const MATANEBLINOS: EspecialidadNdB = {
       description: 'Ignoras los efectos del rasgo Frágil. Además, al hacer una prueba de ataque con un arma que tenga ese rasgo, su rango de Oportunidad se amplía en 2.',
     },
     {
-      name: 'Dos pasos por delante', // L.91 / PDF 97
-      prerequisites: 'Percepción 2 o más, talento Serenidad o talento Apagar',
+      name: 'Dos pasos por delante', // L.91 / PDF 97; prerequisite from the diagram, L.89 / PDF 95
+      prerequisites: 'Percepción 2 o más, talento Serenidad',
+      notaLibro: 'El libro se contradice: el texto completo pide «talento Serenidad o talento Apagar», y Apagar pide a su vez «Tacto delicado o Dos pasos por delante», en círculo (L.91 / PDF 97). El diagrama del árbol cuelga Dos pasos por delante solo de Serenidad (L.89 / PDF 95). Se sigue el diagrama.',
       activation: 'passive',
       rolDescription: 'Esquivas los ataques de los alomantes que herirían a un mataneblinos menos curtido.',
       description: 'Mientras tu presa enemiga esté en tu cercanía, no puedes sufrir rasguños y ese objetivo debe gastar 1 acción adicional para Destrabarse.',
     },
     {
-      name: 'Apagar', // L.91 / PDF 97
-      prerequisites: 'Perspicacia 3 o más, talento Tacto delicado o Dos pasos por delante',
+      name: 'Apagar', // L.91 / PDF 97; prerequisite from the diagram, L.89 / PDF 95
+      prerequisites: 'Perspicacia 3 o más, talento Tacto delicado o talento Serenidad',
+      notaLibro: 'El libro se contradice: el texto completo pide «talento Tacto delicado o Dos pasos por delante», en círculo con Dos pasos por delante (L.91 / PDF 97). El diagrama del árbol une Apagar con Tacto delicado y con Serenidad (L.89 / PDF 95). Se sigue el diagrama.',
       activation: 'reaction',
       rolDescription: 'Sabes que la desventaja es tuya desde el principio, pero eso te empuja a no rendirte.',
       description: 'Antes de que tu presa recupere Investidura estando en tu cercanía, puedes usar contra ella la reacción Acometida reactiva como si hubiera abandonado tu cercanía voluntariamente. Si el ataque impacta o hace un rasguño, el objetivo solo recupera la mitad de la Investidura y queda Aturdido hasta el final de su siguiente turno.',
@@ -569,7 +571,12 @@ const PLANIFICADOR: EspecialidadNdB = {
 const INVESTIGADOR = especialidadBase('agente', 'Investigador')
 const LADRON = especialidadBase('agente', 'Ladrón')
 
-const INVESTIGADOR_NDB = compartida(INVESTIGADOR, `${INVESTIGADOR.description} Recomendada para la Era 2.`)
+const INVESTIGADOR_NDB = compartida(INVESTIGADOR, `${INVESTIGADOR.description} Recomendada para la Era 2.`, {
+  // L.80 / PDF 86 (diagram) and L.82 / PDF 88 (text)
+  'Ojo avizor': {
+    notaLibro: 'Nacidos de la bruma lo redacta distinto en el diagrama del árbol (un aliado dispuesto a que lo hagas y que esté a 6 metros o menos, L.80 / PDF 86) y en el texto completo (un aliado al que puedes influir y que esté a menos de 6 metros, cuando tira un dado de trama, L.82 / PDF 88). El resumen sigue el diagrama.',
+  },
+})
 
 const LADRON_NDB = compartida(LADRON, `${LADRON.description} Recomendada para la Era 1.`, {
   // L.83 / PDF 89 (text) and L.81 / PDF 87 (diagram)

@@ -3,18 +3,18 @@
  *
  * One page, two modes in a sticky bar: ÁRBOL (plan with a global view of every tree: heroic path(s),
  * radiant order, singer, plus the other heroic paths to explore) and MIS TALENTOS (reread what you have).
- * Rules live in lib/talentGraph.ts; the map geometry in components/talentos/talentMap.ts.
+ * Rules live in lib/talentGraph.ts and run on the TalentRules of the world of the campaign (useWorldData().talentos); the map
+ * geometry in components/talentos/talentMap.ts.
  * Stored format is unchanged: Character.talentos = JSON array of names (+ the ~forma~ marker).
  * The planning goal, open láminas, the mode and the DJ confirmations are local (localStorage).
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, Compass, Info, Music, Sparkles, Target, TriangleAlert, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Compass, Info, Music, RefreshCw, Sparkles, Target, TriangleAlert, X } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, IconButton, Segmented, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
 import { CANTOR_COLOR, getFormasDisponibles, withFormaActiva } from '../../data/cantores'
 import { CharacterHero } from '../../components/CharacterHero'
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
@@ -22,13 +22,14 @@ import { HeroicPathIcon } from '../../components/GameIcons'
 import { TalentActivation, type ActivationType } from '../../components/TalentActivation'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { useAuthStore } from '../../store/authStore'
-import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
+import { useCampaignStore, useWorldConfig, useWorldData } from '../../store/campaignStore'
 import { c, eyebrow, font, fs, radius, titleText, tone } from '../../theme'
 import {
   buildTalentGraph, cascadeRemove, cheapestRoute, evaluate, graphOptionsFromCharacter, parseStoredTalentos,
   splitStoredTalentos, talentBudget, talentStateFromCharacter, withTalent,
   type CascadeResult, type Gate, type TalentEvaluation, type TalentGraph,
 } from '../../lib/talentGraph'
+import type { TalentRules } from '../../lib/talentRules'
 import { PathAtlas } from '../../components/talentos/PathAtlas'
 import { TalentSheet } from '../../components/talentos/TalentSheet'
 import { FormaPickerSheet } from '../../components/talentos/FormaPicker'
@@ -58,8 +59,12 @@ export function TalentosDetailPage() {
     queryKey: ['character', cId, charId],
     queryFn: () => charactersApi.getById(cId, charId),
   })
+  // The talent data of the world of the campaign (heroic paths, Investida paths, powers, grids…). Stormlight's are `initialData` of
+  // useWorldData, so there it never waits (no new Spinner); Mistborn's come with the lazy chunk of its world
+  const { data: worldData, isPending: worldPending } = useWorldData()
+  const rules = worldData?.talentos ?? null
   // Loading keeps a (visually hidden) h1 so the page is never headless, as in CharacterDetailPage
-  if (isLoading || !character) {
+  if (isLoading || !character || worldPending) {
     return (
       <>
         <h1 className="sr-only">Talentos</h1>
@@ -67,10 +72,25 @@ export function TalentosDetailPage() {
       </>
     )
   }
-  return <TalentosView key={charId} character={character} cId={cId} />
+  // The chunk did not load: never build the map with the rules of another world. A failed `import()` stays failed for the rest of the
+  // document (the browser keeps the failure), so a `refetch()` could not recover it: only reloading the page does
+  if (!rules) {
+    return (
+      <>
+        <h1 className="sr-only">Talentos</h1>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: 16 }}>
+          <ErrorMessage message="No se pudieron cargar los talentos." style={{ marginBottom: 16 }} />
+          <Button onClick={() => window.location.reload()} icon={<RefreshCw size={15} aria-hidden />}>
+            Recargar la página
+          </Button>
+        </div>
+      </>
+    )
+  }
+  return <TalentosView key={charId} character={character} cId={cId} rules={rules} />
 }
 
-function TalentosView({ character, cId }: { character: Character; cId: number }) {
+function TalentosView({ character, cId, rules }: { character: Character; cId: number; rules: TalentRules }) {
   const charId = character.id
   const qc = useQueryClient()
   const qKey = useMemo(() => ['character', cId, charId] as const, [cId, charId])
@@ -114,29 +134,29 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
   const stored = useMemo(() => parseStoredTalentos(character.talentos), [character.talentos])
   const extraKey = useMemo(() => {
     const names = new Set(splitStoredTalentos(stored).names)
-    return HEROIC_PATHS.filter((p) => p.id !== caminoHeroico && names.has(p.mainTalent)).map((p) => p.id).join(',')
-  }, [stored, caminoHeroico])
+    return rules.caminosHeroicos.filter((p) => p.id !== caminoHeroico && names.has(p.mainTalent)).map((p) => p.id).join(',')
+  }, [stored, caminoHeroico, rules])
   const extraPaths = useMemo(() => (extraKey ? extraKey.split(',') : []), [extraKey])
   const graph = useMemo(
-    () => buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, extraPaths)),
-    [caminoHeroico, caminoRadiante, ascendencia, extraPaths],
+    () => buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, extraPaths), rules),
+    [caminoHeroico, caminoRadiante, ascendencia, extraPaths, rules],
   )
-  const tState = useMemo(() => talentStateFromCharacter(character, { confirmedStory }), [character, confirmedStory])
+  const tState = useMemo(() => talentStateFromCharacter(character, { confirmedStory }, graph.rules), [character, confirmedStory, graph.rules])
   const evaluation = useMemo(() => evaluate(graph, tState), [graph, tState])
   const budget = useMemo(() => talentBudget(character, graph), [character, graph])
   const models = useMemo(() => buildPathModels(graph), [graph])
 
   // other heroic paths (explore): built only when needed
   const otherPathIds = useMemo(
-    () => HEROIC_PATHS.map((p) => p.id).filter((id) => id !== caminoHeroico && !extraPaths.includes(id)),
-    [caminoHeroico, extraPaths],
+    () => rules.caminosHeroicos.map((p) => p.id).filter((id) => id !== caminoHeroico && !extraPaths.includes(id)),
+    [rules, caminoHeroico, extraPaths],
   )
   const needExplore = showOthers || [goal?.nodeId, sheetId, selectedId].some((id) => !!id && !graph.byId.has(id))
   const exploreGraph = useMemo(
     () => (needExplore && otherPathIds.length
-      ? buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, [...extraPaths, ...otherPathIds]))
+      ? buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, [...extraPaths, ...otherPathIds]), rules)
       : null),
-    [needExplore, otherPathIds, extraPaths, caminoHeroico, caminoRadiante, ascendencia],
+    [needExplore, otherPathIds, extraPaths, caminoHeroico, caminoRadiante, ascendencia, rules],
   )
   const exploreEval = useMemo(() => (exploreGraph ? evaluate(exploreGraph, tState) : null), [exploreGraph, tState])
   const exploreModels = useMemo(
@@ -342,7 +362,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
           variant="hero"
           leading={<span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>}
           between={extraPaths.map((pid) => {
-            const p = HEROIC_PATHS.find((x) => x.id === pid)
+            const p = rules.caminosHeroicos.find((x) => x.id === pid)
             return p ? <span key={pid} style={heroPill}><HeroicPathIcon id={p.id} size={13} />{p.name}</span> : null
           })}
         />

@@ -699,17 +699,22 @@ function DamageTab({ onRoll }: { onRoll: (r: AnyRollResult) => void }) {
 }
 
 // Tab: Recuperación
+/** Voluntad for the recovery die: with `features.bonosServidor` it adds the bonus the server computes (a kandra's Blessing of Stability), as the sheet does */
+function voluntadRecuperacion(char: Character, bonosAtributos: boolean): number {
+  return char.voluntad + (bonosAtributos ? (char.bonosAtributos?.voluntad ?? 0) : 0)
+}
+
 function RecoveryTab({ onRoll, char }: { onRoll: (r: AnyRollResult) => void; char?: Character | null }) {
   const world = useRollerWorld()
-  const [voluntad, setVoluntad] = useState(char?.voluntad ?? 3)
+  const [voluntad, setVoluntad] = useState(char?.voluntad != null ? voluntadRecuperacion(char, world.bonosAtributos) : 3)
   const [medicineBonus, setMedicineBonus] = useState(0)
   const [result, setResult] = useState<ReturnType<typeof rollRecovery> | null>(null)
 
   // Sincronizar voluntad si cambia el personaje
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- existing sync behaviour, kept as-is in the rebrand
-    if (char?.voluntad != null) setVoluntad(char.voluntad)
-  }, [char])
+    if (char?.voluntad != null) setVoluntad(voluntadRecuperacion(char, world.bonosAtributos))
+  }, [char, world.bonosAtributos])
 
   const faces = recoveryDieFaces(voluntad)
 

@@ -194,7 +194,7 @@ export function PathAtlas(props: AtlasProps) {
 
   // «Otros poderes»: the powers the Investida path unlocks that the character lacks and the era has (nothing without the talent state)
   const otherDefs = useMemo(
-    () => (!bare && props.state && model.kind === 'caminoInvestido' ? otherPowerDefs(graph, model.pathId).filter((p) => isAvailable(p, era)) : []),
+    () => (!bare && props.state && model.kind === 'caminoInvestido' ? otherPowerDefs(graph, model.pathId, era).filter((p) => isAvailable(p, era)) : []),
     [bare, props.state, model.kind, model.pathId, graph, era],
   )
 

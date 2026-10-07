@@ -14,6 +14,7 @@ import { SKILL_NAME_MAP, type TalentRules } from '../lib/talentRules'
 import { TALENT_GRIDS } from '../data/talentGrids'
 import { TALENT_SUMMARIES } from '../data/talentSummaries'
 import { CAMINOS_NACIDOS_DEL_METAL } from '../data/mistborn/caminosNacidosDelMetal'
+import { METALES_POR_CAMINO_Y_ERA, type CaminoMetalId } from '../data/mistborn/metales'
 import { ASCENDENCIAS_MB } from '../data/mistborn/origenes'
 import { TALENT_GRIDS_MISTBORN } from '../data/mistborn/talentGrids'
 import { TALENT_SUMMARIES_MISTBORN } from '../data/mistborn/talentSummaries'
@@ -50,6 +51,13 @@ export const MISTBORN_TALENTOS: TalentRules = {
   campoCaminoInvestido: 'caminoMetal',
   // The goal that opens the tree of the metalborn path and the trees of its powers (L.75 / PDF 81; T36): «Meta de nacido del metal pendiente»
   nombreMeta: 'Meta de nacido del metal',
+  // The metals each path can take in each era: the literal table of L.372 / PDF 378, the same one MetalPicker filters by. The «Otros poderes» of the map
+  // offers only these, so that the brumoso of Era 1 is not shown a power of gold that no brumoso of his era can have
+  metalesDelCamino: (caminoId, era) => {
+    if (!Object.hasOwn(METALES_POR_CAMINO_Y_ERA, caminoId)) return null
+    const porEra = METALES_POR_CAMINO_Y_ERA[caminoId as CaminoMetalId]
+    return era ? porEra[era] : [...porEra.era1, ...porEra.era2]
+  },
 }
 
 export const DATA: WorldData = {

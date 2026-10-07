@@ -2,7 +2,8 @@
  * TalentLamina — the readable plate of one specialty / spren bond / surge, opened from its gold band.
  * Two lanes of cards at the book's grid positions: official activation icon, full name, the non-talent
  * requirement in italics with ✓/✗, the state in words and the route step tab. Same fixed-geometry
- * tracer as the map (talentMap.ts), with the lámina profile.
+ * tracer as the map (talentMap.ts), with the lámina profile. The lámina of a power (Mistborn) opens with its
+ * definition and the state of its goal; the cards closed by the goal are hatched and carry the glyph of the metal.
  */
 import { useMemo, type CSSProperties, type ReactNode } from 'react'
 import { Check, ChevronUp, Hourglass, Plus, Target, X } from 'lucide-react'
@@ -11,16 +12,19 @@ import { SurgeIcon } from '../GameIcons'
 import { c, font, fs, radius, shadow, titleText, tone } from '../../theme'
 import { POTENCIAS } from '../../data/potencias'
 import type { Gate, TalentEvaluation, TalentGraph } from '../../lib/talentGraph'
+import type { PoderDef } from '../../worlds/types'
 import {
   WIDE_MIN, cellMark, firstSentence, laminaDims, plural, requiresText, stateWords, summaryOf, tracePlate,
   type EdgeStatusFn, type PlateModel,
 } from './talentMap'
-import { ACTIVATION, BAND_BG, BAND_FG, type Accent } from './talentStyle'
-import { ActIcon, DottedCheck, EdgeLayer, IdealGlyph } from './MapPieces'
+import { ACTIVATION, BAND_BG, BAND_FG, META_LOCKED, type Accent } from './talentStyle'
+import { ActIcon, DottedCheck, EdgeLayer, IdealGlyph, MetalMark } from './MapPieces'
 
 /** Non-talent requirements of a card (the talent part is the lines), plus talents outside this plate. */
 function gateBits(gates: Gate[], plate: PlateModel): { key: string; ok: boolean | 'dj'; content: ReactNode }[] {
   const out: { key: string; ok: boolean | 'dj'; content: ReactNode }[] = []
+  // the powers whose goal is one of the gates: «poder Alomancia de acero» says the same as «Meta de nacido del metal» (a power is complete when its goal is)
+  const conMeta = new Set(gates.flatMap((g) => (g.kind === 'meta' ? g.poderIds : [])))
   for (const g of gates) {
     const ok = g.status === 'met' ? true : g.status === 'confirm' ? 'dj' as const : false
     if (g.kind === 'talent') {
@@ -38,7 +42,13 @@ function gateBits(gates: Gate[], plate: PlateModel): { key: string; ok: boolean 
     } else if (g.kind === 'story') {
       out.push({ key: `h${g.clauseIndex}`, ok, content: <>DJ: {g.condition}</> })
     } else if (g.kind === 'ancestry') {
-      out.push({ key: `a${g.clauseIndex}`, ok, content: <>Ascendencia cantora</> })
+      // «Ascendencia cantora» in Stormlight, «Ascendencia humana o de sangre koloss» in Mistborn: the engine words it
+      out.push({ key: `a${g.clauseIndex}`, ok, content: <>{g.label}</> })
+    } else if (g.kind === 'meta') {
+      // the goal that closes the tree (T36): the glyph of its metal and «Meta de nacido del metal pendiente» (§7.7 #4)
+      out.push({ key: `m${g.clauseIndex}`, ok, content: <><span style={{ display: 'inline-flex', verticalAlign: -1.5 }}><MetalMark poderId={g.poderIds[0]} size={11} /></span> {g.label}</> })
+    } else if (g.kind === 'poder' && conMeta.has(g.poderId)) {
+      // already said by the goal gate of the same power: the card has no room to say it twice
     } else {
       out.push({ key: `u${g.clauseIndex}`, ok, content: <>{g.label}</> })
     }
@@ -56,6 +66,20 @@ function OkMark({ ok }: { ok: boolean | 'dj' }) {
   return ok
     ? <Check size={12} strokeWidth={3} aria-hidden style={{ display: 'inline', color: tone.esmeralda.fg, verticalAlign: -1.5 }} />
     : <X size={12} strokeWidth={3} aria-hidden style={{ display: 'inline', color: tone.rubi.fg, verticalAlign: -1.5 }} />
+}
+
+/** Height that the goal adds to a card on a phone (3 lines of its requirement text, 16.9 px each); it goes both to the card and to the block of its requirements */
+const EXTRA_ALTO_META = 52
+
+/**
+ * A plate of 4 lanes (the nacidoble path) in two lanes in reading order: on a phone its cards would be 68 px wide and their text would be cut. `order`
+ * is already the book's reading order (row by row, left to right), so the cards keep their sequence and only their grid positions change
+ */
+function aDosCarriles(plate: PlateModel): PlateModel {
+  return {
+    ...plate, cols: 2, rows: Math.ceil(plate.order.length / 2),
+    pos: new Map(plate.order.map((nid, i) => [nid, { col: i % 2, row: Math.floor(i / 2) }])),
+  }
 }
 
 export function TalentLamina({ id, plate, graph, evaluation, level, contentW, accent, edgeStatus, stepOf, targetId, onOpen, onClose, surgeRank, headingLevel = 3 }: {
@@ -76,19 +100,35 @@ export function TalentLamina({ id, plate, graph, evaluation, level, contentW, ac
 }) {
   const Hn = `h${headingLevel}` as 'h3' | 'h4'
   const wide = contentW >= WIDE_MIN
-  // the plates of 3 lanes (the singer) and of 4 (the nacidoble path): narrower cards over the whole lámina width
+  // the plates of 3 lanes (the singer) and of 4 (the nacidoble path): narrower cards over the whole lámina width; on a phone the 4 lanes become 2
+  const shown = useMemo(() => (!wide && plate.cols > 3 ? aDosCarriles(plate) : plate), [plate, wide])
+  // a tree closed by a goal (a power, the metalborn path) puts one more requirement on every card, the goal, which takes two lines on a phone: taller cards there
+  const extraH = !wide && (plate.kind === 'poder' || plate.kind === 'caminoInvestido') ? EXTRA_ALTO_META : 0
   const d = useMemo(() => {
     const base = laminaDims(contentW)
-    if (plate.cols <= 2) return base
+    const dims = extraH ? { ...base, cellH: base.cellH + extraH } : base
+    if (shown.cols <= 2) return dims
     const W = Math.min(contentW, wide ? 648 : 420)
-    return { ...base, channel: 12, cellW: Math.floor((W - 2 * base.margin - 12 * (plate.cols - 1)) / plate.cols) }
-  }, [contentW, plate.cols, wide])
-  const lam = useMemo(() => tracePlate(plate, graph, d, edgeStatus), [plate, graph, d, edgeStatus])
+    return { ...dims, channel: 12, cellW: Math.floor((W - 2 * base.margin - 12 * (shown.cols - 1)) / shown.cols) }
+  }, [contentW, shown.cols, wide, extraH])
+  const lam = useMemo(() => tracePlate(shown, graph, d, edgeStatus), [shown, graph, d, edgeStatus])
   const { box } = lam
   const owned = plate.order.filter((nid) => { const s = evaluation.nodes.get(nid)?.state; return s === 'learned' || s === 'learnedElsewhere' }).length
   const avail = plate.order.filter((nid) => evaluation.nodes.get(nid)?.state === 'available').length
   const pot = plate.kind === 'potencia' ? POTENCIAS.find((p) => p.name === plate.tree.section) : undefined
   const rank = pot && surgeRank ? surgeRank(pot.name) : 0
+  // the definition of the power of a power plate (`poder:<arte>:<metal>`: no plate of Stormlight has a `poderId`) and the goal gate its cards share
+  const def = useMemo(
+    () => (plate.poderId ? graph.rules.poderes.find((p): p is PoderDef => 'caminos' in p && `${p.arte}:${p.metal}` === plate.poderId) : undefined),
+    [plate.poderId, graph.rules.poderes],
+  )
+  const metaGate = useMemo(() => {
+    for (const nid of plate.order) {
+      const g = evaluation.nodes.get(nid)?.gates.find((x): x is Extract<Gate, { kind: 'meta' }> => x.kind === 'meta')
+      if (g) return g
+    }
+    return undefined
+  }, [plate.order, evaluation])
   const cardName: CSSProperties = {
     fontFamily: font.display, fontSize: wide ? 16 : 15, fontWeight: 650, lineHeight: 1.15, color: c.text,
     display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere',
@@ -113,8 +153,26 @@ export function TalentLamina({ id, plate, graph, evaluation, level, contentW, ac
           </div>
         </div>
       )}
+      {def && (
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: c.s1, border: `1px solid ${c.borderBright}`, borderRadius: radius.md, padding: '10px 12px', marginBottom: 10, boxShadow: shadow[1] }}>
+          <MetalMark poderId={plate.poderId} size={30} style={{ color: accent.fg }} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 650, color: c.text }}>{def.name}</span>
+              <span style={{ fontSize: fs.xs, color: c.muted }}>poder · {def.atributo}</span>
+            </p>
+            <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45, marginTop: 4 }}>
+              {firstSentence(def.descripcion)}
+              {def.requiereMeta && metaGate && (
+                <>{' '}<strong style={{ color: c.text }}>{metaGate.label}.</strong>{metaGate.completo ? '' : ' Hasta entonces sus talentos siguen cerrados.'}</>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: BAND_BG, color: BAND_FG, borderRadius: 4, padding: '4px 4px 4px 12px', minHeight: 44 }}>
         {pot && <SurgeIcon surge={pot.name} size={20} style={{ color: BAND_FG }} />}
+        {def && <MetalMark poderId={plate.poderId} size={20} style={{ color: BAND_FG }} />}
         <Hn id={`${id}-t`} style={{ ...titleText, fontSize: wide ? 18 : 17, color: BAND_FG, margin: 0, flex: 1, minWidth: 0 }}>
           {plate.fullLabel}
         </Hn>
@@ -146,6 +204,7 @@ export function TalentLamina({ id, plate, graph, evaluation, level, contentW, ac
             mark.kind === 'learned' ? { background: accent.wash(14), border: `1.5px solid ${accent.borderStrong}` }
             : mark.kind === 'elsewhere' ? { background: accent.wash(6), border: `1.5px dotted ${accent.borderStrong}` }
             : mark.kind === 'available' ? { background: c.s1, border: `1.5px dashed ${accent.border}` }
+            : mark.badge === 'meta' ? META_LOCKED
             : { background: mark.badge === 'nivel' ? c.s2 : c.s1, border: `1px solid ${c.borderBright}` }
           const onRoute = !!step || target
           const req = requiresText(node)
@@ -171,7 +230,7 @@ export function TalentLamina({ id, plate, graph, evaluation, level, contentW, ac
                 {bits.length > 0 && (
                   // up to ~4 stacked clauses (talent + skill + level + DJ condition can all land on one
                   // node, e.g. the radiant Ideal cards): keep in sync with laminaDims()'s cellH
-                  <span style={{ display: 'block', fontSize: fs.xs + 0.5, fontStyle: 'italic', color: c.muted, lineHeight: 1.35, maxHeight: 68, overflow: 'hidden', flexShrink: 0 }}>
+                  <span style={{ display: 'block', fontSize: fs.xs + 0.5, fontStyle: 'italic', color: c.muted, lineHeight: 1.35, maxHeight: 68 + extraH, overflow: 'hidden', flexShrink: 0 }}>
                     {bits.map((b, i) => (
                       // a plain inline span: the mark wraps together with its own clause's last word
                       // (non-breaking space) instead of floating on its own flex line
@@ -192,6 +251,7 @@ export function TalentLamina({ id, plate, graph, evaluation, level, contentW, ac
                   {mark.kind === 'learned' ? <Check size={13} strokeWidth={3} aria-hidden />
                     : mark.kind === 'elsewhere' ? <DottedCheck size={13} />
                     : mark.kind === 'available' ? <Plus size={13} strokeWidth={3} aria-hidden />
+                    : mark.badge === 'meta' ? <MetalMark poderId={mark.poderId} size={13} style={{ color: c.muted }} />
                     : <Hourglass size={12} aria-hidden style={{ color: c.muted }} />}
                   {words}
                 </span>

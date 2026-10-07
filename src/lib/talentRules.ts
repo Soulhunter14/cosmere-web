@@ -15,7 +15,7 @@
  * imports this module for its defaults, so this module takes nothing but types from it (in an import cycle, whichever of the two
  * modules ran first would read the other one's constants before they exist).
  */
-import type { WorldId } from '../types'
+import type { Era, WorldId } from '../types'
 import type { CaminoInvestidoDef, PoderDef } from '../worlds/types'
 import type { ArbolAscendencia } from '../data/mistborn/origenes'
 import type { SkillField } from './talentGraph'
@@ -61,6 +61,12 @@ export interface TalentRules {
    * «pendiente» / «completada» to it. Optional: a world without goal-locked trees leaves it out and the engine says «Meta»
    */
   nombreMeta?: string
+  /**
+   * Metals (`PoderDef.metal`) that the Investida path `caminoId` can take in `era` (`null` = every era), or `null` when the world does not restrict them.
+   * The «Otros poderes» of the talent map offers only the powers of these metals: a power that the path unlocks in some era (`PoderDef.caminos`) may not
+   * be available to it in this one (the brumoso of Era 1 has no gold, L.372 / PDF 378). Optional: Stormlight has no such table, so nothing is filtered there
+   */
+  metalesDelCamino?: (caminoId: string, era: Era | null) => readonly string[] | null
 }
 
 /** Skill name as written in prerequisites → Character field. «Saber» is the book's name for conocimiento. */

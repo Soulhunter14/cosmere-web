@@ -15,6 +15,7 @@
  *   separate lines. Parents outside the plate become text chips («también requiere: X»).
  */
 import type { Gate, NodeEval, TalentGraph, TalentNode, TalentTree } from '../../lib/talentGraph'
+import type { Era } from '../../types'
 import type { PoderDef } from '../../worlds/types'
 
 // ── Text helpers ─────────────────────────────────────────────────────────────
@@ -207,11 +208,16 @@ export function buildPathModels(graph: TalentGraph): PathModel[] {
 
 // ── «Otros poderes» and the rows of plates ───────────────────────────────────────────────────────────────────
 
-/** Powers of the world that the Investida path `pathId` unlocks (their `caminos`) and that have a tree but the character does not have */
-export function otherPowerDefs(graph: TalentGraph, pathId: string): PoderDef[] {
+/**
+ * Powers of the world that the Investida path `pathId` unlocks (their `caminos`) and can take in `era` (`rules.metalesDelCamino`, when the world has such
+ * a table), that have a tree but the character does not have
+ */
+export function otherPowerDefs(graph: TalentGraph, pathId: string, era: Era | null = null): PoderDef[] {
   const own = new Set((graph.options.poderes ?? []).map((p) => `${p.arte}:${p.metal}`))
+  const metales = graph.rules.metalesDelCamino?.(pathId, era) ?? null
   return graph.rules.poderes.filter(
-    (p): p is PoderDef => 'caminos' in p && p.talentos.length > 0 && (p.caminos as readonly string[]).includes(pathId) && !own.has(`${p.arte}:${p.metal}`),
+    (p): p is PoderDef => 'caminos' in p && p.talentos.length > 0 && (p.caminos as readonly string[]).includes(pathId)
+      && (!metales || metales.includes(p.metal)) && !own.has(`${p.arte}:${p.metal}`),
   )
 }
 

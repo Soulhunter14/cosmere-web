@@ -5,7 +5,8 @@
  * Consumes a `TalentGraph`/`TalentEvaluation` already built by the page (lib/talentGraph.ts) —
  * this component owns no rules logic. A talent whose name is shared by several occurrences
  * (Robusto in four heroic paths, "Segundo Ideal" reused per order…) is shown once with every
- * source listed.
+ * source listed. The card summaries are the ones of the world of the graph (`graph.rules.summaries`). Mistborn adds, for the powers of the
+ * character, the basic actions of each complete power (or its nascent version) and «Beber vial (1)», which opens the sheet of the vial (§7.7 #4).
  */
 import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, Music, Sparkle, TriangleAlert, Zap } from 'lucide-react'
@@ -17,10 +18,12 @@ import { Button, EmptyState, Segmented } from '../ui'
 import { c, eyebrow, font, fs, radius, shadow, tone, toneFrom, type Tone } from '../../theme'
 import { RADIANT_ORDERS, RADIANT_REGLAS } from '../../data/radiantOrders'
 import { POTENCIAS } from '../../data/potencias'
-import { TALENT_SUMMARIES } from '../../data/talentSummaries'
 import { CANTOR_COLOR, getFormasDisponibles } from '../../data/cantores'
 import type { FormaCantor } from '../../data/cantores'
-import type { TalentGraph, TalentEvaluation, TalentNode } from '../../lib/talentGraph'
+import type { AccionPoder } from '../../data/mistborn/tipos'
+import type { TalentGraph, TalentEvaluation, TalentNode, TalentTree, TreeKind } from '../../lib/talentGraph'
+import type { PoderDef } from '../../worlds/types'
+import { sourceOf } from './talentMap'
 
 /* ─── localStorage prefs (try/catch: private windows, blocked storage…) ─── */
 function readPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -80,6 +83,8 @@ interface Entry {
   treeGroupKey: string
   treeGroupLabel: string
   treeGroupOrder: number
+  /** a button under the full text (the vial: «Beber vial…»), which the component wires to the page */
+  accion?: { label: string }
 }
 
 const RADIANT_ACTIONS: { name: string; activation: ActivationType }[] = [
@@ -87,6 +92,34 @@ const RADIANT_ACTIONS: { name: string; activation: ActivationType }[] = [
   { name: 'Aumentar', activation: 'action1' },
   { name: 'Revitalizar', activation: 'free' },
 ]
+
+/**
+ * The trees that name themselves (the Investida path with a flat tree, an ancestry, a power of Mistborn: their `pathName` is their `section`) are written
+ * once, never «Brumoso · Brumoso» (T36); the singer tree of Stormlight keeps its «Cantor · Cantor» (P1)
+ */
+const ARBOLES_CON_NOMBRE_PROPIO: ReadonlySet<TreeKind> = new Set<TreeKind>(['caminoInvestido', 'ascendencia', 'poder'])
+
+/** The tree of a group of «Por árbol»: «Cazador · Arquero», «Brumoso», «Brumoso · Alomancia de acero» */
+const grupoDeArbol = (tree: TalentTree): string =>
+  ARBOLES_CON_NOMBRE_PROPIO.has(tree.kind) && tree.pathName === tree.section ? tree.section : `${tree.pathName} · ${tree.section}`
+
+/** The cost in actions that the sheets of the book put next to the actions of a power: «Quemar acero (1)», «Beber vial (1)» */
+const COSTE_EN_ACCIONES: Partial<Record<ActivationType, string>> = { action1: ' (1)', action2: ' (2)', action3: ' (3)' }
+const conCoste = (nombre: string, activacion: ActivationType): string => `${nombre}${COSTE_EN_ACCIONES[activacion] ?? ''}`
+
+/** What the vial does (L.129-130 / PDF 135-136), the same rule as the sheet of the vial */
+const BEBER_VIAL =
+  'Bebes un vial con los metales que elijas. Si contiene un metal que puedes quemar, recuperas Investidura hasta tu valor máximo; ' +
+  'los poderes cuyo metal está en el vial dejan de estar Desprovistos y los demás quedan Desprovistos.'
+
+/** The full text of an action of a power: what it does, its options and effects, its cost and its duration */
+function describirAccion(a: AccionPoder): string {
+  const bloques = [a.descripcion]
+  if (a.opciones?.length) bloques.push(a.opciones.map((o) => `${o.nombre}: ${o.descripcion}`).join('\n'))
+  if (a.efectos?.length) bloques.push(a.efectos.map((e) => `• ${e}`).join('\n'))
+  bloques.push(`Coste: ${a.coste} · Duración: ${a.duracion}${a.mantener ? `\nMantener: ${a.mantener}` : ''}`)
+  return bloques.join('\n\n')
+}
 
 function surgeRank(character: Character, surgeName: string): number {
   const fields = character as unknown as Record<string, unknown>
@@ -97,10 +130,13 @@ function surgeRank(character: Character, surgeName: string): number {
   return 0
 }
 
-function buildEntries(character: Character, graph: TalentGraph, evaluation: TalentEvaluation): Entry[] {
+function buildEntries(character: Character, graph: TalentGraph, evaluation: TalentEvaluation, conVial: boolean): Entry[] {
   const list: Entry[] = []
   const pathNameOf = (n: TalentNode) => graph.treeById.get(n.treeId)?.pathName ?? n.pathId
   const orderOf = (treeId: string) => graph.treeById.get(treeId)?.order ?? 999
+  /** Where a talent comes from: «Cazador · Arquero»; the trees that name themselves say it as the map does («Brumoso · talento principal», «Kandra») */
+  const fuenteDe = (n: TalentNode) => (ARBOLES_CON_NOMBRE_PROPIO.has(n.kind) ? sourceOf(n, graph) : `${pathNameOf(n)} · ${n.section}`)
+  const grupoDe = (n: TalentNode) => { const tree = graph.treeById.get(n.treeId); return tree ? grupoDeArbol(tree) : `${pathNameOf(n)} · ${n.section}` }
 
   for (const name of evaluation.learned) {
     const nodes = graph.byName.get(name)
@@ -109,7 +145,7 @@ function buildEntries(character: Character, graph: TalentGraph, evaluation: Tale
       nodes.find((n) => evaluation.nodes.get(n.id)?.state === 'learned')
       ?? nodes.find((n) => evaluation.nodes.get(n.id)?.state === 'learnedElsewhere')
       ?? nodes[0]
-    const sources = [...new Set(nodes.map((n) => `${pathNameOf(n)} · ${n.section}`))]
+    const sources = [...new Set(nodes.map(fuenteDe))]
     list.push({
       key: name,
       name,
@@ -120,7 +156,7 @@ function buildEntries(character: Character, graph: TalentGraph, evaluation: Tale
       formas: primary.formas.length ? primary.formas : undefined,
       primaryNodeId: primary.id,
       treeGroupKey: primary.treeId,
-      treeGroupLabel: `${pathNameOf(primary)} · ${primary.section}`,
+      treeGroupLabel: grupoDe(primary),
       treeGroupOrder: orderOf(primary.treeId),
     })
   }
@@ -162,23 +198,65 @@ function buildEntries(character: Character, graph: TalentGraph, evaluation: Tale
     }
   }
 
+  // The powers of the character (Mistborn; Stormlight characters have none): the basic actions of each COMPLETE power. Before its goal is done a power is
+  // only nascent: no rules of its own, just small narrative effects that the DJ and the player agree on (L.162 / PDF 168), so it is one row, not its actions
+  const metaNombre = (graph.rules.nombreMeta ?? 'Meta').toLowerCase()
+  character.poderes.forEach((poder, i) => {
+    const def = graph.rules.poderes.find((d): d is PoderDef => 'caminos' in d && d.arte === poder.arte && d.metal === poder.metal)
+    if (!def) return
+    const treeId = `poder:${def.arte}:${def.metal}`
+    const tree = graph.treeById.get(treeId)
+    const grupo = { treeGroupKey: treeId, treeGroupLabel: tree ? grupoDeArbol(tree) : def.name, treeGroupOrder: tree?.order ?? 900 + i }
+    // alomancia de atium has no nascent version and no goal (L.177 / PDF 183): it is always the complete one
+    if (poder.completo || !def.requiereMeta) {
+      for (const a of def.acciones) {
+        list.push({
+          key: `poder-accion:${treeId}:${a.nombre}`, name: conCoste(a.nombre, a.activacion), activation: a.activacion, sources: [def.name],
+          description: describirAccion(a), primaryNodeId: null, ...grupo,
+        })
+      }
+      return
+    }
+    const usos = def.usosCreativos.length ? `\n\nPara inspirarte, sus usos creativos: ${def.usosCreativos.map((u) => u.nombre).join(', ')}.` : ''
+    list.push({
+      key: `poder-naciente:${treeId}`, name: `${def.name} (naciente)`, activation: 'special', sources: [def.name],
+      description: `Aún no has completado tu ${metaNombre} para este poder: solo tienes su versión naciente, con pequeños efectos narrativos que acuerdas con la DJ. `
+        + `Al completarla desbloqueas sus acciones (${def.acciones.map((a) => a.nombre).join(', ')}).${usos}`,
+      primaryNodeId: null, ...grupo,
+    })
+  })
+
+  // «Beber vial (1)»: the action the alomantic paths give with their Investiture (L.129 / PDF 135); it sits with the Investida path in «Por árbol»
+  if (conVial) {
+    const camino = graph.trees.find((t) => t.kind === 'caminoInvestido')
+    list.push({
+      key: 'beber-vial', name: conCoste('Beber vial', 'action1'), activation: 'action1', sources: ['Alomancia'], description: BEBER_VIAL,
+      primaryNodeId: null, accion: { label: 'Beber vial…' },
+      treeGroupKey: camino?.id ?? 'beber-vial', treeGroupLabel: camino ? grupoDeArbol(camino) : 'Alomancia', treeGroupOrder: camino?.order ?? 899,
+    })
+  }
+
   return list
 }
 
 /* ─── Row ─── */
 function EntryRow({
-  entry, forced, expanded, onToggle, onOpenTalent, onShowInTree,
+  entry, summaries, forced, expanded, onToggle, onOpenTalent, onShowInTree, onAccion,
 }: {
   entry: Entry
+  /** card text of the world of the graph (`graph.rules.summaries`) */
+  summaries: Readonly<Record<string, string>>
   /** Segmented "Completo": every row shows its full text regardless of individual state */
   forced: boolean
   expanded: boolean
   onToggle: () => void
   onOpenTalent: (nodeId: string) => void
   onShowInTree: (nodeId: string) => void
+  /** what the button of the row (`entry.accion`) does */
+  onAccion?: () => void
 }) {
   const isOpen = forced || expanded
-  const summary = TALENT_SUMMARIES[entry.name] ?? firstSentence(entry.description)
+  const summary = summaries[entry.name] ?? firstSentence(entry.description)
   return (
     <li style={{ borderTop: `1px solid ${c.border}` }}>
       <button
@@ -229,6 +307,11 @@ function EntryRow({
                 </li>
               ))}
             </ul>
+          )}
+          {entry.accion && onAccion && (
+            <div>
+              <Button variant="secondary" size="md" aria-haspopup="dialog" onClick={onAccion}>{entry.accion.label}</Button>
+            </div>
           )}
           {entry.primaryNodeId && (
             <p style={{ display: 'flex', gap: 16 }}>
@@ -325,19 +408,22 @@ function IdealHintCard({ graph, onShowInTree }: { graph: TalentGraph; onShowInTr
 }
 
 /* ─── Component ─── */
-export function MyTalents({ character, graph, evaluation, onOpenTalent, onShowInTree, onChangeForma }: {
+export function MyTalents({ character, graph, evaluation, onOpenTalent, onShowInTree, onChangeForma, onBeberVial }: {
   character: Character
   graph: TalentGraph
   evaluation: TalentEvaluation
   onOpenTalent: (nodeId: string) => void
   onShowInTree: (nodeId: string) => void
   onChangeForma?: () => void
+  /** Opens the sheet of the vial (Mistborn). Only given when the character has a power a vial acts upon and may drink one: without it there is no «Beber vial (1)» */
+  onBeberVial?: () => void
 }) {
   const [agrupar, setAgrupar] = useState<Agrupar>(() => readPref(AGRUPAR_KEY, ['accion', 'arbol'] as const, 'accion'))
   const [texto, setTexto] = useState<Texto>(() => readPref(TEXTO_KEY, ['resumen', 'completo'] as const, 'resumen'))
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
 
-  const entries = useMemo(() => buildEntries(character, graph, evaluation), [character, graph, evaluation])
+  const conVial = !!onBeberVial
+  const entries = useMemo(() => buildEntries(character, graph, evaluation, conVial), [character, graph, evaluation, conVial])
   const order = RADIANT_ORDERS.find((o) => o.id === graph.radiantOrderId)
   const showIdealHint = !!order && !evaluation.learned.has('Primer Ideal')
 
@@ -411,11 +497,13 @@ export function MyTalents({ character, graph, evaluation, onOpenTalent, onShowIn
                 <EntryRow
                   key={e.key}
                   entry={e}
+                  summaries={graph.rules.summaries}
                   forced={texto === 'completo'}
                   expanded={expanded.has(e.key)}
                   onToggle={() => toggle(e.key)}
                   onOpenTalent={onOpenTalent}
                   onShowInTree={onShowInTree}
+                  onAccion={onBeberVial}
                 />
               ))}
             </ul>

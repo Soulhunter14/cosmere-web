@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type Ref } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
-import { Plus, Minus, Trash2, Info, Sword, Shield, ShieldCheck, Package, ShoppingBag, Star, TriangleAlert, Coins, type LucideIcon } from 'lucide-react'
+import { Plus, Minus, Trash2, Info, Sword, Shield, ShieldCheck, Package, ShoppingBag, Star, TriangleAlert, Coins, Check, Search, type LucideIcon } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
 import { Button, Card, ConfirmDialog, ErrorMessage, Field, IconButton, Input, SectionTitle, Sheet, Spinner, Stepper } from '../../components/ui'
@@ -11,8 +11,10 @@ import { CharacterHero } from '../../components/CharacterHero'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { cosmereImage } from '../../lib/cosmereAssets'
-import { formatMoneda, monedaImagen } from '../../lib/moneda'
+import { formatMoneda, monedaImagen, type Moneda } from '../../lib/moneda'
+import { filterPickerItems, isPickable } from '../../lib/catalogo'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
+import type { WorldConfig } from '../../worlds/types'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, titleText, tone, type Tone } from '../../theme'
 
 type ItemKind = 'weapon' | 'armor' | 'gear'
@@ -144,6 +146,147 @@ function leerCantidad(texto: string): number | null {
   return /^\d{0,9}(\.\d{0,2})?$/.test(t) && /\d/.test(t) ? Number(t) : null
 }
 
+/** «Era» tile of an item sheet: only the items that exist in a single era (L.254-267 / PDF 260-273) have one */
+const eraTiles = (era: 1 | 2 | null, cfg: WorldConfig): { label: string; value: string }[] => {
+  const def = era != null ? cfg.eras?.find((e) => e.id === `era${era}`) : undefined
+  return def ? [{ label: 'Era', value: def.label }] : []
+}
+
+/** «Precio» (or «Solo recompensa») and «Era» tiles of a weapon or armor sheet: nothing for an item that has neither, which is every Stormlight one */
+const priceEraTiles = (item: { price: number | null; isRewardOnly: boolean; era: 1 | 2 | null }, cfg: WorldConfig): { label: string; value: string }[] => [
+  ...(item.price != null ? [{ label: 'Precio', value: formatMoneda(item.price, cfg.moneda) }] : item.isRewardOnly ? [{ label: 'Precio', value: 'Solo recompensa' }] : []),
+  ...eraTiles(item.era, cfg),
+]
+
+/* ─── Item picker ──────────────────────────────────────────────────────── */
+
+/** A row of the picker: the bag stores names, so `id` is the name; `price` and `group` (type of weapon) only travel in a world with a priced catalog */
+type PickerItem = { id: string; label: string; weight: number; price?: number | null; group?: number }
+
+/**
+ * The picker behind the «Añadir» buttons. A world with a priced catalog (Mistborn: 35 weapons, 79 objects) gets a search box, the price of each item and,
+ * for weapons, chips by type; any other world (Stormlight) gets the plain list it always had (P1)
+ */
+function ItemPicker({ kind, label, items, groups, searchable, moneda, onPick, onClose }: {
+  kind: ItemKind
+  label: string
+  items: PickerItem[]
+  /** Types of weapon in `items`, for the chips (fewer than two: no chips) */
+  groups: { id: number; label: string }[]
+  /** Search box, prices and chips (worlds with a priced catalog); `false` = the plain list */
+  searchable: boolean
+  moneda: Moneda
+  onPick: (name: string) => void
+  onClose: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [group, setGroup] = useState<number | null>(null)
+  const cat = CATEGORY[kind]
+  const CatIcon = cat.Icon
+  const shown = searchable ? filterPickerItems(items, search, group) : items
+  const filtering = search.trim() !== '' || group !== null
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={`Añadir ${label}`}
+      footer={<Button variant="secondary" size="lg" fullWidth onClick={onClose}>Cerrar</Button>}
+    >
+      {searchable && items.length > 0 && (
+        <>
+          {/* The search box stays at the top of the sheet while the long list scrolls under it */}
+          <div style={{ position: 'sticky', top: 0, zIndex: 1, margin: '0 -20px 10px', padding: '0 20px 8px', background: 'var(--surface-1)' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={16} aria-hidden style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: c.subtle, pointerEvents: 'none' }} />
+              <Input
+                type="search"
+                aria-label={`Buscar en ${label.toLowerCase()}`}
+                placeholder="Buscar por nombre…"
+                autoComplete="off"
+                enterKeyHint="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ paddingLeft: 38 }}
+              />
+            </div>
+            {/* The count is announced while the list is filtered; an empty result is announced by its own message below */}
+            <p className="sr-only" role="status">{filtering && shown.length > 0 ? `${shown.length} resultado${shown.length !== 1 ? 's' : ''}` : ''}</p>
+          </div>
+          {groups.length > 1 && (
+            <div role="group" aria-label="Tipo de arma" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {[{ id: null, label: 'Todas' }, ...groups].map((g) => {
+                const on = group === g.id
+                return (
+                  <button
+                    key={g.id ?? 'todas'}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setGroup(g.id)}
+                    className="ui-btn"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      minHeight: 36, padding: on ? '0 12px 0 10px' : '0 12px', borderRadius: radius.full,
+                      fontSize: fs.sm, fontWeight: on ? 650 : 550, cursor: 'pointer',
+                      border: `1px solid ${on ? cat.tone.border : c.borderBright}`,
+                      background: on ? cat.tone.bg : c.s2,
+                      color: on ? cat.tone.fg : c.muted,
+                    }}
+                  >
+                    {on && <Check size={14} aria-hidden strokeWidth={2.5} />}
+                    {g.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+      {items.length === 0 ? (
+        <p role="status" style={{ fontSize: fs.sm, color: c.muted, textAlign: 'center', padding: '20px 0' }}>Cargando...</p>
+      ) : shown.length === 0 ? (
+        <p role="status" style={{ fontSize: fs.sm, color: c.muted, textAlign: 'center', padding: '20px 0' }}>Sin resultados</p>
+      ) : (
+        <ul role="list" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {shown.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className="ui-card ui-card--interactive"
+                onClick={() => onPick(item.id)}
+                style={{
+                  ...buttonReset,
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  minHeight: 52,
+                  padding: '8px 14px 8px 8px',
+                  borderRadius: radius.md,
+                  background: c.s1,
+                  border: `1px solid ${c.border}`,
+                  color: c.text,
+                  textAlign: 'left',
+                }}
+              >
+                <span aria-hidden style={{ width: 36, height: 36, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: cat.tone.bg, border: `1px solid ${cat.tone.border}`, color: cat.tone.fg }}>
+                  <CatIcon size={17} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: fs.base, fontWeight: 550, overflowWrap: 'anywhere' }}>{item.label}</span>
+                <span style={{ fontSize: fs.sm, color: c.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                  <span className="sr-only">, </span>
+                  {item.weight} kg
+                  {item.price != null && ` · ${formatMoneda(item.price, moneda)}`}
+                </span>
+                <Plus size={16} aria-hidden style={{ color: cat.tone.fg }} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Sheet>
+  )
+}
+
 /* ─── Page ─────────────────────────────────────────────────────────────── */
 
 export function BolsaDetailPage() {
@@ -181,17 +324,19 @@ export function BolsaDetailPage() {
     if (character) setMarcos({ infusas: character.marcosInfusas ?? 0, opacas: character.marcosOpacas ?? 0 })
   }, [character])
 
-  const { data: catalogWeapons = [] } = useQuery<WeaponCatalog[]>({ queryKey: ['catalog', 'weapons'], queryFn: catalogApi.getWeapons })
-  const { data: catalogArmor = [] }   = useQuery<ArmorCatalog[]>({  queryKey: ['catalog', 'armor'],   queryFn: catalogApi.getArmor })
-  const { data: catalogGear = [] }    = useQuery<GearItem[]>({       queryKey: ['catalog', 'gear'],    queryFn: catalogApi.getGear })
+  // The catalog of the campaign (its world and, in Mistborn, its era): the same keys as CatalogPage, so an item created there is here at once.
+  // Arrows, not bare references: TanStack would call `catalogApi.getWeapons` with its QueryFunctionContext as `campaignId`, and the server would silently answer Stormlight
+  const { data: catalogWeapons = [] } = useQuery<WeaponCatalog[]>({ queryKey: ['catalog', cId, 'weapons'], queryFn: () => catalogApi.getWeapons(cId) })
+  const { data: catalogArmor = [] }   = useQuery<ArmorCatalog[]>({  queryKey: ['catalog', cId, 'armor'],   queryFn: () => catalogApi.getArmor(cId) })
+  const { data: catalogGear = [] }    = useQuery<GearItem[]>({       queryKey: ['catalog', cId, 'gear'],    queryFn: () => catalogApi.getGear(cId) })
 
-  const { data: optWeaponType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE') })
-  const { data: optSkill }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL') })
-  const { data: optDamageType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE') })
-  const { data: optRange }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE') })
-  const { data: optWeaponTrait } = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT') })
-  const { data: optArmorType }   = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE') })
-  const { data: optArmorTrait }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT') })
+  const { data: optWeaponType }  = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE', cId) })
+  const { data: optSkill }       = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL', cId) })
+  const { data: optDamageType }  = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE', cId) })
+  const { data: optRange }       = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE', cId) })
+  const { data: optWeaponTrait } = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT', cId) })
+  const { data: optArmorType }   = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE', cId) })
+  const { data: optArmorTrait }  = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT', cId) })
 
   const buildOptMap     = (opts?: CatalogOption[]) => { const m = new Map<number, string>();        opts?.forEach((o) => m.set(o.id, o.name)); return m }
   const buildOptFullMap = (opts?: CatalogOption[]) => { const m = new Map<number, CatalogOption>(); opts?.forEach((o) => m.set(o.id, o));      return m }
@@ -786,61 +931,30 @@ export function BolsaDetailPage() {
 
       {/* ─── Item picker ─── */}
       {itemPicker && (() => {
+        // Neither a reward-only item nor a metal vial is offered (Q21: the vials of a metal live in `poderes[].viales`, so buying one here would count it twice)
+        const priced = cfg.features.catalogoDePrecios
+        const row = (name: string, weight: number, price: number | null, group?: number): PickerItem =>
+          ({ id: name, label: name, weight, ...(priced ? { price, group } : {}) })
+        const weapons = catalogWeapons.filter(isPickable)
         const config = {
-          weapon: { label: 'Armas',     items: catalogWeapons.map((w) => ({ id: w.name, label: w.name, weight: w.weight })) },
-          armor:  { label: 'Armaduras', items: catalogArmor.map((a) => ({ id: a.name, label: a.name, weight: a.weight })) },
-          gear:   { label: 'Equipo',    items: catalogGear.map((g) => ({ id: g.name, label: g.name, weight: g.weight })) },
+          weapon: { label: 'Armas',     items: weapons.map((w) => row(w.name, w.weight, w.price, w.weaponTypeId)) },
+          armor:  { label: 'Armaduras', items: catalogArmor.filter(isPickable).map((a) => row(a.name, a.weight, a.price)) },
+          gear:   { label: 'Equipo',    items: catalogGear.filter(isPickable).map((g) => row(g.name, g.weight, g.price)) },
         }[itemPicker]
-        const cat = CATEGORY[itemPicker]
-        const CatIcon = cat.Icon
-        const close = () => setItemPicker(null)
+        const groups = itemPicker === 'weapon'
+          ? [...new Set(weapons.map((w) => w.weaponTypeId))].sort((a, b) => a - b).map((id) => ({ id, label: wtMap.get(id) ?? '—' }))
+          : []
         return (
-          <Sheet
-            open
-            onClose={close}
-            title={`Añadir ${config.label}`}
-            footer={<Button variant="secondary" size="lg" fullWidth onClick={close}>Cerrar</Button>}
-          >
-            {config.items.length === 0 ? (
-              <p role="status" style={{ fontSize: fs.sm, color: c.muted, textAlign: 'center', padding: '20px 0' }}>Cargando...</p>
-            ) : (
-              <ul role="list" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {config.items.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      className="ui-card ui-card--interactive"
-                      onClick={() => addItem(itemPicker, item.id)}
-                      style={{
-                        ...buttonReset,
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        minHeight: 52,
-                        padding: '8px 14px 8px 8px',
-                        borderRadius: radius.md,
-                        background: c.s1,
-                        border: `1px solid ${c.border}`,
-                        color: c.text,
-                        textAlign: 'left',
-                      }}
-                    >
-                      <span aria-hidden style={{ width: 36, height: 36, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: cat.tone.bg, border: `1px solid ${cat.tone.border}`, color: cat.tone.fg }}>
-                        <CatIcon size={17} />
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: fs.base, fontWeight: 550, overflowWrap: 'anywhere' }}>{item.label}</span>
-                      <span style={{ fontSize: fs.sm, color: c.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                        <span className="sr-only">, </span>
-                        {item.weight} kg
-                      </span>
-                      <Plus size={16} aria-hidden style={{ color: cat.tone.fg }} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Sheet>
+          <ItemPicker
+            kind={itemPicker}
+            label={config.label}
+            items={config.items}
+            groups={groups}
+            searchable={priced}
+            moneda={cfg.moneda}
+            onPick={(name) => addItem(itemPicker, name)}
+            onClose={() => setItemPicker(null)}
+          />
         )
       })()}
 
@@ -889,7 +1003,7 @@ export function BolsaDetailPage() {
                 </DetailSection>
                 <DetailSection title="Estadísticas">
                   <dl style={statGrid}>
-                    {[{ label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' }, { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' }, { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' }, { label: 'Peso', value: `${weapon.weight} kg` }].map(({ label, value }) => (
+                    {[{ label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' }, { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' }, { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' }, { label: 'Peso', value: `${weapon.weight} kg` }, ...priceEraTiles(weapon, cfg)].map(({ label, value }) => (
                       <StatPill key={label} label={label} value={value} />
                     ))}
                   </dl>
@@ -928,7 +1042,7 @@ export function BolsaDetailPage() {
                 </DetailSection>
                 <DetailSection title="Tipo">
                   <dl style={statGrid}>
-                    {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }].map(({ label, value }) => (
+                    {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }, ...priceEraTiles(armor, cfg)].map(({ label, value }) => (
                       <StatPill key={label} label={label} value={value} />
                     ))}
                   </dl>
@@ -957,7 +1071,7 @@ export function BolsaDetailPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <DetailSection title="Detalles">
                   <dl style={statGrid}>
-                    {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: formatMoneda(gear.price, cfg.moneda) }].map(({ label, value }) => (
+                    {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: formatMoneda(gear.price, cfg.moneda) }, ...eraTiles(gear.era, cfg)].map(({ label, value }) => (
                       <StatPill key={label} label={label} value={value} />
                     ))}
                   </dl>

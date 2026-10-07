@@ -38,6 +38,7 @@ export const MISTBORN: WorldConfig = {
     bonosServidor: true,
     equipoInicial: true,
     origenes: true,
+    catalogoDePrecios: true,
   },
   // The book's table (T26). No tirador/pnj tables nor `columnasPnj`: Mistborn reads `habilidades` on all three surfaces (the dice roller from T43)
   habilidades: HABILIDADES_COSMERE,

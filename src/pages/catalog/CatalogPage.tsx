@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Sword, Shield, Package, X, Plus, Trash2, Pencil, Check, Star, type LucideIcon } from 'lucide-react'
+import { Sword, Shield, Package, X, Plus, Trash2, Pencil, Check, Star, Coins, type LucideIcon } from 'lucide-react'
 import { catalogApi } from '../../api/catalog'
 import type { CreateWeaponPayload, CreateArmorPayload } from '../../api/catalog'
 import {
-  Button, EmptyState, Field, IconButton, Input, PageHeader, SectionTitle, Select, Sheet, Spinner, TabPanel, Tabs, Textarea,
+  Button, EmptyState, Field, IconButton, Input, PageHeader, SectionTitle, Select, Sheet, Spinner, Switch, TabPanel, Tabs, Textarea,
 } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { cosmereImage } from '../../lib/cosmereAssets'
-import { useCampaignStore } from '../../store/campaignStore'
-import { buttonReset, c, card, eyebrow, font, fs, numeral, page, radius, shadow, tone, type Tone } from '../../theme'
+import { formatMoneda, monedaImagen } from '../../lib/moneda'
+import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
+import { buttonReset, c, card, eyebrow, font, fs, numeral, page, pill, radius, shadow, tone, type Tone } from '../../theme'
 import type { WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
 
 type Tab = 'weapons' | 'armor' | 'gear'
@@ -146,15 +147,43 @@ function DetailSection({ title, action, children }: { title: string; action?: Re
   )
 }
 
-/** Price with the official diamond-mark sphere */
+/**
+ * Price in the money of the world: «5 mc» with the official diamond-mark sphere (the marco), «0,05 ar» with the illustration of the money of the
+ * era (L.254 / PDF 260, T45) or a `Coins` glyph while the world has none. The text comes from `formatMoneda`, which leaves a Stormlight price exactly as it was
+ */
 function Price({ value }: { value: number }) {
+  const { moneda } = useWorldConfig()
+  const era = useEra()
+  const marco = moneda.simbolo === 'mc'
+  const img = marco ? SPHERE : monedaImagen(moneda, era)
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      {SPHERE && <img src={SPHERE} alt="" width={15} height={16} style={{ flexShrink: 0 }} />}
-      {value} mc
+      {img
+        ? (marco
+          ? <img src={img} alt="" width={15} height={16} style={{ flexShrink: 0 }} />
+          : <img src={img} alt="" width={18} height={18} style={{ flexShrink: 0, objectFit: 'contain' }} />)
+        : !marco && <Coins size={16} aria-hidden style={{ flexShrink: 0 }} />}
+      {formatMoneda(value, moneda)}
     </span>
   )
 }
+
+/** Chip of an item that only exists in one era (the book labels the rows «ERA 1» / «ERA 2», L.254-267 / PDF 260-273); label and tone are the world's */
+function EraChip({ era }: { era: 1 | 2 }) {
+  const { eras } = useWorldConfig()
+  const def = eras?.find((e) => e.id === `era${era}`)
+  return def ? <span style={pill(def.tone)}>{def.label}</span> : null
+}
+
+/** «Precio» tile of a weapon or armor sheet: its price, «Solo recompensa» when it has none because it is a reward, nothing otherwise (every Stormlight weapon and armor) */
+const priceTile = (item: { price: number | null; isRewardOnly: boolean }): { label: string; value: ReactNode }[] =>
+  item.price != null ? [{ label: 'Precio', value: <Price value={item.price} /> }]
+  : item.isRewardOnly ? [{ label: 'Precio', value: 'Solo recompensa' }]
+  : []
+
+/** «Era» tile of an item sheet (only the items that exist in a single era have one) */
+const eraTile = (item: { era: 1 | 2 | null }): { label: string; value: ReactNode }[] =>
+  item.era != null ? [{ label: 'Era', value: <EraChip era={item.era} /> }] : []
 
 /**
  * Visible header of the catalogue sheets. The dialog's accessible name/description come from the Sheet's
@@ -176,7 +205,7 @@ function SheetHeader({ tab, title, subtitle, actions }: { tab: Tab; title: strin
 }
 
 // ── Detail sheet ─────────────────────────────────────────────
-function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onClose: () => void; isGm: boolean }) {
+function DetailSheet({ selected, onClose, isGm, campaignId }: { selected: SelectedItem; onClose: () => void; isGm: boolean; campaignId: number }) {
   const qc = useQueryClient()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingDesc, setEditingDesc] = useState(false)
@@ -189,19 +218,15 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
     : selected.kind === 'armor' ? selected.item.description
     : selected.item.description
 
-  const descQueryKey =
-    selected.kind === 'weapon' ? 'catalog-weapons'
-    : selected.kind === 'armor' ? 'catalog-armor'
-    : 'catalog-gear'
-
+  // The catalog is served by campaign: every list and option of it lives under ['catalog', campaignId] (the Bolsa shares those keys)
   const updateDescMutation = useMutation({
     mutationFn: (description: string) => {
-      if (selected.kind === 'weapon') return catalogApi.updateWeaponDescription(selected.item.id, description)
-      if (selected.kind === 'armor') return catalogApi.updateArmorDescription(selected.item.id, description)
-      return catalogApi.updateGearDescription(selected.item.id, description)
+      if (selected.kind === 'weapon') return catalogApi.updateWeaponDescription(selected.item.id, description, campaignId)
+      if (selected.kind === 'armor') return catalogApi.updateArmorDescription(selected.item.id, description, campaignId)
+      return catalogApi.updateGearDescription(selected.item.id, description, campaignId)
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [descQueryKey] })
+      qc.invalidateQueries({ queryKey: ['catalog', campaignId] })
       setEditingDesc(false)
     },
   })
@@ -216,12 +241,12 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
   }
 
   const deleteWeaponMutation = useMutation({
-    mutationFn: () => catalogApi.deleteWeapon((selected as { item: WeaponCatalog }).item.id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-weapons'] }); onClose() },
+    mutationFn: () => catalogApi.deleteWeapon((selected as { item: WeaponCatalog }).item.id, campaignId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog', campaignId] }); onClose() },
   })
   const deleteArmorMutation = useMutation({
-    mutationFn: () => catalogApi.deleteArmor((selected as { item: ArmorCatalog }).item.id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-armor'] }); onClose() },
+    mutationFn: () => catalogApi.deleteArmor((selected as { item: ArmorCatalog }).item.id, campaignId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog', campaignId] }); onClose() },
   })
 
   const isCustom =
@@ -338,6 +363,8 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
               { label: 'Tipo', value: selected.typeName },
               { label: 'Alcance', value: selected.rangeName },
               { label: 'Peso', value: `${selected.item.weight} kg` },
+              ...priceTile(selected.item),
+              ...eraTile(selected.item),
             ]} />
           </DetailSection>
 
@@ -362,6 +389,8 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
             <StatGrid items={[
               { label: 'Tipo', value: selected.typeName },
               { label: 'Peso', value: `${selected.item.weight} kg` },
+              ...priceTile(selected.item),
+              ...eraTile(selected.item),
             ]} />
           </DetailSection>
 
@@ -382,6 +411,7 @@ function DetailSheet({ selected, onClose, isGm }: { selected: SelectedItem; onCl
             <StatGrid items={[
               { label: 'Peso', value: `${selected.item.weight} kg` },
               { label: 'Precio', value: <Price value={selected.item.price} /> },
+              ...eraTile(selected.item),
             ]} />
           </DetailSection>
 
@@ -510,6 +540,23 @@ function TraitChips({ traits, expertTraits }: { traits: string[]; expertTraits: 
   )
 }
 
+/**
+ * What a priced catalog adds under a weapon or armor: era chip, «Solo recompensa» chip and price. No element at all when the item has none
+ * of them, which is every Stormlight weapon and armor (its cards do not change, P1)
+ */
+function ItemMeta({ item }: { item: { era: 1 | 2 | null; price: number | null; isRewardOnly: boolean } }) {
+  if (item.era == null && item.price == null && !item.isRewardOnly) return null
+  return (
+    <span style={{ ...cardIndent, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+      {item.era != null && <EraChip era={item.era} />}
+      {item.isRewardOnly && <span style={pill(tone.esmeralda)}>Solo recompensa</span>}
+      {item.price != null && (
+        <span style={{ fontSize: fs.xs, fontWeight: 550, color: c.muted }}><Price value={item.price} /></span>
+      )}
+    </span>
+  )
+}
+
 // ── Weapon card ─────────────────────────────────────────────
 function WeaponCard({ weapon, typeName, skillName, damageTypeName, rangeName, traits, expertTraits, onClick }: {
   weapon: WeaponCatalog
@@ -541,6 +588,8 @@ function WeaponCard({ weapon, typeName, skillName, damageTypeName, rangeName, tr
         <span style={{ color: c.subtle }}>Habilidad:</span>{' '}
         <span style={{ fontWeight: 600 }}>{skillName}</span>
       </span>
+
+      <ItemMeta item={weapon} />
     </button>
   )
 }
@@ -567,6 +616,8 @@ function ArmorCard({ armor, typeName, traits, expertTraits, onClick }: {
       </span>
 
       {hasTraits && <TraitChips traits={traits} expertTraits={expertTraits} />}
+
+      <ItemMeta item={armor} />
     </button>
   )
 }
@@ -588,6 +639,7 @@ function GearCard({ gear, onClick }: { gear: GearItem; onClick: () => void }) {
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
           <span style={{ ...numeral, fontSize: fs.base, color: CATEGORY.gear.tone.fg }}>{gear.weight} kg</span>
           <span style={{ fontSize: fs.xs, fontWeight: 550, color: c.muted }}><Price value={gear.price} /></span>
+          {gear.era != null && <EraChip era={gear.era} />}
         </span>
       </span>
     </button>
@@ -675,20 +727,74 @@ function CloseButton({ onClose }: { onClose: () => void }) {
   )
 }
 
+/**
+ * What the «Precio» field holds: empty = no price (null), an amount rounded to the decimals of the money, `undefined` = not an amount.
+ * (`type="number"` always gives a plain decimal point, whatever the locale)
+ */
+const readPrice = (text: string, decimals: number): number | null | undefined => {
+  const t = text.trim()
+  if (t === '') return null
+  const n = Number(t)
+  return Number.isFinite(n) && n >= 0 ? Number(n.toFixed(decimals)) : undefined
+}
+
+/** «Precio» field of the forms of own items (worlds with a priced catalog, in the money of the world); empty = no price */
+function PriceField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { moneda } = useWorldConfig()
+  return (
+    <Field label={`Precio (${moneda.simbolo})`}>
+      <Input type="number" inputMode="decimal" min={0} step={1 / 10 ** moneda.decimales} value={value} onChange={(e) => onChange(e.target.value)} placeholder="Sin precio" />
+    </Field>
+  )
+}
+
+/** «Solo recompensa» switch of the forms of own items: the whole row is the label of a real switch */
+function RewardSwitch({ checked, onChange }: { checked: boolean; onChange: (next: boolean) => void }) {
+  const id = useId()
+  const t = tone.esmeralda
+  return (
+    <label
+      htmlFor={id}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', minHeight: 56,
+        borderRadius: radius.md, cursor: 'pointer',
+        border: `1px solid ${checked ? t.border : c.border}`,
+        background: checked ? t.bg : c.s2,
+        transition: 'background var(--dur-2), border-color var(--dur-2)',
+      }}
+    >
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: fs.sm + 1, fontWeight: 650, color: checked ? t.fg : c.text }}>Solo recompensa</span>
+        <span style={{ display: 'block', fontSize: fs.xs, color: c.muted, marginTop: 2, lineHeight: 1.4 }}>
+          No se compra: la concede el director.
+        </span>
+      </span>
+      <Switch id={id} checked={checked} onChange={onChange} label="Solo recompensa" />
+    </label>
+  )
+}
+
 // ── Create Weapon Sheet ───────────────────────────────────────
-function CreateWeaponSheet({ onClose, options }: {
+function CreateWeaponSheet({ onClose, options, campaignId }: {
   onClose: () => void
+  campaignId: number
   options: {
     weaponTypes: CatalogOption[]; skills: CatalogOption[]; damageTypes: CatalogOption[]
     ranges: CatalogOption[]; traits: CatalogOption[]
   }
 }) {
   const qc = useQueryClient()
+  const cfg = useWorldConfig()
+  // A world with a priced catalog (Mistborn) also asks for the price and whether the item is reward-only; the others send neither
+  const priced = cfg.features.catalogoDePrecios
   const formId = useId()
   const mutation = useMutation({
     mutationFn: catalogApi.createWeapon,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-weapons'] }); onClose() },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog', campaignId] }); onClose() },
   })
+  const [priceText, setPriceText] = useState('')
+  const [rewardOnly, setRewardOnly] = useState(false)
+  const price = readPrice(priceText, cfg.moneda.decimales)
 
   const [form, setForm] = useState<CreateWeaponPayload>({
     name: '', weaponTypeId: 0, skillId: 0,
@@ -703,13 +809,19 @@ function CreateWeaponSheet({ onClose, options }: {
 
   const valid = form.name.trim() && form.weaponTypeId && form.skillId &&
     form.damageDiceCount > 0 && form.damageDiceValue > 0 &&
-    form.damageTypeId && form.rangeId
+    form.damageTypeId && form.rangeId && !(priced && price === undefined)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
-    mutation.mutate(form)
+    mutation.mutate({ ...form, campaignId, ...(priced ? { price, isRewardOnly: rewardOnly } : {}) })
   }
+
+  const weightField = (
+    <Field label="Peso (kg)">
+      <Input type="number" inputMode="decimal" min={0} step={0.5} value={form.weight} onChange={(e) => set('weight', +e.target.value)} />
+    </Field>
+  )
 
   return (
     <Sheet
@@ -766,9 +878,14 @@ function CreateWeaponSheet({ onClose, options }: {
           </Field>
         </div>
 
-        <Field label="Peso (kg)">
-          <Input type="number" inputMode="decimal" min={0} step={0.5} value={form.weight} onChange={(e) => set('weight', +e.target.value)} />
-        </Field>
+        {priced ? (
+          <div style={grid2}>
+            {weightField}
+            <PriceField value={priceText} onChange={setPriceText} />
+          </div>
+        ) : weightField}
+
+        {priced && <RewardSwitch checked={rewardOnly} onChange={setRewardOnly} />}
 
         <MultiSelect label="Rasgos" accent={CATEGORY.weapons.tone} options={options.traits} selected={form.traitIds} onChange={(ids) => set('traitIds', ids)} />
 
@@ -789,16 +906,23 @@ function CreateWeaponSheet({ onClose, options }: {
 }
 
 // ── Create Armor Sheet ────────────────────────────────────────
-function CreateArmorSheet({ onClose, options }: {
+function CreateArmorSheet({ onClose, options, campaignId }: {
   onClose: () => void
+  campaignId: number
   options: { armorTypes: CatalogOption[]; traits: CatalogOption[] }
 }) {
   const qc = useQueryClient()
+  const cfg = useWorldConfig()
+  // See CreateWeaponSheet: only a world with a priced catalog asks for the price and the reward mark
+  const priced = cfg.features.catalogoDePrecios
   const formId = useId()
   const mutation = useMutation({
     mutationFn: catalogApi.createArmor,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog-armor'] }); onClose() },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog', campaignId] }); onClose() },
   })
+  const [priceText, setPriceText] = useState('')
+  const [rewardOnly, setRewardOnly] = useState(false)
+  const price = readPrice(priceText, cfg.moneda.decimales)
 
   const [form, setForm] = useState<CreateArmorPayload>({
     name: '', armorTypeId: 0, desvio: 0, traitIds: [], expertTraitIds: [], description: '', weight: 0,
@@ -807,13 +931,19 @@ function CreateArmorSheet({ onClose, options }: {
   const set = <K extends keyof CreateArmorPayload>(k: K, v: CreateArmorPayload[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
 
-  const valid = form.name.trim() && form.armorTypeId
+  const valid = form.name.trim() && form.armorTypeId && !(priced && price === undefined)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
-    mutation.mutate(form)
+    mutation.mutate({ ...form, campaignId, ...(priced ? { price, isRewardOnly: rewardOnly } : {}) })
   }
+
+  const weightField = (
+    <Field label="Peso (kg)">
+      <Input type="number" inputMode="decimal" min={0} step={0.5} value={form.weight} onChange={(e) => set('weight', +e.target.value)} />
+    </Field>
+  )
 
   return (
     <Sheet
@@ -843,9 +973,14 @@ function CreateArmorSheet({ onClose, options }: {
           </Field>
         </div>
 
-        <Field label="Peso (kg)">
-          <Input type="number" inputMode="decimal" min={0} step={0.5} value={form.weight} onChange={(e) => set('weight', +e.target.value)} />
-        </Field>
+        {priced ? (
+          <div style={grid2}>
+            {weightField}
+            <PriceField value={priceText} onChange={setPriceText} />
+          </div>
+        ) : weightField}
+
+        {priced && <RewardSwitch checked={rewardOnly} onChange={setRewardOnly} />}
 
         <MultiSelect label="Rasgos" accent={CATEGORY.armor.tone} options={options.traits} selected={form.traitIds} onChange={(ids) => set('traitIds', ids)} />
 
@@ -875,21 +1010,24 @@ export function CatalogPage() {
   const [selected, setSelected] = useState<SelectedItem | null>(null)
   const [showCreateWeapon, setShowCreateWeapon] = useState(false)
   const [showCreateArmor, setShowCreateArmor] = useState(false)
-  const { isGm } = useCampaignStore()
+  const { isGm, currentCampaign } = useCampaignStore()
+  // The catalog is served by campaign (its world and, in Mistborn, its era). AppLayout renders the page only once the store holds the campaign of
+  // the URL, so this is never 0; the keys are shared with the pickers of the Bolsa, so an item created here is in them at once
+  const cId = currentCampaign?.id ?? 0
 
-  // Item data
-  const { data: weapons, isLoading: wLoad } = useQuery({ queryKey: ['catalog-weapons'], queryFn: catalogApi.getWeapons })
-  const { data: armor,   isLoading: aLoad } = useQuery({ queryKey: ['catalog-armor'],   queryFn: catalogApi.getArmor })
-  const { data: gear,    isLoading: gLoad } = useQuery({ queryKey: ['catalog-gear'],     queryFn: catalogApi.getGear })
+  // Item data (an arrow: TanStack would call a bare reference with its QueryFunctionContext as `campaignId`, and the server would silently answer Stormlight)
+  const { data: weapons, isLoading: wLoad } = useQuery({ queryKey: ['catalog', cId, 'weapons'], queryFn: () => catalogApi.getWeapons(cId) })
+  const { data: armor,   isLoading: aLoad } = useQuery({ queryKey: ['catalog', cId, 'armor'],   queryFn: () => catalogApi.getArmor(cId) })
+  const { data: gear,    isLoading: gLoad } = useQuery({ queryKey: ['catalog', cId, 'gear'],    queryFn: () => catalogApi.getGear(cId) })
 
-  // Lookup options
-  const { data: optWeaponType }  = useQuery({ queryKey: ['opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE') })
-  const { data: optSkill }       = useQuery({ queryKey: ['opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL') })
-  const { data: optDamageType }  = useQuery({ queryKey: ['opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE') })
-  const { data: optRange }       = useQuery({ queryKey: ['opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE') })
-  const { data: optWeaponTrait } = useQuery({ queryKey: ['opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT') })
-  const { data: optArmorType }   = useQuery({ queryKey: ['opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE') })
-  const { data: optArmorTrait }  = useQuery({ queryKey: ['opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT') })
+  // Lookup options (the shared Cosmere ones plus those of the world of the campaign)
+  const { data: optWeaponType }  = useQuery({ queryKey: ['catalog', cId, 'opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE', cId) })
+  const { data: optSkill }       = useQuery({ queryKey: ['catalog', cId, 'opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL', cId) })
+  const { data: optDamageType }  = useQuery({ queryKey: ['catalog', cId, 'opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE', cId) })
+  const { data: optRange }       = useQuery({ queryKey: ['catalog', cId, 'opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE', cId) })
+  const { data: optWeaponTrait } = useQuery({ queryKey: ['catalog', cId, 'opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT', cId) })
+  const { data: optArmorType }   = useQuery({ queryKey: ['catalog', cId, 'opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE', cId) })
+  const { data: optArmorTrait }  = useQuery({ queryKey: ['catalog', cId, 'opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT', cId) })
 
   const wtMap      = buildMap(optWeaponType)
   const skMap      = buildMap(optSkill)
@@ -1011,12 +1149,13 @@ export function CatalogPage() {
       </TabPanel>
 
       {/* ── Detail sheet ────────────────────────────────── */}
-      {selected && <DetailSheet selected={selected} onClose={() => setSelected(null)} isGm={isGm} />}
+      {selected && <DetailSheet selected={selected} onClose={() => setSelected(null)} isGm={isGm} campaignId={cId} />}
 
       {/* ── Create sheets ───────────────────────────────── */}
       {showCreateWeapon && (
         <CreateWeaponSheet
           onClose={() => setShowCreateWeapon(false)}
+          campaignId={cId}
           options={{
             weaponTypes: optWeaponType ?? [],
             skills: optSkill ?? [],
@@ -1029,6 +1168,7 @@ export function CatalogPage() {
       {showCreateArmor && (
         <CreateArmorSheet
           onClose={() => setShowCreateArmor(false)}
+          campaignId={cId}
           options={{
             armorTypes: optArmorType ?? [],
             traits: optArmorTrait ?? [],

@@ -2,42 +2,47 @@
  * Talentos de un personaje (routes personajes/talentos/:characterId and gm/talentos/:characterId).
  *
  * One page, two modes in a sticky bar: ÁRBOL (plan with a global view of every tree: heroic path(s),
- * radiant order, singer, plus the other heroic paths to explore) and MIS TALENTOS (reread what you have).
- * Rules live in lib/talentGraph.ts; the map geometry in components/talentos/talentMap.ts.
+ * radiant order, singer, the metalborn path with its powers, ancestry trees, plus the other heroic paths to explore) and MIS TALENTOS (reread
+ * what you have, and drink a vial from there in Nacidos de la bruma).
+ * Rules live in lib/talentGraph.ts and run on the TalentRules of the world of the campaign (useWorldData().talentos); the map
+ * geometry in components/talentos/talentMap.ts.
  * Stored format is unchanged: Character.talentos = JSON array of names (+ the ~forma~ marker).
  * The planning goal, open láminas, the mode and the DJ confirmations are local (localStorage).
  */
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, Compass, Info, Music, Sparkles, Target, TriangleAlert, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Compass, Info, Music, RefreshCw, Sparkles, Target, TriangleAlert, X } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, IconButton, Segmented, Spinner, Stepper } from '../../components/ui'
+import { Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, IconButton, Segmented, Sheet, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { CANTOR_COLOR, getFormasDisponibles, withFormaActiva } from '../../data/cantores'
 import { CharacterHero } from '../../components/CharacterHero'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { HeroicPathIcon } from '../../components/GameIcons'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { conVialBebido, esPoderDelVial } from '../../components/mistborn/vial'
 import { TalentActivation, type ActivationType } from '../../components/TalentActivation'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { useAuthStore } from '../../store/authStore'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useWorldConfig, useWorldData } from '../../store/campaignStore'
 import { c, eyebrow, font, fs, radius, titleText, tone } from '../../theme'
 import {
   buildTalentGraph, cascadeRemove, cheapestRoute, evaluate, graphOptionsFromCharacter, parseStoredTalentos,
   splitStoredTalentos, talentBudget, talentStateFromCharacter, withTalent,
   type CascadeResult, type Gate, type TalentEvaluation, type TalentGraph,
 } from '../../lib/talentGraph'
+import type { TalentRules } from '../../lib/talentRules'
 import { PathAtlas } from '../../components/talentos/PathAtlas'
 import { TalentSheet } from '../../components/talentos/TalentSheet'
 import { FormaPickerSheet } from '../../components/talentos/FormaPicker'
 import { MyTalents } from '../../components/talentos/MyTalents'
 import { BudgetSheet } from '../../components/talentos/BudgetSheet'
 import { CellMarkView, IdealGlyph } from '../../components/talentos/MapPieces'
-import { WIDE_MIN, buildPathModels, cellDomId, plural, type EdgeStatusFn } from '../../components/talentos/talentMap'
-import { accentOf, readStore, useContentWidth, usePrefersReducedMotion, writeStore } from '../../components/talentos/talentStyle'
+import { WIDE_MIN, buildPathModels, cellDomId, plural, type EdgeStatusFn, type PathModel } from '../../components/talentos/talentMap'
+import { META_LOCKED, accentOf, readStore, useContentWidth, usePrefersReducedMotion, writeStore } from '../../components/talentos/talentStyle'
+
+// «Beber vial» (T31): the sheet of the vial of Nacidos de la bruma, loaded lazily from the barrel so that neither it nor its data reach the main chunk (§7.4 rule 4)
+const BeberVialSheet = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.BeberVialSheet })))
 
 type Mode = 'arbol' | 'releer'
 interface Goal { nodeId: string; choices: Record<string, string> }
@@ -59,8 +64,12 @@ export function TalentosDetailPage() {
     queryKey: ['character', cId, charId],
     queryFn: () => charactersApi.getById(cId, charId),
   })
+  // The talent data of the world of the campaign (heroic paths, Investida paths, powers, grids…). Stormlight's are `initialData` of
+  // useWorldData, so there it never waits (no new Spinner); Mistborn's come with the lazy chunk of its world
+  const { data: worldData, isPending: worldPending } = useWorldData()
+  const rules = worldData?.talentos ?? null
   // Loading keeps a (visually hidden) h1 so the page is never headless, as in CharacterDetailPage
-  if (isLoading || !character) {
+  if (isLoading || !character || worldPending) {
     return (
       <>
         <h1 className="sr-only">Talentos</h1>
@@ -68,15 +77,32 @@ export function TalentosDetailPage() {
       </>
     )
   }
-  return <TalentosView key={charId} character={character} cId={cId} />
+  // The chunk did not load: never build the map with the rules of another world. A failed `import()` stays failed for the rest of the
+  // document (the browser keeps the failure), so a `refetch()` could not recover it: only reloading the page does
+  if (!rules) {
+    return (
+      <>
+        <h1 className="sr-only">Talentos</h1>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: 16 }}>
+          <ErrorMessage message="No se pudieron cargar los talentos." style={{ marginBottom: 16 }} />
+          <Button onClick={() => window.location.reload()} icon={<RefreshCw size={15} aria-hidden />}>
+            Recargar la página
+          </Button>
+        </div>
+      </>
+    )
+  }
+  return <TalentosView key={charId} character={character} cId={cId} rules={rules} />
 }
 
-function TalentosView({ character, cId }: { character: Character; cId: number }) {
+function TalentosView({ character, cId, rules }: { character: Character; cId: number; rules: TalentRules }) {
   const charId = character.id
   const qc = useQueryClient()
   const qKey = useMemo(() => ['character', cId, charId] as const, [cId, charId])
   const user = useAuthStore((s) => s.user)
   const isGm = useCampaignStore((s) => s.isGm)
+  // Capabilities and texts of the world of the campaign: Ideales jurados and formas of cantor are Roshar features
+  const cfg = useWorldConfig()
   const canEditIdeals = isGm || (!!user && character.ownerId === user.id)
   const [searchParams, setSearchParams] = useSearchParams()
   const contentW = useContentWidth()
@@ -101,6 +127,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
   const [sheetId, setSheetId] = useState<string | null>(null)
   const [budgetOpen, setBudgetOpen] = useState(false)
   const [formaOpen, setFormaOpen] = useState(false)
+  const [vialOpen, setVialOpen] = useState(false)
   const [showOthers, setShowOthers] = useState(false)
   const [djConfirm, setDjConfirm] = useState<{ name: string; conditions: string[]; keys: string[] } | null>(null)
   const [forgetConfirm, setForgetConfirm] = useState<(CascadeResult & { name: string }) | null>(null)
@@ -109,33 +136,36 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
   const pendingScroll = useRef<string | null>(null)
 
   // ── engine ───────────────────────────────────────────────────────────────
-  const { caminoHeroico, caminoRadiante, ascendencia } = character
+  // The metalborn path, the starting path and the powers build trees too (§7.7 #3): changing them on the sheet rebuilds the graph
+  const { caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes } = character
   const stored = useMemo(() => parseStoredTalentos(character.talentos), [character.talentos])
   const extraKey = useMemo(() => {
     const names = new Set(splitStoredTalentos(stored).names)
-    return HEROIC_PATHS.filter((p) => p.id !== caminoHeroico && names.has(p.mainTalent)).map((p) => p.id).join(',')
-  }, [stored, caminoHeroico])
+    return rules.caminosHeroicos.filter((p) => p.id !== caminoHeroico && names.has(p.mainTalent)).map((p) => p.id).join(',')
+  }, [stored, caminoHeroico, rules])
   const extraPaths = useMemo(() => (extraKey ? extraKey.split(',') : []), [extraKey])
   const graph = useMemo(
-    () => buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, extraPaths)),
-    [caminoHeroico, caminoRadiante, ascendencia, extraPaths],
+    () => buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes }, extraPaths, rules), rules),
+    [caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes, extraPaths, rules],
   )
-  const tState = useMemo(() => talentStateFromCharacter(character, { confirmedStory }), [character, confirmedStory])
+  const tState = useMemo(() => talentStateFromCharacter(character, { confirmedStory }, graph.rules), [character, confirmedStory, graph.rules])
   const evaluation = useMemo(() => evaluate(graph, tState), [graph, tState])
   const budget = useMemo(() => talentBudget(character, graph), [character, graph])
   const models = useMemo(() => buildPathModels(graph), [graph])
 
   // other heroic paths (explore): built only when needed
   const otherPathIds = useMemo(
-    () => HEROIC_PATHS.map((p) => p.id).filter((id) => id !== caminoHeroico && !extraPaths.includes(id)),
-    [caminoHeroico, extraPaths],
+    () => rules.caminosHeroicos.map((p) => p.id).filter((id) => id !== caminoHeroico && !extraPaths.includes(id)),
+    [rules, caminoHeroico, extraPaths],
   )
   const needExplore = showOthers || [goal?.nodeId, sheetId, selectedId].some((id) => !!id && !graph.byId.has(id))
   const exploreGraph = useMemo(
     () => (needExplore && otherPathIds.length
-      ? buildTalentGraph(graphOptionsFromCharacter({ caminoHeroico, caminoRadiante, ascendencia }, [...extraPaths, ...otherPathIds]))
+      ? buildTalentGraph(graphOptionsFromCharacter(
+        { caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes }, [...extraPaths, ...otherPathIds], rules,
+      ), rules)
       : null),
-    [needExplore, otherPathIds, extraPaths, caminoHeroico, caminoRadiante, ascendencia],
+    [needExplore, otherPathIds, extraPaths, caminoHeroico, caminoRadiante, ascendencia, caminoMetal, caminoInicial, poderes, rules],
   )
   const exploreEval = useMemo(() => (exploreGraph ? evaluate(exploreGraph, tState) : null), [exploreGraph, tState])
   const exploreModels = useMemo(
@@ -207,6 +237,28 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
     onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(qKey, ctx.prev) },
     onSettled: () => qc.invalidateQueries({ queryKey: qKey }),
   })
+  // «Beber vial» (T31): the metals of the vial go up as `beber-vial` and the sheet closes, as on the character sheet. Optimistic by prefix of the cache (the key of
+  // this page has 3 elements and the ficha's 4: the prefix covers both, §2) with the rule of the vial that vial.ts shares with its sheet; the refetch brings the
+  // server's own values. Only the last of several vials in flight refetches, so a slow answer never puts an old value back on screen
+  const vialKey = ['vial', cId, charId] as const
+  const beberVialMutation = useMutation({
+    mutationKey: vialKey,
+    mutationFn: (metales: string[]) => charactersApi.beberVial(cId, charId, metales),
+    onMutate: async (metales: string[]) => {
+      await qc.cancelQueries({ queryKey: qKey })
+      const previas = qc.getQueriesData<Character>({ queryKey: qKey })
+      qc.setQueriesData<Character>({ queryKey: qKey }, (old) => old && conVialBebido(old, metales))
+      return { previas }
+    },
+    onError: (_e, _v, ctx) => { ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data)) },
+    onSettled: () => {
+      if (qc.isMutating({ mutationKey: vialKey }) > 1) return // another vial is still on its way: it refreshes when it settles
+      qc.invalidateQueries({ queryKey: qKey })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+  // The vial is offered to its owner and the director, and only to a character with a power it acts upon (alomancy, atium aside)
+  const onBeberVial = canEditIdeals && poderes.some(esPoderDelVial) ? () => setVialOpen(true) : undefined
   const busy = talentosMutation.isPending
 
   // scroll to a talent after switching to the map (ref written in handlers, read after render)
@@ -295,8 +347,6 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
   }
 
   // ── derived bits for the bars ────────────────────────────────────────────
-  const heroicPath = HEROIC_PATHS.find((p) => p.id === caminoHeroico)
-  const radiantOrder = RADIANT_ORDERS.find((o) => o.id === caminoRadiante)
   const hasAnything = models.length > 0
   const myCount = [...evaluation.learned].filter((n) => graph.byName.has(n)).length
   const formasMissing = budget.missing.some((r) => r.accepts.includes('formas'))
@@ -319,7 +369,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
     level: character.level, contentW, edgeStatus, stepOf, targetId, selectedId,
     onSelect: setSelectedId, openLaminas, onToggleLamina: toggleLamina, onCloseLaminas: closeLaminas,
     onOpenSheet: setSheetId, onLearn: requestLearn, onSetGoal: (id: string) => requestSetGoal(id),
-    onRemoveGoal: () => setGoalConfirm({ kind: 'remove' }), busy, surgeRank,
+    onRemoveGoal: () => setGoalConfirm({ kind: 'remove' }), busy, surgeRank, state: tState,
   }
 
   const forgetCount = forgetConfirm ? forgetConfirm.removed.length || 1 : 0
@@ -338,25 +388,15 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
         <h1 style={{ ...titleText, fontSize: fs['2xl'], color: onGem, marginBottom: 14, overflowWrap: 'anywhere' }}>
           {character.name}
         </h1>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
-          {heroicPath && (
-            <span style={heroPill}>
-              <HeroicPathIcon id={heroicPath.id} size={13} />
-              {heroicPath.name}
-            </span>
-          )}
-          {extraPaths.map((pid) => {
-            const p = HEROIC_PATHS.find((x) => x.id === pid)
+        <CharacterIdentityPills
+          character={character}
+          variant="hero"
+          leading={<span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>}
+          between={extraPaths.map((pid) => {
+            const p = rules.caminosHeroicos.find((x) => x.id === pid)
             return p ? <span key={pid} style={heroPill}><HeroicPathIcon id={p.id} size={13} />{p.name}</span> : null
           })}
-          {radiantOrder && (
-            <span style={{ ...heroPill, paddingLeft: 4 }}>
-              <RadiantOrderIcon orderId={radiantOrder.id} size={16} decorative />
-              {radiantOrder.name}
-            </span>
-          )}
-        </div>
+        />
       </CharacterHero>
 
       {/* ── Sticky bar: mode + budget chip, goal strip ──────────────────── */}
@@ -444,7 +484,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
           <EmptyState
             icon={<Sparkles size={24} aria-hidden />}
             title="Sin camino asignado"
-            description="Asigna un Camino Heroico u Orden Radiante en la ficha para ver los talentos disponibles."
+            description={cfg.textos.vacioTalentos}
           />
         )}
 
@@ -476,6 +516,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
           </div>
         )}
         {talentosMutation.isError && <ErrorMessage message="No se pudo guardar el último cambio de talentos. Inténtalo de nuevo." style={{ marginBottom: 12 }} />}
+        {beberVialMutation.isError && <ErrorMessage message="No se ha podido beber el vial. Inténtalo de nuevo." style={{ marginBottom: 12 }} />}
 
         {/* ── MIS TALENTOS (reread) ─────────────────────────────────────── */}
         {hasAnything && mode === 'releer' && (
@@ -485,7 +526,8 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
             evaluation={evaluation}
             onOpenTalent={setSheetId}
             onShowInTree={showInTree}
-            onChangeForma={graph.isCantor ? () => setFormaOpen(true) : undefined}
+            onChangeForma={graph.isCantor && cfg.features.formasCantor ? () => setFormaOpen(true) : undefined}
+            onBeberVial={onBeberVial}
           />
         )}
 
@@ -502,8 +544,10 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
                     graph={graph}
                     evaluation={evaluation}
                     {...atlasCommon}
-                    keyOwnedNote={ideales > 0 ? `${ideales} ${plural(ideales, 'Ideal jurado', 'Ideales jurados')}` : 'cuenta como jurado'}
-                    outro={!m.noJugable && (
+                    keyOwnedNote={cfg.features.idealesJurados
+                      ? (ideales > 0 ? `${ideales} ${plural(ideales, 'Ideal jurado', 'Ideales jurados')}` : 'cuenta como jurado')
+                      : undefined}
+                    outro={!m.noJugable && cfg.features.idealesJurados && (
                       <IdealesControl value={ideales} canEdit={canEditIdeals} onChange={(v) => idealesMutation.mutate(v)} saving={idealesMutation.isPending} />
                     )}
                   />
@@ -517,7 +561,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
                     graph={graph}
                     evaluation={evaluation}
                     {...atlasCommon}
-                    keyExtra={
+                    keyExtra={cfg.features.formasCantor ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: c.muted, fontWeight: 600 }}>
                           <Music size={13} aria-hidden />
@@ -525,7 +569,7 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
                         </span>
                         <Button variant="secondary" size="sm" onClick={() => setFormaOpen(true)} aria-haspopup="dialog" aria-label="Cambiar forma activa">Cambiar</Button>
                       </span>
-                    }
+                    ) : undefined}
                     intro={
                       <>
                         {formaData?.esPoder && (
@@ -547,6 +591,18 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
                         Elige 1 talento de Formas (obligatorio)
                       </p>
                     )}
+                  />
+                )
+              }
+              if (m.kind === 'caminoInvestido') {
+                return (
+                  <PathAtlas
+                    key={m.id}
+                    model={m}
+                    graph={graph}
+                    evaluation={evaluation}
+                    {...atlasCommon}
+                    intro={<ResumenCamino model={m} graph={graph} evaluation={evaluation} nombreMeta={rules.nombreMeta ?? 'Meta'} />}
                   />
                 )
               }
@@ -621,14 +677,29 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
 
       <BudgetSheet open={budgetOpen} onClose={() => setBudgetOpen(false)} budget={budget} route={route} level={character.level} />
 
-      <FormaPickerSheet
-        open={formaOpen}
-        onClose={() => setFormaOpen(false)}
-        formas={formasDisponibles}
-        activa={evaluation.formaActiva}
-        accent={cantorAccent}
-        onActivate={activateForma}
-      />
+      {/* The vial (T31): mounted only while it is open; the metals it holds go up as `beber-vial` and the page closes it, like the pickers of the character sheet */}
+      {vialOpen && (
+        <Suspense fallback={<Sheet open onClose={() => setVialOpen(false)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>
+          <BeberVialSheet
+            open
+            onClose={() => setVialOpen(false)}
+            character={character}
+            isGm={isGm}
+            onBeber={(metales) => { setVialOpen(false); beberVialMutation.mutate(metales) }}
+          />
+        </Suspense>
+      )}
+
+      {cfg.features.formasCantor && (
+        <FormaPickerSheet
+          open={formaOpen}
+          onClose={() => setFormaOpen(false)}
+          formas={formasDisponibles}
+          activa={evaluation.formaActiva}
+          accent={cantorAccent}
+          onActivate={activateForma}
+        />
+      )}
 
       <ConfirmDialog
         open={!!djConfirm}
@@ -704,6 +775,39 @@ function TalentosView({ character, cId }: { character: Character; cId: number })
   )
 }
 
+// ── Resumen del camino Investido con árbol plano (camino de nacido del metal) ────────────────────────────────────────
+
+/**
+ * Under the header of the metalborn path: what its goal still keeps closed. The talents of the path and the trees of its powers stay closed until the goal
+ * is done (L.75 / PDF 81, Q26) and the map says so with hatched cells; this says why, which trees and how to open them. The gates are the engine's own (the
+ * goal gate of each tree), so the note never disagrees with the map. Nothing is shown when no tree of the path is closed.
+ */
+function ResumenCamino({ model, graph, evaluation, nombreMeta }: { model: PathModel; graph: TalentGraph; evaluation: TalentEvaluation; nombreMeta: string }) {
+  const cerrado = (treeId: string): boolean => {
+    for (const id of graph.treeById.get(treeId)?.nodeIds ?? []) {
+      const g = evaluation.nodes.get(id)?.gates.find((x): x is Extract<Gate, { kind: 'meta' }> => x.kind === 'meta')
+      if (g) return g.status !== 'met'
+    }
+    return false
+  }
+  const camino = cerrado(model.id)
+  const poderes = model.plates.filter((p) => p.kind === 'poder' && cerrado(p.tree.id)).map((p) => p.tree.section)
+  const total = (camino ? 1 : 0) + poderes.length
+  if (total === 0) return null
+  // «tu camino, Alomancia de acero y Alomancia de hierro»; with more than three, «tu camino y 7 poderes»
+  const items = total > 3 ? [...(camino ? ['tu camino'] : []), `${poderes.length} ${plural(poderes.length, 'poder', 'poderes')}`] : [...(camino ? ['tu camino'] : []), ...poderes]
+  const lista = items.length > 1 ? `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}` : items[0]
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: tone.zafiro.bg, border: `1px solid ${tone.zafiro.border}`, borderRadius: radius.md, padding: '10px 12px', marginBottom: 12 }}>
+      <Info size={16} aria-hidden style={{ color: tone.zafiro.fg, flexShrink: 0, marginTop: 2 }} />
+      <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45, minWidth: 0 }}>
+        <strong style={{ color: c.text }}>{nombreMeta} pendiente.</strong>{' '}
+        Hasta que la completes siguen cerrados (casillas rayadas) los talentos de {lista}. Se completa al concluir la meta en Metas.
+      </p>
+    </div>
+  )
+}
+
 // ── Ideales jurados (GM or owner) ──────────────────────────────────────────
 
 function IdealesControl({ value, canEdit, onChange, saving }: { value: number; canEdit: boolean; onChange: (v: number) => void; saving: boolean }) {
@@ -735,6 +839,7 @@ function IdealesControl({ value, canEdit, onChange, saving }: { value: number; c
 const ACCENT_NEUTRAL = accentOf('#60a5fa')
 
 function StateLegend() {
+  const { features } = useWorldConfig()
   const item: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.muted }
   const box = (look: CSSProperties, child: ReactNode) => (
     <span aria-hidden style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 2, minWidth: 30, height: 20, padding: '0 4px', borderRadius: 5, ...look }}>{child}</span>
@@ -749,8 +854,13 @@ function StateLegend() {
         <li style={item}>{box({ background: c.s1, border: `1.5px dashed ${a.border}` }, <CellMarkView mark={{ kind: 'available', dj: false }} accent={a} compact={false} />)}disponible</li>
         <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: null, minLevel: 1 }} accent={a} compact={false} />)}a 2 talentos</li>
         <li style={item}>{box({ background: c.s3, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: 'nivel', minLevel: 6 }} accent={a} compact={false} />)}nivel 6 como pronto</li>
+        {features.artesMetalicas && (
+          <li style={item}>{box(META_LOCKED, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: 'meta', minLevel: 1, poderId: 'alomancia:acero' }} accent={a} compact={false} />)}bloqueado hasta completar su meta</li>
+        )}
         <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <span style={{ fontSize: fs.eyebrow, fontWeight: 750, color: c.muted }}>DJ</span>)}lo decide la DJ</li>
-        <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <IdealGlyph size={12} />)}jurar un Ideal</li>
+        {features.idealesJurados && (
+          <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <IdealGlyph size={12} />)}jurar un Ideal</li>
+        )}
         <li style={item}>
           <span aria-hidden style={{ width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${c.subtle}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: fs.eyebrow, fontWeight: 750, color: c.muted, lineHeight: 1 }}>o</span>
           basta uno

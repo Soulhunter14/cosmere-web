@@ -14,7 +14,7 @@ import {
 } from '../../lib/talentGraph'
 import { cellMark, plural, sourceOf, stateWords } from './talentMap'
 import { accentOf } from './talentStyle'
-import { DottedCheck } from './MapPieces'
+import { DottedCheck, MetalMark } from './MapPieces'
 import { FormaCard } from './FormaPicker'
 
 function GateIcon({ g }: { g: Gate }) {
@@ -42,7 +42,12 @@ function gateSub(g: Gate): string | null {
     case 'skill': { const i = g.text.indexOf(': '); return i >= 0 ? g.text.slice(i + 2) : null }
     case 'level': return g.status === 'met' ? null : `tienes ${g.current}`
     case 'story': return 'condición de historia: la confirmas con la DJ al aprenderlo'
-    default: return g.status === 'met' ? null : g.text
+    default: {
+      // «Poder Alomancia de acero: aún no está completo», «Voluntad 4: tienes 2», «Meta de nacido del metal pendiente: el poder … aún no está completo»: the
+      // label is the row's own text, so the sub-text is only what it adds (as for the skills). A text that does not start with its label stays whole
+      if (g.status === 'met') return null
+      return g.text.startsWith(`${g.label}: `) ? g.text.slice(g.label.length + 2) : g.text
+    }
   }
 }
 
@@ -94,9 +99,16 @@ export function TalentSheet({
   const occurrences = (graph.byName.get(node.name) ?? []).filter((o) => o.id !== node.id)
   const children = [...new Map(node.childIds.map((id) => graph.byId.get(id)).filter((n) => !!n).map((n) => [n!.name, n!])).values()]
   const stepIds = new Set(route?.steps.map((s) => s.nodeId) ?? [])
-  // skills and levels already show on each step; keep the Ideals / DJ / ancestry conditions
-  const extraGates = (route?.gates ?? []).filter((g): g is Extract<Gate, { kind: 'ideal' | 'story' | 'ancestry' | 'unknown' }> =>
-    g.kind === 'ideal' || g.kind === 'story' || g.kind === 'ancestry' || g.kind === 'unknown')
+  // skills and levels already show on each step; keep the Ideals / DJ / ancestry conditions and, from T35, the powers, attributes and the goal of
+  // Mistborn. «poder Alomancia de acero» says the same as the goal of that power (only the goal is listed) and the goal of a power tree is on every step
+  // of a route through it (each of these gates is listed once; the Ideal, DJ and ancestry ones are listed as they always were)
+  const routeGates = route?.gates ?? []
+  const conMeta = new Set(routeGates.flatMap((g) => (g.kind === 'meta' ? g.poderIds : [])))
+  const nueva = (g: Gate) => g.kind === 'poder' || g.kind === 'atributo' || g.kind === 'poderes' || g.kind === 'otrosPoderes' || g.kind === 'meta'
+  const extraGates = routeGates.filter((g, i): g is Extract<Gate, { kind: 'ideal' | 'story' | 'ancestry' | 'poder' | 'atributo' | 'poderes' | 'otrosPoderes' | 'meta' | 'unknown' }> =>
+    (g.kind === 'ideal' || g.kind === 'story' || g.kind === 'ancestry' || nueva(g) || g.kind === 'unknown')
+    && !(g.kind === 'poder' && conMeta.has(g.poderId))
+    && !(nueva(g) && routeGates.findIndex((x) => x.kind === g.kind && x.text === g.text) < i))
   const choose = (key: string, name: string) => {
     const next = { ...choices, [key]: name }
     setChoices(next)
@@ -203,7 +215,12 @@ export function TalentSheet({
                               <button type="button" className="ui-link" onClick={() => openByName(o.name)} style={linkBtn}>{o.name}</button>
                             </span>
                           ))
-                          : gateMain(g)}
+                          : (
+                            <>
+                              {g.kind === 'meta' && <span style={{ display: 'inline-flex', verticalAlign: -2, marginRight: 6, color: c.muted }}><MetalMark poderId={g.poderIds[0]} size={14} /></span>}
+                              {gateMain(g)}
+                            </>
+                          )}
                         {g.implicit && <span style={{ color: c.subtle, fontWeight: 500 }}> (regla del libro)</span>}
                       </p>
                       {(sub || onRoute) && (

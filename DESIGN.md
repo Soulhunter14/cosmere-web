@@ -122,8 +122,11 @@ and live in `src/assets/cosmere/` (they belong to Brotherwise Games / Dragonstee
 | Radiant orders | `RadiantOrderIcon orderId=…` (`orden-<id>` glyph, placard fallback), `RadiantOrderPlacard`; Knights Radiant: `caballeros-radiantes` (mono) / `caballeros-radiantes-color` |
 | Frames | `marco-defensa`, `marco-desvio`, `marco-recurso` (character-sheet shapes) |
 | Ornaments | `ornamento-banda` (tileable chapter frieze), `ornamento-cartela`, `ornamento-filete`, `ornamento-cita`, `ornamento-rombo`, `ornamento-medallon` |
-| Illustrations | `cosmereImage('dado-d20' \| 'dado-trama' \| 'esfera-chip-zafiro' \| 'esfera-marco-diamante' \| 'esfera-broam-esmeralda' \| 'esferas-fila')` |
+| Nacidos de la bruma emblem | `CosmereIcon name="nacidos-bruma-emblem"` (`WorldConfig.emblema` of the Mistborn world; tintable, PDF 410) |
+| Metals of Scadrial | `MetalGlyph metal arte era?` (`components/mistborn/MetalGlyph.tsx`): the 50 glyphs of the «Alfabeto de acero y alfabeto de Terris» (`alomancia-era1-<metal>`, `alomancia-era2-<metal>`, `feruquimia-<metal>` in `assets/cosmere/mistborn/`, PDF 411), tintable, in ONE lazy chunk (`lib/mistbornAssets.ts`) that only a Mistborn campaign requests: an empty box while it loads, Lucide `Flame`/`Anvil` for a metal without glyph |
+| Illustrations | `cosmereImage('dado-d20' \| 'dado-trama' \| 'esfera-chip-zafiro' \| 'esfera-marco-diamante' \| 'esfera-broam-esmeralda' \| 'esferas-fila' \| 'dinero-era1' \| 'dinero-era2')` |
 | Heroic paths (no official emblem exists) | `HeroicPathIcon id=…` (Lucide: ScanSearch, BowArrow, Handshake, BookOpenText, Swords, Crown) |
+| Mistborn ancestries and metalborn paths (no official icon exists) | `WorldConfig.ascendencias[].icono`, `WorldConfig.iconos.caminoInvestido` (Lucide, `worlds/mistborn.icons.tsx`) |
 | Stats, dice-roller modes | `StatIcons.*`, `RollModeIcons.*` (Lucide) |
 
 Registry helpers (`hasCosmereIcon`, `cosmereImage`) live in `lib/cosmereAssets.ts`; Lucide concept maps (`HEROIC_PATH_ICONS`, `StatIcons`, `RollModeIcons`, `surgeSlug`) in `lib/gameIcons.ts`.

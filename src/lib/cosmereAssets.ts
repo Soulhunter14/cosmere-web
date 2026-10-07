@@ -34,7 +34,7 @@ export const COSMERE_ICON_NAMES = Object.keys(ICONS).sort()
 const IMAGES = import.meta.glob('../assets/cosmere/img/*.webp', { query: '?url', import: 'default', eager: true }) as Record<string, string>
 const IMAGE_URLS: Record<string, string> = Object.fromEntries(Object.entries(IMAGES).map(([p, url]) => [baseName(p).replace(/\.webp$/, ''), url]))
 
-/** URL of an official illustration: 'dado-d20', 'dado-trama', 'esfera-chip-zafiro', 'esfera-marco-diamante', 'esfera-broam-esmeralda', 'esferas-fila' */
+/** URL of an official illustration: 'dado-d20', 'dado-trama', 'esfera-chip-zafiro', 'esfera-marco-diamante', 'esfera-broam-esmeralda', 'esferas-fila', 'dinero-era1', 'dinero-era2' */
 export function cosmereImage(name: string): string | undefined {
   return IMAGE_URLS[name]
 }

@@ -38,6 +38,15 @@ export const ACTIVATION: Record<ActivationType, { icon: string; label: string; t
   passive: { icon: 'siempre-activo', label: 'Siempre activo', tone: tone.cuarzo },
 }
 
+/**
+ * Look of a cell locked by its goal (the «meta de nacido del metal», T36): hatched, so that it reads as closed at any level and apart from the
+ * plain «nivel» lock; the glyph of the metal in its mark says which goal. Shared by the map and the legend of the page.
+ */
+export const META_LOCKED = {
+  background: `repeating-linear-gradient(135deg, ${c.s3} 0 4px, ${c.s1} 4px 8px)`,
+  border: `1px solid ${c.borderBright}`,
+}
+
 /** Gold plate band (book style): official ornament gold with deep navy letters (≥ 7:1 in both themes). */
 export const BAND_BG = 'var(--gold-ornament)'
 export const BAND_FG = 'var(--navy-deep)'

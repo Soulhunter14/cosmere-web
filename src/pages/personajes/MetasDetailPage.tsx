@@ -4,12 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Target, Check, Trash2, ChevronDown, Flag, Trophy, Sprout, CircleX, type LucideIcon } from 'lucide-react'
 import { metasApi } from '../../api/metas'
 import { charactersApi } from '../../api/characters'
-import { Button, Card, ConfirmDialog, EmptyState, Field, IconButton, Input, SectionTitle, Segmented, Sheet, Spinner, Textarea } from '../../components/ui'
-import type { Meta, ConcludeMetaRequest } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, Field, IconButton, Input, SectionTitle, Segmented, Sheet, Spinner, Textarea } from '../../components/ui'
+import type { Character, Meta, ConcludeMetaRequest, PoderPersonaje } from '../../types'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { CharacterHero } from '../../components/CharacterHero'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, shadow, titleText, tone, type ToneName } from '../../theme'
@@ -22,6 +19,9 @@ const HERO_TEXT_SOFT = onGemSoft
 const fromTablet = (px: number) => `clamp(0px, calc((100vw - 640px) * 999), ${px}px)`
 
 const TOTAL_HITOS = 3
+
+/** A power that the conclusion of a goal turned complete (Nacidos de la bruma): its id (`${arte}:${metal}`) and its name, «Alomancia de acero» */
+interface PoderCompleto { id: string; nombre: string }
 
 const CONCLUSION_OPTIONS: { value: ConcludeMetaRequest['tipoConclusion']; label: string; tone: ToneName; icon: LucideIcon }[] = [
   { value: 'exito', label: 'Éxito', tone: 'esmeralda', icon: Trophy },
@@ -79,7 +79,17 @@ function HitoCheckboxes({ hitos, onChange }: { hitos: number; onChange: (n: numb
 
 // ─── Single meta card ──────────────────────────────────────────────────────
 
-function MetaCard({ meta, campaignId, characterId, index = 0 }: { meta: Meta; campaignId: number; characterId: number; index?: number }) {
+function MetaCard({ meta, campaignId, characterId, index = 0, poderes, completos, onCompletos }: {
+  meta: Meta
+  campaignId: number
+  characterId: number
+  index?: number
+  /** Powers of the character: the goal that trains one carries the badge «Meta de nacido del metal» (`metaId`, T14); always empty in Stormlight */
+  poderes: PoderPersonaje[]
+  /** Powers that this goal turned complete when it was concluded; the page keeps them because the card changes of list (and remounts) when it is concluded */
+  completos?: PoderCompleto[]
+  onCompletos: (metaId: number, completos: PoderCompleto[]) => void
+}) {
   const qc = useQueryClient()
   const bodyId = useId()
   const [showConclusion, setShowConclusion] = useState(false)
@@ -92,6 +102,8 @@ function MetaCard({ meta, campaignId, characterId, index = 0 }: { meta: Meta; ca
   const accent = isConcluida ? (conclusionInfo ? tone[conclusionInfo.tone] : tone.cuarzo) : tone.brand
   const selectedTone = CONCLUSION_OPTIONS.find((o) => o.value === conclusionType)?.tone ?? 'brand'
   const r = radius.lg - 1
+  const deMetal = poderes.some((p) => p.metaId === meta.id)
+  const hayAviso = !!completos && completos.length > 0
 
   const updateMutation = useMutation({
     mutationFn: (hitos: number) =>
@@ -99,15 +111,37 @@ function MetaCard({ meta, campaignId, characterId, index = 0 }: { meta: Meta; ca
     onSuccess: () => qc.invalidateQueries({ queryKey: ['metas', campaignId, characterId] }),
   })
 
+  // Concluding a goal can complete a power (any type of conclusion, T14, Q20) and deleting one unlinks it: the sheet and the lists read the powers of
+  // the character, so both refresh it. By prefix, which also reaches the copies of the sheet (`enCombate`, §2)
+  const refrescarPersonaje = () => Promise.all([
+    qc.invalidateQueries({ queryKey: ['character', campaignId, characterId] }),
+    qc.invalidateQueries({ queryKey: ['characters', campaignId] }),
+  ])
+
+  // Which powers did the conclusion complete? The ones that were nascent when it was concluded and are complete in the refreshed character (the server
+  // marks them, T14). Runs apart from the mutation, which does not wait for it; with no powers (Stormlight) it ends at the comparison
+  const avisarPoderesCompletos = async () => {
+    await refrescarPersonaje()
+    const despues = qc.getQueryData<Character>(['character', campaignId, characterId])?.poderes ?? []
+    const nuevos = despues.filter((p) => p.completo && poderes.some((a) => a.arte === p.arte && a.metal === p.metal && !a.completo))
+    if (nuevos.length === 0) return
+    const { nombrePoder } = await import('../../components/mistborn/poderes') // lazy: the data of the metals do not travel in the main bundle (§8)
+    onCompletos(meta.id, nuevos.map((p) => ({ id: `${p.arte}:${p.metal}`, nombre: nombrePoder(p) })))
+  }
+
   const concludeMutation = useMutation({
     mutationFn: () =>
       metasApi.conclude(campaignId, characterId, meta.id, { tipoConclusion: conclusionType, notasConclusion: conclusionNote }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['metas', campaignId, characterId] }); setShowConclusion(false) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['metas', campaignId, characterId] })
+      setShowConclusion(false)
+      void avisarPoderesCompletos().catch(() => undefined)
+    },
   })
 
   const deleteMutation = useMutation({
     mutationFn: () => metasApi.delete(campaignId, characterId, meta.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['metas', campaignId, characterId] }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: ['metas', campaignId, characterId] }), refrescarPersonaje()]),
   })
 
   const ConclusionIcon = conclusionInfo?.icon
@@ -135,7 +169,7 @@ function MetaCard({ meta, campaignId, characterId, index = 0 }: { meta: Meta; ca
             width: '100%', display: 'flex', alignItems: 'center', gap: 12,
             padding: '12px 14px 12px 18px', minHeight: 60,
             fontFamily: font.ui, fontWeight: 400,
-            borderRadius: expanded ? `${r}px ${r}px 0 0` : r,
+            borderRadius: expanded || hayAviso ? `${r}px ${r}px 0 0` : r,
             outlineOffset: -2,
           }}
         >
@@ -160,6 +194,7 @@ function MetaCard({ meta, campaignId, characterId, index = 0 }: { meta: Meta; ca
             >
               {meta.titulo}
             </span>
+            {deMetal && <Badge tone="brand">Meta de nacido del metal</Badge>}
             {conclusionInfo && ConclusionIcon && (
               <span style={pill(tone[conclusionInfo.tone])}>
                 <ConclusionIcon size={13} aria-hidden />
@@ -174,6 +209,13 @@ function MetaCard({ meta, campaignId, characterId, index = 0 }: { meta: Meta; ca
           />
         </button>
       </h3>
+
+      {/* The conclusion completed a power of the character (Nacidos de la bruma) */}
+      {hayAviso && (
+        <div role="status" className="fade-in" style={{ padding: '0 16px 12px 18px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {completos?.map((p) => <Badge key={p.id} tone="esmeralda">Poder completo: {p.nombre}</Badge>)}
+        </div>
+      )}
 
       {expanded && (
         <div id={bodyId} className="fade-in" style={{ padding: '0 16px 16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -323,6 +365,7 @@ export function MetasDetailPage() {
   const [titulo, setTitulo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [showConcluidas, setShowConcluidas] = useState(false)
+  const [completados, setCompletados] = useState<Record<number, PoderCompleto[]>>({})
   const qc = useQueryClient()
 
   const { data: metas = [], isLoading: metasLoading } = useQuery({
@@ -342,11 +385,14 @@ export function MetasDetailPage() {
   if (isLoading || metasLoading) return <Spinner />
   if (!character) return null
 
+  // A concluded goal moves to «Concluidas»: that list opens so the notice of the power it completed is seen under it
+  const avisarCompletos = (metaId: number, lista: PoderCompleto[]) => {
+    setCompletados((prev) => ({ ...prev, [metaId]: lista }))
+    setShowConcluidas(true)
+  }
+
   const activas = metas.filter((m) => m.estado === 'activa')
   const concluidas = metas.filter((m) => m.estado === 'concluida')
-
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
 
   const listStyle: CSSProperties = { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }
 
@@ -364,21 +410,12 @@ export function MetasDetailPage() {
         <h1 style={{ ...titleText, fontSize: fs['2xl'], color: HERO_TEXT, marginBottom: 12, overflowWrap: 'anywhere' }}>
           {character.name}
         </h1>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
-          {path && (
-            <span style={heroPill}>
-              <HeroicPathIcon id={path.id} size={13} />
-              {path.name}
-            </span>
-          )}
-          {order && (
-            <span style={heroPill}>
-              <RadiantOrderIcon orderId={order.id} size={16} decorative />
-              {order.name}
-            </span>
-          )}
-        </div>
+        <CharacterIdentityPills
+          character={character}
+          variant="hero"
+          insetIcon={false}
+          leading={<span style={{ ...heroPill, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>}
+        />
       </CharacterHero>
 
       <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -403,7 +440,16 @@ export function MetasDetailPage() {
             {activas.length > 0 && (
               <ul role="list" style={listStyle}>
                 {activas.map((meta, i) => (
-                  <MetaCard key={meta.id} meta={meta} campaignId={cId} characterId={charId} index={i} />
+                  <MetaCard
+                    key={meta.id}
+                    meta={meta}
+                    campaignId={cId}
+                    characterId={charId}
+                    index={i}
+                    poderes={character.poderes}
+                    completos={completados[meta.id]}
+                    onCompletos={avisarCompletos}
+                  />
                 ))}
               </ul>
             )}
@@ -481,7 +527,16 @@ export function MetasDetailPage() {
             {showConcluidas && (
               <ul id={concluidasId} role="list" style={listStyle}>
                 {concluidas.map((meta, i) => (
-                  <MetaCard key={meta.id} meta={meta} campaignId={cId} characterId={charId} index={i} />
+                  <MetaCard
+                    key={meta.id}
+                    meta={meta}
+                    campaignId={cId}
+                    characterId={charId}
+                    index={i}
+                    poderes={character.poderes}
+                    completos={completados[meta.id]}
+                    onCompletos={avisarCompletos}
+                  />
                 ))}
               </ul>
             )}

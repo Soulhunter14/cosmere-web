@@ -1,19 +1,17 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useState, type CSSProperties } from 'react'
-import { ShoppingBag, ArrowRight, Package } from 'lucide-react'
+import { ShoppingBag, ArrowRight, Package, Coins } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { EmptyState, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
 import { cosmereImage } from '../../lib/cosmereAssets'
-import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, toneFrom } from '../../theme'
+import { formatCantidad, monedaImagen } from '../../lib/moneda'
+import { buttonReset, c, card, fs, page, radius, shadow, titleText } from '../../theme'
 import { onGem } from '../../lib/hero'
 
 /** Official sphere illustration (a diamond mark) next to the marcos count */
@@ -21,10 +19,13 @@ const MARCO_IMG = cosmereImage('esfera-marco-diamante')
 
 function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
   const [hovered, setHovered] = useState(false)
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
+  const cfg = useWorldConfig()
+  const era = useEra()
   const itemCount = (character.weapons?.length ?? 0) + (character.armor?.length ?? 0) + (character.equipment?.length ?? 0)
   const marcos = (character.marcosInfusas ?? 0) + (character.marcosOpacas ?? 0)
+  // Nacidos de la bruma: the money is «Arquillas», kept on the server (`recursos.arquillas`), with the official illustration of the era
+  const arquillas = character.recursos?.arquillas ?? 0
+  const dinero = monedaImagen(cfg.moneda, era)
 
   return (
     <button
@@ -73,22 +74,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>{character.name}</span>
 
-        {(path || order) && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {path && (
-              <span style={pill(toneFrom(path.color))}>
-                <HeroicPathIcon id={path.id} size={13} />
-                {path.name}
-              </span>
-            )}
-            {order && (
-              <span style={{ ...pill(toneFrom(order.color)), paddingLeft: 4 }}>
-                <RadiantOrderIcon orderId={order.id} size={16} decorative />
-                {order.name}
-              </span>
-            )}
-          </span>
-        )}
+        <CharacterIdentityPills character={character} />
 
         <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: fs.sm, color: c.muted }}>
           <span style={metaItem}>
@@ -96,10 +82,19 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
             {itemCount} objeto{itemCount !== 1 ? 's' : ''}
           </span>
           <span aria-hidden style={{ color: c.subtle }}>·</span>
-          <span style={metaItem}>
-            {MARCO_IMG && <img src={MARCO_IMG} alt="" width={16} height={16} style={{ width: 16, height: 16, objectFit: 'contain' }} />}
-            {marcos} marco{marcos !== 1 ? 's' : ''}
-          </span>
+          {cfg.features.arquillas ? (
+            <span style={metaItem}>
+              {dinero
+                ? <img src={dinero} alt="" width={16} height={16} style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                : <Coins size={14} aria-hidden style={{ color: c.subtle }} />}
+              {formatCantidad(arquillas, cfg.moneda)} arquilla{arquillas !== 1 ? 's' : ''}
+            </span>
+          ) : (
+            <span style={metaItem}>
+              {MARCO_IMG && <img src={MARCO_IMG} alt="" width={16} height={16} style={{ width: 16, height: 16, objectFit: 'contain' }} />}
+              {marcos} marco{marcos !== 1 ? 's' : ''}
+            </span>
+          )}
         </span>
       </span>
 

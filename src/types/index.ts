@@ -1,3 +1,5 @@
+import type { AttrField } from '../worlds/types'
+
 // Auth
 export interface User {
   id: number
@@ -11,6 +13,11 @@ export interface LoginResponse {
 }
 
 // Campaigns
+// Setting of a campaign: fixed when it is created and inherited by its characters.
+export type WorldId = 'stormlight' | 'mistborn'
+// Mistborn era (L.372 / PDF 378): required in 'mistborn', null in 'stormlight'; fixed when the campaign is created.
+export type Era = 'era1' | 'era2'
+
 export interface Campaign {
   id: number
   name: string
@@ -18,6 +25,8 @@ export interface Campaign {
   createdAt: string
   nextSessionDate?: string
   nextSessionTitle?: string
+  world: WorldId
+  era: Era | null
 }
 
 export interface CampaignDetail extends Campaign {
@@ -37,6 +46,10 @@ export interface StatLinea {
   concepto: string
   valor: number
   descripcionCondicion?: string
+  /** Attribute-bonus line of any origin (cantor form, Blessing, talent, spike), flagged by the server (§5.1): the sheet reads this instead of the concept text */
+  esBono: boolean
+  /** Informative line with no numeric effect (hemalurgy «Desorientado al inicio de escena»): the sheet prints only its concept. Absent in every other line */
+  sinValor?: boolean
 }
 
 export interface StatDesglose {
@@ -44,6 +57,39 @@ export interface StatDesglose {
   unidad?: string          // undefined = integer, "m" = meters
   lineas: StatLinea[]      // active — sum to total
   situacional: StatLinea[] // visible but NOT counted in total
+}
+
+// Metallic power of a Mistborn character (§4.2, §5.4): alomancy or feruchemy of one metal; derived id = `${arte}:${metal}`
+export interface PoderPersonaje {
+  arte: 'alomancia' | 'feruquimia'
+  /** ASCII id of one of the 17 metals (`hierro`, `acero`, `estano`…) */
+  metal: string
+  origen: 'camino' | 'clavo' | 'lerasium' | 'medallon'
+  /** false = nascent, true = complete (L.132-133 / PDF 138-139); the server owns it (meta conclusion, PATCH recursos) */
+  completo: boolean
+  /** Meta enlazada de «Entrenar tu poder» / «Fabricar tu mente de metal» */
+  metaId: number | null
+  /** Feruchemy: current charges, one reserve per metal */
+  cargas: number
+  /** Componedor: permanent −1 per use (≤ 0) */
+  ajusteCargasMax: number
+  /** Alomancy, rare metals only */
+  viales: number
+  /** Estado «Desprovisto [poder]» (L.310 / PDF 316) */
+  desprovisto: boolean
+}
+
+// Hemalurgic spike of a Mistborn character (T49a, §9): its own list in `Character.clavos`, apart from `poderes`. Only the director writes it
+// (the server keeps the saved list when anyone else sends one)
+export interface ClavoHemalurgico {
+  /** ASCII id of the metal of the spike: one of the 12 of the table «Efectos conocidos de los clavos hemalúrgicos» (cinc, cobre, estano, hierro, acero…; L.291 / PDF 297) */
+  metalClavo: string
+  /** `${arte}:${metal}` of the power a power spike grants (one of the four of its metal; the power travels in `poderes` with `origen: 'clavo'`); null in an attribute spike */
+  poderElegido: string | null
+  /** true while implanted: only then does it take effect (L.290 / PDF 296) */
+  implantado: boolean
+  /** «Clavo secreto» (L.289 / PDF 295): informative only in v1 */
+  secreto: boolean
 }
 
 // Characters
@@ -79,6 +125,8 @@ export interface Character {
   salud: StatDesglose
   investidura: StatDesglose
   movimiento: StatDesglose
+  /** Desvío efectivo: mayor entre armadura (`desvio`) y forma de cantor, más talentos situacionales. */
+  desvioCalculado: StatDesglose
   marcosInfusas: number
   marcosOpacas: number
   agilidad: number
@@ -129,16 +177,50 @@ export interface Character {
   spells: string[]
   equipment: string[]
   equippedArmor: string
+  // Nacidos de la bruma (§5.1). In Stormlight: '', '', [], {}, [] and {} (bonosAtributos carries the cantor-form bonus)
+  /** Metalborn path: `''`, `brumoso`, `nacido-de-la-bruma`, `feruquimista`, `ferrin` or `nacidoble` (L.19 / PDF 25) */
+  caminoMetal: string
+  /** Which path the character started with (L.17-18 / PDF 23-24): `''` = undecided (every existing character) */
+  caminoInicial: '' | 'heroico' | 'metal'
+  poderes: PoderPersonaje[]
+  /** Table state by key: `investiduraActual`, `cuentasAtium`, `arquillas` (written with PATCH …/recursos, never with the PUT) */
+  recursos: Record<string, number>
+  /** Kandra Blessings: `consciencia`, `potencia`, `presencia`, `estabilidad`, `fortaleza` (at most 2, no duplicates) */
+  bendiciones: string[]
+  /** World-specific derived stats (`alomancia.limite`, `poder.cobre.cargasMax`…), computed by the server */
+  derivadosSet: Record<string, StatDesglose>
+  /** Attribute bonuses of any origin, without zeros; the sheet and the dice roller add them only when `features.bonosServidor` is true */
+  bonosAtributos: Partial<Record<AttrField, number>>
+  /** Hemalurgic spikes (T49a): `[]` in Stormlight and in a character with none; `derivadosSet['hemalurgia.clavosMax']` is the limit once there is one */
+  clavos: ClavoHemalurgico[]
   createdAt: string
   updatedAt: string
 }
 
-export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante'> & { ownerId?: number }
+export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante' | 'caminoMetal' | 'caminoInicial'> & { ownerId?: number }
+// `poderes`, `bendiciones` and `caminoInicial` do travel in the PUT; `recursos` (and the table state of each power) go with PATCH …/recursos
+// `clavos` travels too (T49b), but only the director's list is written: for anyone else the server keeps the saved one
 export type UpdateCharacterRequest = Omit<Character,
   'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas' |
   'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |
-  'salud' | 'investidura' | 'movimiento'
+  'salud' | 'investidura' | 'movimiento' | 'desvioCalculado' |
+  'recursos' | 'derivadosSet' | 'bonosAtributos'
 >
+
+// PATCH …/recursos (Nacidos de la bruma, §5.2): only the keys that are present are written
+export interface RecursosPatch {
+  recursos?: Record<string, number>
+  poderes?: {
+    arte: string
+    metal: string
+    cargas?: number
+    viales?: number
+    desprovisto?: boolean
+    completo?: boolean
+    /** Componedor: only ≤ 0 (L.155 / PDF 161) */
+    ajusteCargasMax?: number
+  }[]
+}
 
 // Metas
 export interface Meta {
@@ -245,6 +327,8 @@ export interface GlobalNpc {
   imageUrl?: string
   createdAt: string
   updatedAt: string
+  /** World of the adversary: the server fixes it from the campaign it is created in and returns it; it never travels in a request body (§5.2) */
+  world: WorldId
 }
 
 // Sessions
@@ -337,6 +421,14 @@ export interface WeaponCatalog {
   isCustom: boolean
   description: string
   weight: number
+  /** World the item belongs to (a catalog is served by campaign, so it is the world of the campaign) */
+  world: WorldId
+  /** Era the item exists in (L.254-267 / PDF 260-273 label rows «ERA 1» / «ERA 2»); null = every era of its world */
+  era: 1 | 2 | null
+  /** Price in the money of the world (`WorldConfig.moneda`); null = it has none (every Stormlight weapon, Q13, and the rewards) */
+  price: number | null
+  /** Only obtained as a reward: the Bolsa pickers do not offer it */
+  isRewardOnly: boolean
 }
 
 export interface ArmorCatalog {
@@ -349,6 +441,10 @@ export interface ArmorCatalog {
   isCustom: boolean
   description: string
   weight: number
+  world: WorldId
+  era: 1 | 2 | null
+  price: number | null
+  isRewardOnly: boolean
 }
 
 export interface GearItem {
@@ -357,12 +453,19 @@ export interface GearItem {
   weight: number
   price: number
   description: string
+  world: WorldId
+  era: 1 | 2 | null
+  isRewardOnly: boolean
+  /** `'vial'` for the metal vials of Mistborn (reference of price only: the Bolsa picker does not offer them, Q21); null for the rest */
+  category: string | null
 }
 
 export interface CatalogOption {
   id: number
   name: string
   description: string
+  /** `'cosmere'` marks the options shared by every world (WorldIds.Cosmere); the others belong to one world */
+  world: WorldId | 'cosmere'
 }
 
 // Locked Days

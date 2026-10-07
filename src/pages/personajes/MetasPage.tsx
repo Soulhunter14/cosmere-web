@@ -7,12 +7,9 @@ import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { EmptyState, PageHeader, Spinner } from '../../components/ui'
 import type { Character } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
-import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, toneFrom } from '../../theme'
+import { buttonReset, c, card, fs, page, radius, shadow, titleText } from '../../theme'
 import { onGem } from '../../lib/hero'
 
 /* White initial on the deep character gradient (lib/avatar: ≥ 10:1 on every palette). */
@@ -21,10 +18,6 @@ const ON_GEM = onGem
 // ─── Character selector card (same list-row look as TalentosPage, BolsaPage and CharacterListPage) ─
 
 function CharacterSelectCard({ character, onSelect }: { character: Character; onSelect: () => void }) {
-  const path = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const order = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
-  const hasPaths = !!(character.caminoHeroico || character.caminoRadiante) && !!(path || order)
-
   return (
     <button
       type="button"
@@ -58,22 +51,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>{character.name}</span>
 
-        {hasPaths && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {path && (
-              <span style={pill(toneFrom(path.color))}>
-                <HeroicPathIcon id={path.id} size={13} />
-                {path.name}
-              </span>
-            )}
-            {order && (
-              <span style={{ ...pill(toneFrom(order.color)), paddingLeft: 4 }}>
-                <RadiantOrderIcon orderId={order.id} size={16} decorative />
-                {order.name}
-              </span>
-            )}
-          </span>
-        )}
+        <CharacterIdentityPills character={character} />
 
         <span style={{ fontSize: fs.sm, color: c.muted, fontVariantNumeric: 'tabular-nums' }}>Nv. {character.level}</span>
       </span>

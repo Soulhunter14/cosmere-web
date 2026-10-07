@@ -1,10 +1,13 @@
 import { useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
+import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Edit2, Save, X } from 'lucide-react'
+import { BookOpen, Edit2, Save, X, type LucideIcon } from 'lucide-react'
 import { globalNpcsApi } from '../../api/global-npcs'
-import { useCampaignStore } from '../../store/campaignStore'
-import { Button, Card, ErrorMessage, Field, IconButton, Input, Spinner, TabPanel, Tabs, Textarea } from '../../components/ui'
+import { useCampaignStore, useWorld, useWorldConfig } from '../../store/campaignStore'
+import { getWorld } from '../../worlds'
+import { COLUMNAS_COSMERE } from '../../worlds/skills'
+import type { AttrField, HabilidadDef } from '../../worlds/types'
+import { Button, Card, EmptyState, ErrorMessage, Field, IconButton, Input, Spinner, TabPanel, Tabs, Textarea } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { StatIcons } from '../../lib/gameIcons'
 import { c, eyebrow, font, fs, numeral, page, pill, radius, shadow, tint, titleText, tone, type Tone } from '../../theme'
@@ -14,55 +17,33 @@ import type { GlobalNpc } from '../../types'
 type NumKey = { [K in keyof GlobalNpc]-?: GlobalNpc[K] extends number ? K : never }[keyof GlobalNpc]
 type TextKey = 'apariencia' | 'notas'
 
-const SECTIONS = [
-  {
-    key: 'fisico', label: 'Físico', tone: tone.granate,
-    attrs: [['fuerza', 'FUE'], ['velocidad', 'VEL']] as [NumKey, string][],
-    skills: [
-      ['agilidad', 'Agilidad', 'velocidad', 'VEL'],
-      ['armasLigeras', 'Armas ligeras', 'velocidad', 'VEL'],
-      ['armasPesadas', 'Armas pesadas', 'fuerza', 'FUE'],
-      ['atletismo', 'Atletismo', 'fuerza', 'FUE'],
-      ['hurto', 'Hurto', 'velocidad', 'VEL'],
-      ['sigilo', 'Sigilo', 'velocidad', 'VEL'],
-    ] as [NumKey, string, NumKey, string][],
-  },
-  {
-    key: 'cognitivo', label: 'Cognitivo', tone: tone.zafiro,
-    attrs: [['intelecto', 'INT'], ['discernimiento', 'DIS']] as [NumKey, string][],
-    skills: [
-      ['deduccion', 'Deducción', 'intelecto', 'INT'],
-      ['disciplina', 'Disciplina', 'discernimiento', 'DIS'],
-      ['intimidacion', 'Intimidación', 'discernimiento', 'DIS'],
-      ['manufactura', 'Manufactura', 'intelecto', 'INT'],
-      ['medicina', 'Medicina', 'intelecto', 'INT'],
-      ['conocimiento', 'Conocimiento', 'intelecto', 'INT'],
-    ] as [NumKey, string, NumKey, string][],
-  },
-  {
-    key: 'espiritual', label: 'Espiritual', tone: tone.amatista,
-    attrs: [['voluntad', 'VOL'], ['presencia', 'PRE']] as [NumKey, string][],
-    skills: [
-      ['engano', 'Engaño', 'presencia', 'PRE'],
-      ['liderazgo', 'Liderazgo', 'presencia', 'PRE'],
-      ['percepcion', 'Percepción', 'discernimiento', 'DIS'],
-      ['perspicacia', 'Perspicacia', 'discernimiento', 'DIS'],
-      ['persuasion', 'Persuasión', 'presencia', 'PRE'],
-      ['supervivencia', 'Supervivencia', 'voluntad', 'VOL'],
-    ] as [NumKey, string, NumKey, string][],
-  },
-]
+/** The three columns of the page. The skills of each one come from the table of the world; the two attributes that head it (its tiles and its defense) are the book's */
+const COLUMNAS = [
+  { key: 'fisico', label: 'Físico', tone: tone.granate },
+  { key: 'cognitivo', label: 'Cognitivo', tone: tone.zafiro },
+  { key: 'espiritual', label: 'Espiritual', tone: tone.amatista },
+] as const
+
+const ATTR_CODES: Record<AttrField, string> = {
+  fuerza: 'FUE', velocidad: 'VEL', intelecto: 'INT', voluntad: 'VOL', discernimiento: 'DIS', presencia: 'PRE',
+}
+
+/** Cards of the page: `habilidades` decides which skills go in each column; the two attributes that head it are those of `COLUMNAS_COSMERE` */
+const buildSections = (habilidades: HabilidadDef[]) => COLUMNAS.map((col) => ({
+  ...col,
+  attrs: COLUMNAS_COSMERE[col.key].map((k): [NumKey, string] => [k, ATTR_CODES[k]]),
+  skills: habilidades
+    .filter((h) => h.columna === col.key)
+    .map((h): [NumKey, string, NumKey, string] => [h.field, h.label, h.atributo, h.codigo]),
+}))
 
 const TEXT_FIELDS: [TextKey, string][] = [
   ['apariencia', 'Apariencia'],
   ['notas', 'Notas'],
 ]
 
-const RESOURCES: { label: string; key: NumKey; tone: Tone; Icon: typeof StatIcons.salud }[] = [
-  { label: 'Salud', key: 'maxHealth', tone: tone.granate, Icon: StatIcons.salud },
-  { label: 'Concentración', key: 'maxConcentration', tone: tone.heliodoro, Icon: StatIcons.concentracion },
-  { label: 'Investidura', key: 'maxInvestiture', tone: tone.amatista, Icon: StatIcons.investidura },
-]
+/** The adversary has no field for its metallic arts: grades, metals and actions are written in the notes, so a world with them says so in the title (§7.8 PNJ) */
+const NOTAS_ARTES_METALICAS = 'Notas, poderes y tácticas'
 
 const ATTR_NAMES: Record<string, string> = {
   fuerza: 'Fuerza', velocidad: 'Velocidad', intelecto: 'Intelecto',
@@ -121,11 +102,15 @@ function Paragraphs({ text, reading = false }: { text: string; reading?: boolean
 }
 
 export function GlobalNpcDetailPage() {
-  const { npcId } = useParams<{ campaignId: string; npcId: string }>()
+  const { campaignId, npcId } = useParams<{ campaignId: string; npcId: string }>()
   const id = Number(npcId)
+  const cId = Number(campaignId)
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const location = useLocation()
   const { isGm } = useCampaignStore()
+  const world = useWorld()
+  const cfg = useWorldConfig()
   const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
   const [form, setForm] = useState<GlobalNpc | null>(null)
   const [tab, setTab] = useState<Tab>('stats')
@@ -143,13 +128,27 @@ export function GlobalNpcDetailPage() {
   }
 
   const updateMutation = useMutation({
-    mutationFn: () => globalNpcsApi.update(id, form ?? {}),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['global-npc', id] }); qc.invalidateQueries({ queryKey: ['global-npcs'] }); setEditing(false) },
+    mutationFn: () => globalNpcsApi.update(id, form ?? {}, cId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['global-npc', id] }); qc.invalidateQueries({ queryKey: ['global-npcs', cId] }); setEditing(false) },
   })
 
   // A failed fetch used to spin forever: say so instead
   if (isError && !npc) return <div style={page}><ErrorMessage message="No se pudo cargar el NPC. Inténtalo de nuevo." /></div>
   if (isLoading || !npc) return <Spinner />
+
+  // The route opens any adversary by id: one of another world (a saved link to a Caminapiedras adversary opened from a Mistborn campaign) is neither shown nor editable
+  if (npc.world !== world) {
+    return (
+      <div style={page}>
+        <EmptyState
+          icon={<BookOpen size={22} aria-hidden />}
+          title="Este adversario pertenece a otra ambientación"
+          description={`Solo se puede consultar desde una campaña ${getWorld(npc.world).nombreDe}.`}
+          action={<Button variant="secondary" onClick={() => navigate(`/campaigns/${campaignId}/gm`)}>Volver a NPCs</Button>}
+        />
+      </div>
+    )
+  }
 
   const f = (editing && form ? form : npc) as GlobalNpc
   const set = (k: keyof GlobalNpc) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -159,6 +158,17 @@ export function GlobalNpcDetailPage() {
 
   const rubi = tone.rubi
   const numberInput: CSSProperties = { textAlign: 'center', ...numeral, fontSize: fs.lg, padding: '6px 8px' }
+  // The table of the world, the same one the sheet and the dice roller read (no world id is compared here)
+  const sections = buildSections(cfg.habilidades)
+  // Salud and Concentración are Cosmere; the Investidura icon is the world's. A world with metallic arts only shows the Investidura tile of an adversary that has one
+  // (or while the director edits it, so it can be given one): most of its adversaries are not Investidos (Q27)
+  const resources: { label: string; key: NumKey; tone: Tone; Icon: LucideIcon }[] = [
+    { label: 'Salud', key: 'maxHealth', tone: tone.granate, Icon: StatIcons.salud },
+    { label: 'Concentración', key: 'maxConcentration', tone: tone.heliodoro, Icon: StatIcons.concentracion },
+    ...(!cfg.features.artesMetalicas || editing || (f.maxInvestiture ?? 0) > 0
+      ? [{ label: 'Investidura', key: 'maxInvestiture' as const, tone: tone.amatista, Icon: cfg.iconos.investidura }]
+      : []),
+  ]
 
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', paddingBottom: 32 }}>
@@ -255,7 +265,7 @@ export function GlobalNpcDetailPage() {
 
         {/* Resources */}
         <div style={{ position: 'relative', display: 'flex', gap: 8, marginTop: 20 }}>
-          {RESOURCES.map(({ label, key, tone: t, Icon }) => (
+          {resources.map(({ label, key, tone: t, Icon }) => (
             <div
               key={key}
               style={{
@@ -321,7 +331,7 @@ export function GlobalNpcDetailPage() {
         {/* STATS TAB */}
         {tab === 'stats' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {SECTIONS.map((section, si) => {
+            {sections.map((section, si) => {
               const t = section.tone
               const defense = 10 + (f[section.attrs[0][0]] ?? 0) + (f[section.attrs[1][0]] ?? 0)
               const headingId = `npc-sec-${section.key}`
@@ -409,7 +419,7 @@ export function GlobalNpcDetailPage() {
               padding={0}
               aria-labelledby="npc-talentos"
               className="rise"
-              style={{ '--i': SECTIONS.length, overflow: 'hidden', border: `1px solid ${tone.gold.border}` } as CSSProperties}
+              style={{ '--i': sections.length, overflow: 'hidden', border: `1px solid ${tone.gold.border}` } as CSSProperties}
             >
               <div style={{ padding: '12px 16px', background: tone.gold.bg, borderBottom: `1px solid ${tone.gold.border}` }}>
                 <CardHeading id="npc-talentos" t={tone.gold}>Talentos</CardHeading>
@@ -434,7 +444,8 @@ export function GlobalNpcDetailPage() {
         {/* LORE TAB */}
         {tab === 'lore' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {TEXT_FIELDS.map(([k, label], i) => {
+            {TEXT_FIELDS.map(([k, base], i) => {
+              const label = k === 'notas' && cfg.features.artesMetalicas ? NOTAS_ARTES_METALICAS : base
               const headingId = `npc-lore-${k}`
               return (
                 <Card

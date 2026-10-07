@@ -1,10 +1,12 @@
 /**
  * Small presentational pieces of the talent map: the SVG edge layer, the state marks of a cell,
- * the activation glyph and the route step badge. Pure presentation: geometry comes from talentMap.ts.
+ * the activation glyph, the glyph of a metal (goal badge, power bands) and the route step badge.
+ * Pure presentation: geometry comes from talentMap.ts.
  */
 import type { CSSProperties } from 'react'
 import { Check, Plus, Target } from 'lucide-react'
 import { CosmereIcon } from '../CosmereIcon'
+import { MetalGlyph } from '../mistborn/MetalGlyph'
 import type { ActivationType } from '../TalentActivation'
 import { c, fs } from '../../theme'
 import type { CellMark, EdgeDraw, EdgeStatus, JoinDraw } from './talentMap'
@@ -93,6 +95,18 @@ export function IdealGlyph({ size = 12 }: { size?: number }) {
   return <CosmereIcon name="caballeros-radiantes" size={size} style={{ color: 'var(--amatista)', pointerEvents: 'none' }} />
 }
 
+/**
+ * Glyph of the metal of a power: the goal badge of a locked cell and the band of a power plate (§7.7 #4). `poderId` is `${arte}:${metal}`.
+ * The official glyph of the metal in the era of the campaign (`MetalGlyph`, T46: loaded lazily, so a campaign that never draws one never
+ * downloads the glyphs). A power without id, or without glyph, shows the Lucide icon of its art (Anvil for feruchemy, Flame for the rest).
+ * `size` is the nominal size of the Lucide icon it replaces: the glyph is drawn a fifth bigger, because most of its artwork is smaller
+ * than its square box and, at 11 to 13 px, a glyph of the same size would be too small to read.
+ */
+export function MetalMark({ poderId, size = 12, style }: { poderId?: string | null; size?: number; style?: CSSProperties }) {
+  const [arte, metal = ''] = (poderId ?? '').split(':')
+  return <MetalGlyph arte={arte === 'feruquimia' ? arte : 'alomancia'} metal={metal} size={Math.round(size * 1.2)} style={{ pointerEvents: 'none', ...style }} />
+}
+
 /** The state mark of a cell: symbol + word/number, never colour alone. */
 export function CellMarkView({ mark, accent, compact }: { mark: CellMark; accent: Accent; compact: boolean }) {
   const num: CSSProperties = { fontSize: compact ? 13.5 : 13, fontWeight: 750, color: c.muted, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }
@@ -116,6 +130,7 @@ export function CellMarkView({ mark, accent, compact }: { mark: CellMark; accent
           {mark.badge === 'nivel' && <span style={tag}>NV{mark.minLevel}</span>}
           {mark.badge === 'ideal' && <IdealGlyph size={compact ? 11 : 12} />}
           {mark.badge === 'dj' && <span style={tag}>DJ</span>}
+          {mark.badge === 'meta' && <MetalMark poderId={mark.poderId} size={12} style={{ color: c.muted }} />}
         </span>
       )
   }

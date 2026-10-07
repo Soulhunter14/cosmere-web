@@ -24,6 +24,21 @@
         } catch (e) {}
       })();
     </script>
+    <!-- World theme: inside a campaign, <html data-world> is set before first paint from the `dataWorld` that the app
+         persisted together with the current campaign (cosmere-campaign). It only applies when that campaign is the one
+         in the URL, and it knows no world id: the value comes from the world's configuration (tema.dataWorld). -->
+    <script>
+      (function () {
+        try {
+          var m = location.pathname.match(/^\/campaigns\/(\d+)/);
+          if (!m) return;
+          var s = (JSON.parse(localStorage.getItem('cosmere-campaign')) || {}).state || {};
+          if (s.currentCampaign && String(s.currentCampaign.id) === m[1] && typeof s.dataWorld === 'string' && s.dataWorld) {
+            document.documentElement.setAttribute('data-world', s.dataWorld);
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -57,6 +72,11 @@
       html, body { background: #0a0e15; }
       @media (prefers-color-scheme: light) { html:not([data-theme='dark']), html:not([data-theme='dark']) body { background: #e8ecf1; } }
       html[data-theme='light'], html[data-theme='light'] body { background: #e8ecf1; }
+      /* World theme (data-world, set by the script above): its own page background before the stylesheet arrives.
+         Dark first, then the light equivalents; without them the light theme would paint dark before hydration. */
+      html[data-world='mistborn'], html[data-world='mistborn'] body { background: #0c0b0d; }
+      @media (prefers-color-scheme: light) { html[data-world='mistborn']:not([data-theme='dark']), html[data-world='mistborn']:not([data-theme='dark']) body { background: #ebe8e6; } }
+      html[data-world='mistborn'][data-theme='light'], html[data-world='mistborn'][data-theme='light'] body { background: #ebe8e6; }
     </style>
   </head>
   <body>

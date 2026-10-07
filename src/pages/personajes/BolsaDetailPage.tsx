@@ -1,19 +1,21 @@
 import { useState, useEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type Ref } from 'react'
-import { useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Minus, Trash2, Info, Sword, Shield, ShieldCheck, Package, ShoppingBag, Star, TriangleAlert, type LucideIcon } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
+import { Plus, Minus, Trash2, Info, Sword, Shield, ShieldCheck, Package, ShoppingBag, Star, TriangleAlert, Coins, Check, Search, type LucideIcon } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { catalogApi } from '../../api/catalog'
-import { Button, Card, ConfirmDialog, IconButton, SectionTitle, Sheet, Spinner, Stepper } from '../../components/ui'
+import { Button, Card, ConfirmDialog, ErrorMessage, Field, IconButton, Input, SectionTitle, Sheet, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest, WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
-import { HEROIC_PATHS } from '../../data/heroicPaths'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
-import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
+import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
+import { EquipoInicialButton } from './EquipoInicialButton'
 import { CharacterHero } from '../../components/CharacterHero'
 import { CosmereIcon } from '../../components/CosmereIcon'
-import { HeroicPathIcon } from '../../components/GameIcons'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { cosmereImage } from '../../lib/cosmereAssets'
+import { formatMoneda, monedaImagen, type Moneda } from '../../lib/moneda'
+import { filterPickerItems, isPickable } from '../../lib/catalogo'
+import { useEra, useWorldConfig } from '../../store/campaignStore'
+import type { WorldConfig } from '../../worlds/types'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, titleText, tone, type Tone } from '../../theme'
 
 type ItemKind = 'weapon' | 'armor' | 'gear'
@@ -126,6 +128,166 @@ function SphereImg({ src, size, style }: { src?: string; size: number; style?: C
   return <img src={src} alt="" width={size} height={size} style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0, ...style }} />
 }
 
+/** Official illustration of the money of the era (T45), or a Coins glyph in a tinted tile while the world or the era has none */
+function MonedaImg({ src, size }: { src?: string; size: number }) {
+  if (src) return <img src={src} alt="" width={size} height={size} style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} />
+  return (
+    <span
+      aria-hidden
+      style={{ width: size, height: size, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, background: tone.esmeralda.bg, border: `1px solid ${tone.esmeralda.border}`, color: tone.esmeralda.fg }}
+    >
+      <Coins size={Math.round(size / 2)} />
+    </span>
+  )
+}
+
+/** What was typed in the «Añadir / Gastar arquillas» dialogs: «12,5», «12.5» and «3» give 12.5, 12.5 and 3. `null` = not an amount (empty, letters, a sign, more than 2 decimals…) */
+function leerCantidad(texto: string): number | null {
+  const t = texto.trim().replace(',', '.')
+  return /^\d{0,9}(\.\d{0,2})?$/.test(t) && /\d/.test(t) ? Number(t) : null
+}
+
+/** «Era» tile of an item sheet: only the items that exist in a single era (L.254-267 / PDF 260-273) have one */
+const eraTiles = (era: 1 | 2 | null, cfg: WorldConfig): { label: string; value: string }[] => {
+  const def = era != null ? cfg.eras?.find((e) => e.id === `era${era}`) : undefined
+  return def ? [{ label: 'Era', value: def.label }] : []
+}
+
+/** «Precio» (or «Solo recompensa») and «Era» tiles of a weapon or armor sheet: nothing for an item that has neither, which is every Stormlight one */
+const priceEraTiles = (item: { price: number | null; isRewardOnly: boolean; era: 1 | 2 | null }, cfg: WorldConfig): { label: string; value: string }[] => [
+  ...(item.price != null ? [{ label: 'Precio', value: formatMoneda(item.price, cfg.moneda) }] : item.isRewardOnly ? [{ label: 'Precio', value: 'Solo recompensa' }] : []),
+  ...eraTiles(item.era, cfg),
+]
+
+/* ─── Item picker ──────────────────────────────────────────────────────── */
+
+/** A row of the picker: the bag stores names, so `id` is the name; `price` and `group` (type of weapon) only travel in a world with a priced catalog */
+type PickerItem = { id: string; label: string; weight: number; price?: number | null; group?: number }
+
+/**
+ * The picker behind the «Añadir» buttons. A world with a priced catalog (Mistborn: 35 weapons, 79 objects) gets a search box, the price of each item and,
+ * for weapons, chips by type; any other world (Stormlight) gets the plain list it always had (P1)
+ */
+function ItemPicker({ kind, label, items, groups, searchable, moneda, onPick, onClose }: {
+  kind: ItemKind
+  label: string
+  items: PickerItem[]
+  /** Types of weapon in `items`, for the chips (fewer than two: no chips) */
+  groups: { id: number; label: string }[]
+  /** Search box, prices and chips (worlds with a priced catalog); `false` = the plain list */
+  searchable: boolean
+  moneda: Moneda
+  onPick: (name: string) => void
+  onClose: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [group, setGroup] = useState<number | null>(null)
+  const cat = CATEGORY[kind]
+  const CatIcon = cat.Icon
+  const shown = searchable ? filterPickerItems(items, search, group) : items
+  const filtering = search.trim() !== '' || group !== null
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={`Añadir ${label}`}
+      footer={<Button variant="secondary" size="lg" fullWidth onClick={onClose}>Cerrar</Button>}
+    >
+      {searchable && items.length > 0 && (
+        <>
+          {/* The search box stays at the top of the sheet while the long list scrolls under it */}
+          <div style={{ position: 'sticky', top: 0, zIndex: 1, margin: '0 -20px 10px', padding: '0 20px 8px', background: 'var(--surface-1)' }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={16} aria-hidden style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: c.subtle, pointerEvents: 'none' }} />
+              <Input
+                type="search"
+                aria-label={`Buscar en ${label.toLowerCase()}`}
+                placeholder="Buscar por nombre…"
+                autoComplete="off"
+                enterKeyHint="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ paddingLeft: 38 }}
+              />
+            </div>
+            {/* The count is announced while the list is filtered; an empty result is announced by its own message below */}
+            <p className="sr-only" role="status">{filtering && shown.length > 0 ? `${shown.length} resultado${shown.length !== 1 ? 's' : ''}` : ''}</p>
+          </div>
+          {groups.length > 1 && (
+            <div role="group" aria-label="Tipo de arma" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {[{ id: null, label: 'Todas' }, ...groups].map((g) => {
+                const on = group === g.id
+                return (
+                  <button
+                    key={g.id ?? 'todas'}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setGroup(g.id)}
+                    className="ui-btn"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      minHeight: 36, padding: on ? '0 12px 0 10px' : '0 12px', borderRadius: radius.full,
+                      fontSize: fs.sm, fontWeight: on ? 650 : 550, cursor: 'pointer',
+                      border: `1px solid ${on ? cat.tone.border : c.borderBright}`,
+                      background: on ? cat.tone.bg : c.s2,
+                      color: on ? cat.tone.fg : c.muted,
+                    }}
+                  >
+                    {on && <Check size={14} aria-hidden strokeWidth={2.5} />}
+                    {g.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+      {items.length === 0 ? (
+        <p role="status" style={{ fontSize: fs.sm, color: c.muted, textAlign: 'center', padding: '20px 0' }}>Cargando...</p>
+      ) : shown.length === 0 ? (
+        <p role="status" style={{ fontSize: fs.sm, color: c.muted, textAlign: 'center', padding: '20px 0' }}>Sin resultados</p>
+      ) : (
+        <ul role="list" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {shown.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className="ui-card ui-card--interactive"
+                onClick={() => onPick(item.id)}
+                style={{
+                  ...buttonReset,
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  minHeight: 52,
+                  padding: '8px 14px 8px 8px',
+                  borderRadius: radius.md,
+                  background: c.s1,
+                  border: `1px solid ${c.border}`,
+                  color: c.text,
+                  textAlign: 'left',
+                }}
+              >
+                <span aria-hidden style={{ width: 36, height: 36, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: cat.tone.bg, border: `1px solid ${cat.tone.border}`, color: cat.tone.fg }}>
+                  <CatIcon size={17} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: fs.base, fontWeight: 550, overflowWrap: 'anywhere' }}>{item.label}</span>
+                <span style={{ fontSize: fs.sm, color: c.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                  <span className="sr-only">, </span>
+                  {item.weight} kg
+                  {item.price != null && ` · ${formatMoneda(item.price, moneda)}`}
+                </span>
+                <Plus size={16} aria-hidden style={{ color: cat.tone.fg }} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Sheet>
+  )
+}
+
 /* ─── Page ─────────────────────────────────────────────────────────────── */
 
 export function BolsaDetailPage() {
@@ -145,6 +307,12 @@ export function BolsaDetailPage() {
   const itemLists = useRef<Partial<Record<ItemKind, HTMLUListElement | null>>>({})
   // Focus target after spending every Marco ("Gastar" becomes disabled and cannot take focus back)
   const addMarcosButton = useRef<HTMLButtonElement>(null)
+  // Nacidos de la bruma: the money is «Arquillas» (features.arquillas) and the capacity tables carry a lifting column (cfg.tablas)
+  const cfg = useWorldConfig()
+  const era = useEra()
+  const [arquillasDialog, setArquillasDialog] = useState<'add' | 'remove' | null>(null)
+  const [arquillasTexto, setArquillasTexto] = useState('')
+  const addArquillasButton = useRef<HTMLButtonElement>(null)
 
   const { data: character, isLoading } = useQuery<Character>({
     queryKey: ['character', cId, charId],
@@ -157,17 +325,19 @@ export function BolsaDetailPage() {
     if (character) setMarcos({ infusas: character.marcosInfusas ?? 0, opacas: character.marcosOpacas ?? 0 })
   }, [character])
 
-  const { data: catalogWeapons = [] } = useQuery<WeaponCatalog[]>({ queryKey: ['catalog', 'weapons'], queryFn: catalogApi.getWeapons })
-  const { data: catalogArmor = [] }   = useQuery<ArmorCatalog[]>({  queryKey: ['catalog', 'armor'],   queryFn: catalogApi.getArmor })
-  const { data: catalogGear = [] }    = useQuery<GearItem[]>({       queryKey: ['catalog', 'gear'],    queryFn: catalogApi.getGear })
+  // The catalog of the campaign (its world and, in Mistborn, its era): the same keys as CatalogPage, so an item created there is here at once.
+  // Arrows, not bare references: TanStack would call `catalogApi.getWeapons` with its QueryFunctionContext as `campaignId`, and the server would silently answer Stormlight
+  const { data: catalogWeapons = [] } = useQuery<WeaponCatalog[]>({ queryKey: ['catalog', cId, 'weapons'], queryFn: () => catalogApi.getWeapons(cId) })
+  const { data: catalogArmor = [] }   = useQuery<ArmorCatalog[]>({  queryKey: ['catalog', cId, 'armor'],   queryFn: () => catalogApi.getArmor(cId) })
+  const { data: catalogGear = [] }    = useQuery<GearItem[]>({       queryKey: ['catalog', cId, 'gear'],    queryFn: () => catalogApi.getGear(cId) })
 
-  const { data: optWeaponType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE') })
-  const { data: optSkill }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL') })
-  const { data: optDamageType }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE') })
-  const { data: optRange }       = useQuery<CatalogOption[]>({ queryKey: ['opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE') })
-  const { data: optWeaponTrait } = useQuery<CatalogOption[]>({ queryKey: ['opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT') })
-  const { data: optArmorType }   = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE') })
-  const { data: optArmorTrait }  = useQuery<CatalogOption[]>({ queryKey: ['opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT') })
+  const { data: optWeaponType }  = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'WEAPON_TYPE'],  queryFn: () => catalogApi.getOptions('WEAPON_TYPE', cId) })
+  const { data: optSkill }       = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'SKILL'],        queryFn: () => catalogApi.getOptions('SKILL', cId) })
+  const { data: optDamageType }  = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'DAMAGE_TYPE'],  queryFn: () => catalogApi.getOptions('DAMAGE_TYPE', cId) })
+  const { data: optRange }       = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'RANGE'],        queryFn: () => catalogApi.getOptions('RANGE', cId) })
+  const { data: optWeaponTrait } = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'WEAPON_TRAIT'], queryFn: () => catalogApi.getOptions('WEAPON_TRAIT', cId) })
+  const { data: optArmorType }   = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'ARMOR_TYPE'],   queryFn: () => catalogApi.getOptions('ARMOR_TYPE', cId) })
+  const { data: optArmorTrait }  = useQuery<CatalogOption[]>({ queryKey: ['catalog', cId, 'opts', 'ARMOR_TRAIT'],  queryFn: () => catalogApi.getOptions('ARMOR_TRAIT', cId) })
 
   const buildOptMap     = (opts?: CatalogOption[]) => { const m = new Map<number, string>();        opts?.forEach((o) => m.set(o.id, o.name)); return m }
   const buildOptFullMap = (opts?: CatalogOption[]) => { const m = new Map<number, CatalogOption>(); opts?.forEach((o) => m.set(o.id, o));      return m }
@@ -196,6 +366,44 @@ export function BolsaDetailPage() {
       charactersApi.update(cId, charId, { ...(character as UpdateCharacterRequest), ...patch }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['character', cId, charId] }),
   })
+
+  // «Arquillas» (Nacidos de la bruma, §5.2): the purse lives on the server (`recursos.arquillas`, PATCH …/recursos) and never travels in the PUT of
+  // the whole character. Same recipe as the table state of the sheet (`mesa`, T29), for a counter that gets tapped fast: the change is written into
+  // every cached copy of the character at the call (synchronously, so the next tap starts from it and not from the last render), the requests go
+  // out one after the other in the order they were tapped (`colaMesa`: ten +0,01 taps from 0,1 end as exactly 0,2 on the server whatever the
+  // network does with them) and only the LAST one to settle refetches, so a slow answer never puts an old value back on screen. The answers are
+  // never written into the cache (the server computes them out of combat, §2): the refetch brings them. The queue is a plain promise chain and not
+  // the `scope` of TanStack: a scoped mutation only continues while the tab is in the foreground, so someone who taps ten times and puts the phone
+  // away would keep only the first tap
+  const prefijoFicha = ['character', cId, charId]
+  const colaMesa = useRef<Promise<unknown>>(Promise.resolve())
+  const mesaClave = ['mesa', cId, charId]
+  const arquillasMutation = useMutation({
+    mutationKey: mesaClave,
+    mutationFn: ({ valor }: { valor: number; previas: [QueryKey, Character | undefined][] }) => {
+      const enviar = () => charactersApi.patchRecursos(cId, charId, { recursos: { arquillas: valor } })
+      const turno = colaMesa.current.then(enviar, enviar) // after the previous one, whether it worked or not
+      colaMesa.current = turno.catch(() => undefined)
+      return turno
+    },
+    onError: (_error, { previas }) => previas.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onSettled: () => {
+      if (qc.isMutating({ mutationKey: mesaClave }) > 1) return // another one is still on its way: it refreshes when it settles
+      qc.invalidateQueries({ queryKey: prefijoFicha })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+
+  // One step of «Arquillas» from the LATEST value in the cache, which already holds the steps tapped before it (a button only knows the last render)
+  function cambiarArquillas(delta: number) {
+    const vivo = qc.getQueryData<Character>(prefijoFicha)?.recursos?.arquillas ?? 0
+    const siguiente = Math.max(0, Number((vivo + delta).toFixed(2)))
+    if (siguiente === vivo) return
+    void qc.cancelQueries({ queryKey: prefijoFicha }) // starts cancelling at once: a refetch in flight must not overwrite the change
+    const previas = qc.getQueriesData<Character>({ queryKey: prefijoFicha })
+    qc.setQueriesData<Character>({ queryKey: prefijoFicha }, (old) => old && { ...old, recursos: { ...old.recursos, arquillas: siguiente } })
+    arquillasMutation.mutate({ valor: siguiente, previas })
+  }
 
   function applyMarcos(infusas: number, opacas: number) {
     const next = { infusas: Math.max(0, infusas), opacas: Math.max(0, opacas) }
@@ -226,19 +434,34 @@ export function BolsaDetailPage() {
 
   if (isLoading || !character) return <Spinner />
 
-  const heroicPath = HEROIC_PATHS.find((p) => p.id === character.caminoHeroico)
-  const radiantOrder = RADIANT_ORDERS.find((o) => o.id === character.caminoRadiante)
   const marcosTotal = marcos.infusas + marcos.opacas
 
-  const getCapacity = (fuerza: number) => {
-    if (fuerza === 0) return 22.5
-    if (fuerza <= 2) return 45
-    if (fuerza <= 4) return 112.5
-    if (fuerza <= 6) return 225
-    if (fuerza <= 8) return 1125
-    return 2250
+  // «Arquillas»: what the character carries and the dialogs' amount
+  const arquillas = character.recursos?.arquillas ?? 0
+  const monedaImg = monedaImagen(cfg.moneda, era)
+  const cantidadArquillas = leerCantidad(arquillasTexto)
+  const errorArquillas = /^[.,]?$/.test(arquillasTexto.trim()) ? undefined // nothing yet, or just the separator: still being typed
+    : cantidadArquillas === null ? 'Escribe una cantidad con, como máximo, 2 decimales (0,01 ar es un óbolo).'
+    : arquillasDialog === 'remove' && cantidadArquillas > arquillas ? 'No tienes tantas arquillas.'
+    : undefined
+  const arquillasValida = cantidadArquillas !== null && cantidadArquillas > 0 && !errorArquillas
+  const abrirArquillas = (tipo: 'add' | 'remove') => { setArquillasTexto(''); setArquillasDialog(tipo) }
+  const confirmarArquillas = () => {
+    if (!arquillasDialog || !arquillasValida || cantidadArquillas === null) return
+    cambiarArquillas(arquillasDialog === 'add' ? cantidadArquillas : -cantidadArquillas)
+    // Spending everything disables "Gastar", so the dialog's focus restore would fall to <body>
+    if (arquillasDialog === 'remove' && cantidadArquillas >= arquillas) window.setTimeout(() => addArquillasButton.current?.focus(), 0)
+    setArquillasDialog(null)
   }
-  const capacity = getCapacity(character.fuerza ?? 0)
+
+  // Capacity tables of the world (L.50 / PDF 56), indexed by Fuerza bracket: 0 · 1-2 · 3-4 · 5-6 · 7-8 · 9 or more. In a world whose attribute bonuses
+  // come from the server the Fuerza that counts is the one the sheet shows, bonuses included [inferido: L.50 / PDF 56 does not mention them, but a
+  // Blessing says «Tu Fuerza aumenta en 1», L.34 / PDF 40]
+  const tramoDeFuerza = (f: number) => (f === 0 ? 0 : f <= 2 ? 1 : f <= 4 ? 2 : f <= 6 ? 3 : f <= 8 ? 4 : 5)
+  const getCapacity = (f: number) => cfg.tablas.cargaKg[tramoDeFuerza(f)]
+  const fuerza = (character.fuerza ?? 0) + (cfg.features.bonosServidor ? (character.bonosAtributos?.fuerza ?? 0) : 0)
+  const capacity = getCapacity(fuerza)
+  const lifting = cfg.tablas.levantamientoKg?.[tramoDeFuerza(fuerza)] // Stormlight declares no lifting table: the line does not exist there
   const currentWeight =
     (character.weapons ?? []).reduce((sum, name) => sum + (catalogWeapons.find((w) => w.name === name)?.weight ?? 0), 0) +
     (character.armor ?? []).reduce((sum, name) => sum + (catalogArmor.find((a) => a.name === name)?.weight ?? 0), 0) +
@@ -248,6 +471,7 @@ export function BolsaDetailPage() {
   const barTone = weightPct >= 1 ? tone.rubi : weightPct >= 0.75 ? tone.topacio : tone.esmeralda
   const weightLabel = Number.isInteger(currentWeight) ? `${currentWeight}` : currentWeight.toFixed(1)
   const capLabel = Number.isInteger(capacity) ? `${capacity}` : capacity.toFixed(1)
+  const liftLabel = lifting === undefined ? '' : Number.isInteger(lifting) ? `${lifting}` : lifting.toFixed(1)
 
   const pending = marcosMutation.isPending
   const canSpendInfusa = !(marcos.infusas === 0 || pending)
@@ -310,123 +534,167 @@ export function BolsaDetailPage() {
           <h1 style={{ ...titleText, fontSize: fs['2xl'], color: onGem, overflowWrap: 'anywhere' }}>{character.name}</h1>
           <span style={heroPill}>Nv. {character.level}</span>
         </div>
-        {(heroicPath || radiantOrder) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
-            {heroicPath && (
-              <span style={heroPill}>
-                <HeroicPathIcon id={heroicPath.id} size={13} />
-                {heroicPath.name}
-              </span>
-            )}
-            {radiantOrder && (
-              <span style={{ ...heroPill, paddingLeft: 4 }}>
-                <RadiantOrderIcon orderId={radiantOrder.id} size={16} decorative />
-                {radiantOrder.name}
-              </span>
-            )}
-          </div>
-        )}
+        <CharacterIdentityPills character={character} variant="hero" style={{ marginTop: 12 }} />
       </CharacterHero>
 
       <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 32 }}>
-        {/* ─── Marcos ─── */}
-        <section aria-labelledby="bolsa-marcos">
-          <SectionTitle
-            id="bolsa-marcos"
-            action={
-              <div style={{ display: 'flex', gap: 8 }}>
-                <ToneButton
-                  ref={addMarcosButton}
-                  t={tone.esmeralda}
-                  icon={<Plus size={15} aria-hidden />}
-                  aria-label="Añadir Marcos"
-                  aria-haspopup="dialog"
-                  onClick={() => { setMarcosDelta(1); setMarcosDialog('add') }}
-                >
-                  Añadir
-                </ToneButton>
-                <ToneButton
-                  t={tone.rubi}
-                  icon={<Minus size={15} aria-hidden />}
-                  aria-label="Gastar Marcos"
-                  aria-haspopup="dialog"
-                  onClick={() => { setMarcosDelta(1); setMarcosDialog('remove') }}
-                  disabled={marcosTotal === 0}
-                  style={{ cursor: marcosTotal === 0 ? 'not-allowed' : 'pointer' }}
-                >
-                  Gastar
-                </ToneButton>
-              </div>
-            }
-          >
-            Marcos
-          </SectionTitle>
-          <Card padding={0} style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${c.border}` }}>
-              <SphereImg src={IMG_MARCO} size={40} />
-              <p style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span style={{ ...numeral, fontSize: fs['2xl'], color: c.text }}>{marcosTotal}</span>
-                <span style={{ fontSize: fs.sm, color: c.muted }}>total</span>
-              </p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-              {/* Infusas: hold Stormlight */}
-              <div style={{ ...marcoColumn, borderRight: `1px solid ${c.border}` }}>
-                <p style={{ ...eyebrow, color: tone.brand.fg, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <SphereImg src={IMG_CHIP} size={20} style={{ filter: 'drop-shadow(0 0 5px var(--brand-glow))' }} />
-                  Infusas
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <IconButton
-                    label="Apagar un Marco infuso"
-                    size={44}
-                    onClick={() => { if (canSpendInfusa) applyMarcos(marcos.infusas - 1, marcos.opacas + 1) }}
-                    aria-disabled={!canSpendInfusa || undefined}
-                    aria-busy={pending || undefined}
-                    style={roundStep(canSpendInfusa)}
+        {/* ─── Arquillas: the money of Nacidos de la bruma (L.254 / PDF 260) ─── */}
+        {cfg.features.arquillas && (
+          <section aria-labelledby="bolsa-arquillas">
+            <SectionTitle
+              id="bolsa-arquillas"
+              action={
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <ToneButton
+                    ref={addArquillasButton}
+                    t={tone.esmeralda}
+                    icon={<Plus size={15} aria-hidden />}
+                    aria-label="Añadir arquillas"
+                    aria-haspopup="dialog"
+                    onClick={() => abrirArquillas('add')}
                   >
-                    {pending ? '…' : <Minus size={18} aria-hidden />}
-                  </IconButton>
-                  <span style={{ ...numeral, fontSize: fs['2xl'], color: c.brandLight, minWidth: 36, textAlign: 'center' }}>{marcos.infusas}</span>
-                  <IconButton
-                    label="Recargar un Marco opaco"
-                    size={44}
-                    onClick={() => { if (canRecharge) applyMarcos(marcos.infusas + 1, marcos.opacas - 1) }}
-                    aria-disabled={!canRecharge || undefined}
-                    aria-busy={pending || undefined}
-                    style={roundStep(canRecharge)}
+                    Añadir
+                  </ToneButton>
+                  <ToneButton
+                    t={tone.rubi}
+                    icon={<Minus size={15} aria-hidden />}
+                    aria-label="Gastar arquillas"
+                    aria-haspopup="dialog"
+                    onClick={() => abrirArquillas('remove')}
+                    disabled={arquillas === 0}
+                    style={{ cursor: arquillas === 0 ? 'not-allowed' : 'pointer' }}
                   >
-                    {pending ? '…' : <Plus size={18} aria-hidden />}
-                  </IconButton>
+                    Gastar
+                  </ToneButton>
                 </div>
-                <p style={marcoCaption}>brillantes</p>
+              }
+            >
+              {cfg.moneda.nombre}
+            </SectionTitle>
+            <Card padding={0} style={{ overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'wrap', padding: '14px 16px' }}>
+                <MonedaImg src={monedaImg} size={56} />
+                {/* One tap = one óbolo (0,01 ar). The Stepper only says which way; the amount comes from the cache (cambiarArquillas) */}
+                <Stepper
+                  label="Arquillas"
+                  value={arquillas}
+                  min={0}
+                  step={0.01}
+                  decimals={2}
+                  onChange={(v) => cambiarArquillas(Number((v - arquillas).toFixed(2)))}
+                  format={(v) => <span style={{ fontSize: 'clamp(20px, 6.5vw, 28px)' }}>{formatMoneda(v, cfg.moneda, { fija: true })}</span>}
+                />
               </div>
-
-              {/* Opacas: dun spheres */}
-              <div style={marcoColumn}>
-                <p style={{ ...eyebrow, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <SphereImg src={IMG_CHIP} size={20} style={{ filter: 'grayscale(1)', opacity: 0.6 }} />
-                  Opacas
-                </p>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44 }}>
-                  <span style={{ ...numeral, fontSize: fs['2xl'], color: c.muted, minWidth: 36, textAlign: 'center' }}>{marcos.opacas}</span>
-                </div>
-                <p style={marcoCaption}>apagadas</p>
-              </div>
-            </div>
-
-            <p className="sr-only" aria-live="polite">
-              {`${marcosTotal} Marcos en total: ${marcos.infusas} infusas y ${marcos.opacas} opacas`}
-            </p>
-
-            {marcosTotal > 0 && (
               <p style={{ padding: '10px 16px 12px', borderTop: `1px solid ${c.border}`, fontSize: fs.xs, color: c.muted, textAlign: 'center' }}>
-                Usa +/− en Infusas para cambiar el estado de un Marco
+                Cada toque suma o resta un óbolo (0,01 ar). Para cantidades mayores usa Añadir o Gastar.
               </p>
-            )}
-          </Card>
-        </section>
+              {arquillasMutation.isError && (
+                <ErrorMessage message="No se han podido guardar las arquillas. Inténtalo de nuevo." style={{ margin: '0 16px 14px' }} />
+              )}
+            </Card>
+          </section>
+        )}
+
+        {/* ─── Marcos ─── */}
+        {cfg.features.marcos && (
+          <section aria-labelledby="bolsa-marcos">
+            <SectionTitle
+              id="bolsa-marcos"
+              action={
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <ToneButton
+                    ref={addMarcosButton}
+                    t={tone.esmeralda}
+                    icon={<Plus size={15} aria-hidden />}
+                    aria-label="Añadir Marcos"
+                    aria-haspopup="dialog"
+                    onClick={() => { setMarcosDelta(1); setMarcosDialog('add') }}
+                  >
+                    Añadir
+                  </ToneButton>
+                  <ToneButton
+                    t={tone.rubi}
+                    icon={<Minus size={15} aria-hidden />}
+                    aria-label="Gastar Marcos"
+                    aria-haspopup="dialog"
+                    onClick={() => { setMarcosDelta(1); setMarcosDialog('remove') }}
+                    disabled={marcosTotal === 0}
+                    style={{ cursor: marcosTotal === 0 ? 'not-allowed' : 'pointer' }}
+                  >
+                    Gastar
+                  </ToneButton>
+                </div>
+              }
+            >
+              Marcos
+            </SectionTitle>
+            <Card padding={0} style={{ overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${c.border}` }}>
+                <SphereImg src={IMG_MARCO} size={40} />
+                <p style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ ...numeral, fontSize: fs['2xl'], color: c.text }}>{marcosTotal}</span>
+                  <span style={{ fontSize: fs.sm, color: c.muted }}>total</span>
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                {/* Infusas: hold Stormlight */}
+                <div style={{ ...marcoColumn, borderRight: `1px solid ${c.border}` }}>
+                  <p style={{ ...eyebrow, color: tone.brand.fg, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <SphereImg src={IMG_CHIP} size={20} style={{ filter: 'drop-shadow(0 0 5px var(--brand-glow))' }} />
+                    Infusas
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                    <IconButton
+                      label="Apagar un Marco infuso"
+                      size={44}
+                      onClick={() => { if (canSpendInfusa) applyMarcos(marcos.infusas - 1, marcos.opacas + 1) }}
+                      aria-disabled={!canSpendInfusa || undefined}
+                      aria-busy={pending || undefined}
+                      style={roundStep(canSpendInfusa)}
+                    >
+                      {pending ? '…' : <Minus size={18} aria-hidden />}
+                    </IconButton>
+                    <span style={{ ...numeral, fontSize: fs['2xl'], color: c.brandLight, minWidth: 36, textAlign: 'center' }}>{marcos.infusas}</span>
+                    <IconButton
+                      label="Recargar un Marco opaco"
+                      size={44}
+                      onClick={() => { if (canRecharge) applyMarcos(marcos.infusas + 1, marcos.opacas - 1) }}
+                      aria-disabled={!canRecharge || undefined}
+                      aria-busy={pending || undefined}
+                      style={roundStep(canRecharge)}
+                    >
+                      {pending ? '…' : <Plus size={18} aria-hidden />}
+                    </IconButton>
+                  </div>
+                  <p style={marcoCaption}>brillantes</p>
+                </div>
+
+                {/* Opacas: dun spheres */}
+                <div style={marcoColumn}>
+                  <p style={{ ...eyebrow, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <SphereImg src={IMG_CHIP} size={20} style={{ filter: 'grayscale(1)', opacity: 0.6 }} />
+                    Opacas
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 44 }}>
+                    <span style={{ ...numeral, fontSize: fs['2xl'], color: c.muted, minWidth: 36, textAlign: 'center' }}>{marcos.opacas}</span>
+                  </div>
+                  <p style={marcoCaption}>apagadas</p>
+                </div>
+              </div>
+
+              <p className="sr-only" aria-live="polite">
+                {`${marcosTotal} Marcos en total: ${marcos.infusas} infusas y ${marcos.opacas} opacas`}
+              </p>
+
+              {marcosTotal > 0 && (
+                <p style={{ padding: '10px 16px 12px', borderTop: `1px solid ${c.border}`, fontSize: fs.xs, color: c.muted, textAlign: 'center' }}>
+                  Usa +/− en Infusas para cambiar el estado de un Marco
+                </p>
+              )}
+            </Card>
+          </section>
+        )}
 
         {/* ─── Capacidad de carga ─── */}
         <section aria-labelledby="bolsa-carga">
@@ -434,7 +702,7 @@ export function BolsaDetailPage() {
             id="bolsa-carga"
             action={
               <span style={{ fontSize: fs.sm, color: c.muted, whiteSpace: 'nowrap' }}>
-                Fuerza <strong style={{ ...numeral, fontSize: fs.base, color: c.text }}>{character.fuerza ?? 0}</strong>
+                Fuerza <strong style={{ ...numeral, fontSize: fs.base, color: c.text }}>{fuerza}</strong>
               </span>
             }
           >
@@ -469,8 +737,16 @@ export function BolsaDetailPage() {
             >
               <div style={{ height: '100%', width: `${weightPct * 100}%`, borderRadius: radius.full, background: barTone.fg, transition: 'width 0.3s, background 0.3s' }} />
             </div>
+            {lifting !== undefined && (
+              <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 12 }}>
+                Levantar hasta <strong style={{ ...numeral, fontSize: fs.base, color: c.text }}>{liftLabel}</strong> kg
+              </p>
+            )}
           </Card>
         </section>
+
+        {/* ─── Equipo inicial: the seven packages of the book (T47). Renders nothing outside Nacidos de la bruma or for who is not the director or the owner ─── */}
+        <EquipoInicialButton campaignId={cId} character={character} catalogWeapons={catalogWeapons} />
 
         {/* ─── Armas / Armaduras / Equipo ─── */}
         {([
@@ -573,6 +849,17 @@ export function BolsaDetailPage() {
                   </p>
                 )}
               </Card>
+              {/* A feruchemical power is its own metalmind: its charges live in «Artes metálicas», not here (Q23) */}
+              {type === 'gear' && cfg.features.artesMetalicas && character.poderes.some((p) => p.arte === 'feruquimia') && (
+                <Link
+                  to={`/campaigns/${cId}/characters/${charId}`}
+                  state={{ tab: 'artesMetalicas' }}
+                  className="ui-link"
+                  style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, marginTop: 4, padding: '0 2px', fontSize: fs.sm, fontWeight: 650 }}
+                >
+                  Cargas en Artes metálicas →
+                </Link>
+              )}
             </section>
           )
         })}
@@ -609,63 +896,69 @@ export function BolsaDetailPage() {
         </div>
       </Sheet>
 
+      {/* ─── Arquillas dialog ─── */}
+      <Sheet
+        open={!!arquillasDialog}
+        onClose={() => setArquillasDialog(null)}
+        maxWidth={440}
+        title={arquillasDialog === 'add' ? 'Añadir arquillas' : 'Gastar arquillas'}
+        description={arquillasDialog === 'add' ? 'La cantidad se suma a las arquillas de la bolsa.' : `Tienes ${formatMoneda(arquillas, cfg.moneda, { fija: true })}.`}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={() => setArquillasDialog(null)}>
+              Cancelar
+            </Button>
+            <Button variant={arquillasDialog === 'add' ? 'primary' : 'danger'} size="lg" style={{ flex: 2 }} disabled={!arquillasValida} onClick={confirmarArquillas}>
+              {`${arquillasDialog === 'add' ? 'Añadir' : 'Gastar'}${cantidadArquillas ? ` ${formatMoneda(cantidadArquillas, cfg.moneda, { fija: true })}` : ''}`}
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '8px 0 4px' }}>
+          <MonedaImg src={monedaImg} size={56} />
+          <Field label="Cantidad en arquillas" hint="Los óbolos van como decimales: 0,05 ar son 5 óbolos." error={errorArquillas} style={{ width: '100%' }}>
+            <Input
+              type="text"
+              inputMode="decimal"
+              enterKeyHint="done"
+              autoComplete="off"
+              placeholder="0,00"
+              value={arquillasTexto}
+              onChange={(e) => setArquillasTexto(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmarArquillas() } }}
+              data-autofocus
+              style={{ textAlign: 'center', fontSize: fs.xl }}
+            />
+          </Field>
+        </div>
+      </Sheet>
+
       {/* ─── Item picker ─── */}
       {itemPicker && (() => {
+        // Neither a reward-only item nor a metal vial is offered (Q21: the vials of a metal live in `poderes[].viales`, so buying one here would count it twice)
+        const priced = cfg.features.catalogoDePrecios
+        const row = (name: string, weight: number, price: number | null, group?: number): PickerItem =>
+          ({ id: name, label: name, weight, ...(priced ? { price, group } : {}) })
+        const weapons = catalogWeapons.filter(isPickable)
         const config = {
-          weapon: { label: 'Armas',     items: catalogWeapons.map((w) => ({ id: w.name, label: w.name, weight: w.weight })) },
-          armor:  { label: 'Armaduras', items: catalogArmor.map((a) => ({ id: a.name, label: a.name, weight: a.weight })) },
-          gear:   { label: 'Equipo',    items: catalogGear.map((g) => ({ id: g.name, label: g.name, weight: g.weight })) },
+          weapon: { label: 'Armas',     items: weapons.map((w) => row(w.name, w.weight, w.price, w.weaponTypeId)) },
+          armor:  { label: 'Armaduras', items: catalogArmor.filter(isPickable).map((a) => row(a.name, a.weight, a.price)) },
+          gear:   { label: 'Equipo',    items: catalogGear.filter(isPickable).map((g) => row(g.name, g.weight, g.price)) },
         }[itemPicker]
-        const cat = CATEGORY[itemPicker]
-        const CatIcon = cat.Icon
-        const close = () => setItemPicker(null)
+        const groups = itemPicker === 'weapon'
+          ? [...new Set(weapons.map((w) => w.weaponTypeId))].sort((a, b) => a - b).map((id) => ({ id, label: wtMap.get(id) ?? '—' }))
+          : []
         return (
-          <Sheet
-            open
-            onClose={close}
-            title={`Añadir ${config.label}`}
-            footer={<Button variant="secondary" size="lg" fullWidth onClick={close}>Cerrar</Button>}
-          >
-            {config.items.length === 0 ? (
-              <p role="status" style={{ fontSize: fs.sm, color: c.muted, textAlign: 'center', padding: '20px 0' }}>Cargando...</p>
-            ) : (
-              <ul role="list" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {config.items.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      className="ui-card ui-card--interactive"
-                      onClick={() => addItem(itemPicker, item.id)}
-                      style={{
-                        ...buttonReset,
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        minHeight: 52,
-                        padding: '8px 14px 8px 8px',
-                        borderRadius: radius.md,
-                        background: c.s1,
-                        border: `1px solid ${c.border}`,
-                        color: c.text,
-                        textAlign: 'left',
-                      }}
-                    >
-                      <span aria-hidden style={{ width: 36, height: 36, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: cat.tone.bg, border: `1px solid ${cat.tone.border}`, color: cat.tone.fg }}>
-                        <CatIcon size={17} />
-                      </span>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: fs.base, fontWeight: 550, overflowWrap: 'anywhere' }}>{item.label}</span>
-                      <span style={{ fontSize: fs.sm, color: c.muted, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                        <span className="sr-only">, </span>
-                        {item.weight} kg
-                      </span>
-                      <Plus size={16} aria-hidden style={{ color: cat.tone.fg }} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Sheet>
+          <ItemPicker
+            kind={itemPicker}
+            label={config.label}
+            items={config.items}
+            groups={groups}
+            searchable={priced}
+            moneda={cfg.moneda}
+            onPick={(name) => addItem(itemPicker, name)}
+            onClose={() => setItemPicker(null)}
+          />
         )
       })()}
 
@@ -714,7 +1007,7 @@ export function BolsaDetailPage() {
                 </DetailSection>
                 <DetailSection title="Estadísticas">
                   <dl style={statGrid}>
-                    {[{ label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' }, { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' }, { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' }, { label: 'Peso', value: `${weapon.weight} kg` }].map(({ label, value }) => (
+                    {[{ label: 'Habilidad', value: skMap.get(weapon.skillId) ?? '—' }, { label: 'Tipo', value: wtMap.get(weapon.weaponTypeId) ?? '—' }, { label: 'Alcance', value: rMap.get(weapon.rangeId) ?? '—' }, { label: 'Peso', value: `${weapon.weight} kg` }, ...priceEraTiles(weapon, cfg)].map(({ label, value }) => (
                       <StatPill key={label} label={label} value={value} />
                     ))}
                   </dl>
@@ -753,7 +1046,7 @@ export function BolsaDetailPage() {
                 </DetailSection>
                 <DetailSection title="Tipo">
                   <dl style={statGrid}>
-                    {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }].map(({ label, value }) => (
+                    {[{ label: 'Tipo', value: atMap.get(armor.armorTypeId) ?? '—' }, { label: 'Peso', value: `${armor.weight} kg` }, ...priceEraTiles(armor, cfg)].map(({ label, value }) => (
                       <StatPill key={label} label={label} value={value} />
                     ))}
                   </dl>
@@ -782,7 +1075,7 @@ export function BolsaDetailPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <DetailSection title="Detalles">
                   <dl style={statGrid}>
-                    {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: `${gear.price} mc` }].map(({ label, value }) => (
+                    {[{ label: 'Peso', value: `${gear.weight} kg` }, { label: 'Precio', value: formatMoneda(gear.price, cfg.moneda) }, ...eraTiles(gear.era, cfg)].map(({ label, value }) => (
                       <StatPill key={label} label={label} value={value} />
                     ))}
                   </dl>

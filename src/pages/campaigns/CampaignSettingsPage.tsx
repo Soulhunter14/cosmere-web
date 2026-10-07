@@ -5,9 +5,49 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { campaignsApi } from '../../api/campaigns'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Avatar, Badge, Button, Card, ErrorMessage, PageHeader, SectionTitle, Sheet, Spinner, Switch } from '../../components/ui'
+import { Avatar, Badge, Button, Card, ErrorMessage, PageHeader, SectionTitle, Sheet, Spinner, StatTile, Switch } from '../../components/ui'
+import { CosmereIcon } from '../../components/CosmereIcon'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
+import { getWorld } from '../../worlds'
+import type { Era } from '../../types'
 import { c, eyebrow, font, fs, page, radius, titleText, tone } from '../../theme'
+
+/* The name of the setting or the era inside a StatTile: a heading-sized serif line instead of the big stat numeral */
+const tileValue: CSSProperties = { fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, lineHeight: 1.2, letterSpacing: 0, fontVariantNumeric: 'normal' }
+
+/**
+ * Setting of the campaign, read only: world and era are fixed when the campaign is created (spec §3 b, c), so there is
+ * nothing to edit here. Names, emblem and era labels come from the world's configuration (P8). A world without eras
+ * (Stormlight) has no era tile.
+ */
+function AmbientacionSection({ world, era, index }: { world: string; era: Era | null; index: number }) {
+  const cfg = getWorld(world)
+  const eraDef = era ? cfg.eras?.find((e) => e.id === era) : undefined
+  return (
+    <section aria-labelledby="settings-world" className="rise" style={{ '--i': index } as CSSProperties}>
+      <SectionTitle id="settings-world">Ambientación</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+        <StatTile
+          label="Mundo"
+          icon={<CosmereIcon name={cfg.emblema} size={14} />}
+          value={<span style={tileValue}>{cfg.nombre}</span>}
+          sub={`Ambientada en ${cfg.planeta}`}
+        />
+        {cfg.eras && (
+          <StatTile
+            label="Era"
+            value={<span style={{ ...tileValue, color: eraDef?.tone.fg }}>{eraDef?.label ?? '—'}</span>}
+            sub={eraDef?.aviso}
+            style={eraDef ? { border: `1px solid ${eraDef.tone.border}` } : undefined}
+          />
+        )}
+      </div>
+      <p style={{ fontSize: fs.xs, color: c.subtle, marginTop: 10, lineHeight: 1.45 }}>
+        La ambientación y la era se fijan al crear la campaña y no se pueden cambiar.
+      </p>
+    </section>
+  )
+}
 
 export function CampaignSettingsPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
@@ -137,8 +177,11 @@ export function CampaignSettingsPage() {
           </section>
         )}
 
+        {/* ── Setting (read only) ───────────────────────────────── */}
+        {campaign && <AmbientacionSection world={campaign.world} era={campaign.era} index={1} />}
+
         {/* ── Account ──────────────────────────────────────────── */}
-        <section aria-labelledby="settings-account" className="rise" style={{ '--i': 1 } as CSSProperties}>
+        <section aria-labelledby="settings-account" className="rise" style={{ '--i': 2 } as CSSProperties}>
           <SectionTitle id="settings-account">Tu cuenta</SectionTitle>
           <Card padding={0}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, padding: '16px 16px 16px 20px' }}>
@@ -163,7 +206,7 @@ export function CampaignSettingsPage() {
         </section>
 
         {/* ── Members ───────────────────────────────────────────── */}
-        <section aria-labelledby="settings-members" className="rise" style={{ '--i': 2 } as CSSProperties}>
+        <section aria-labelledby="settings-members" className="rise" style={{ '--i': 3 } as CSSProperties}>
           <SectionTitle id="settings-members">
             Miembros{' '}
             <span style={{ fontFamily: font.ui, fontVariantCaps: 'normal', fontSize: fs.sm, fontWeight: 600, letterSpacing: 0, color: c.subtle }}>

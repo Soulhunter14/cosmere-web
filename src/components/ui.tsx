@@ -704,6 +704,11 @@ export function Segmented<T extends string | number>({
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const tn = tones[t]
+  // Roving tabindex: only the checked radio is tabbable. With nothing checked (a choice still pending, e.g. the era of a
+  // new campaign) the first enabled radio takes the Tab stop instead, as in the WAI-ARIA radio pattern; otherwise the
+  // whole group would be unreachable by keyboard.
+  const checkedIndex = options.findIndex((o) => o.value === value)
+  const tabStop = checkedIndex >= 0 ? checkedIndex : options.findIndex((o) => !o.disabled)
   const move = (e: React.KeyboardEvent, i: number) => {
     const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
     if (!dir) return
@@ -734,7 +739,7 @@ export function Segmented<T extends string | number>({
             aria-checked={on}
             aria-label={o.ariaLabel}
             disabled={o.disabled}
-            tabIndex={on ? 0 : -1}
+            tabIndex={i === tabStop ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => move(e, i)}
             className="ui-seg"
@@ -774,6 +779,8 @@ export function Stepper({
   label,
   format,
   size = 'md',
+  disabled,
+  decimals,
 }: {
   value: number
   onChange: (v: number) => void
@@ -784,6 +791,10 @@ export function Stepper({
   label: string
   format?: (v: number) => React.ReactNode
   size?: 'sm' | 'md'
+  /** Both buttons off and the value marked `aria-disabled` (e.g. a counter that must not move while a form is being edited) */
+  disabled?: boolean
+  /** Rounds each step to this many decimals before `onChange` and before the bounds check, so 0.1 + 0.2 gives 0.3 and not 0.30000000000000004 (e.g. money with `step={0.01} decimals={2}`) */
+  decimals?: number
 }) {
   const h = size === 'sm' ? 36 : 44
   const btn: React.CSSProperties = {
@@ -791,13 +802,16 @@ export function Stepper({
     background: c.s2, color: c.text, fontSize: fs.lg, fontWeight: 600, cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0,
   }
+  const round = (v: number) => (decimals === undefined ? v : Number(v.toFixed(decimals)))
+  const less = round(value - step)
+  const more = round(value + step)
   return (
     <div role="group" aria-label={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Restar (${label})`} disabled={value - step < min} onClick={() => onChange(Math.max(min, value - step))}>−</button>
-      <output aria-live="polite" style={{ ...numeral, minWidth: 36, textAlign: 'center', fontSize: size === 'sm' ? fs.lg : fs.xl, color: c.text }}>
+      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Restar (${label})`} disabled={disabled || less < min} onClick={() => onChange(Math.max(min, less))}>−</button>
+      <output aria-live="polite" aria-disabled={disabled || undefined} style={{ ...numeral, minWidth: 36, textAlign: 'center', fontSize: size === 'sm' ? fs.lg : fs.xl, color: c.text }}>
         {format ? format(value) : value}
       </output>
-      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Sumar (${label})`} disabled={value + step > max} onClick={() => onChange(Math.min(max, value + step))}>+</button>
+      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Sumar (${label})`} disabled={disabled || more > max} onClick={() => onChange(Math.min(max, more))}>+</button>
     </div>
   )
 }

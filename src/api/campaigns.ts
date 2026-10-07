@@ -1,5 +1,5 @@
 import client from './client'
-import type { Campaign, CampaignDetail } from '../types'
+import type { Campaign, CampaignDetail, Era, WorldId } from '../types'
 
 export const campaignsApi = {
   getAll: () => client.get<Campaign[]>('/campaigns').then((r) => r.data),
@@ -7,8 +7,8 @@ export const campaignsApi = {
   getById: (id: number) =>
     client.get<CampaignDetail>(`/campaigns/${id}`).then((r) => r.data),
 
-  create: (name: string) =>
-    client.post<CampaignDetail>('/campaigns', { name }).then((r) => r.data),
+  create: (data: { name: string; world: WorldId; era: Era | null }) =>
+    client.post<CampaignDetail>('/campaigns', data).then((r) => r.data),
 
   delete: (id: number) => client.delete(`/campaigns/${id}`),
 

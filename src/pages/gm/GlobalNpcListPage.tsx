@@ -85,6 +85,7 @@ function GlobalNpcCard({
 
 export function GlobalNpcListPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
+  const cId = Number(campaignId)
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { isGm } = useCampaignStore()
@@ -93,15 +94,16 @@ export function GlobalNpcListPage() {
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // The adversaries of the world of this campaign: the id is part of the key and of the request (an arrow, not `getAll` by reference: TanStack would pass it its context)
   const { data: npcs, isLoading, isError } = useQuery({
-    queryKey: ['global-npcs'],
-    queryFn: globalNpcsApi.getAll,
+    queryKey: ['global-npcs', cId],
+    queryFn: () => globalNpcsApi.getAll(cId),
   })
 
   const createMutation = useMutation({
-    mutationFn: () => globalNpcsApi.create({ name: newName }),
+    mutationFn: () => globalNpcsApi.create({ name: newName }, cId),
     onSuccess: (npc) => {
-      qc.invalidateQueries({ queryKey: ['global-npcs'] })
+      qc.invalidateQueries({ queryKey: ['global-npcs', cId] })
       setCreating(false)
       setNewName('')
       navigate(`/campaigns/${campaignId}/global-npcs/${npc.id}`, { state: { editing: true } })
@@ -109,8 +111,8 @@ export function GlobalNpcListPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => globalNpcsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['global-npcs'] }),
+    mutationFn: (id: number) => globalNpcsApi.delete(id, cId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['global-npcs', cId] }),
   })
 
   const closeCreate = () => {

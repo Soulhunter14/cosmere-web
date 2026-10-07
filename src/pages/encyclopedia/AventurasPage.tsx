@@ -1,19 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Info, Shield, ShieldOff } from 'lucide-react'
-import {
-  ESCENAS_SECTIONS,
-  DESCANSOS,
-  ACTIVIDADES_REPOSO,
-  SUCESOS_SECTIONS,
-  ESTADOS,
-  TIPOS_DANO,
-  DURACION_LESIONES,
-  EFECTOS_LESIONES,
-  DANO_SECTIONS,
-} from '../../data/aventuras'
 import type { AventuraSection, Estado, ActividadReposo, TipoDano } from '../../data/aventuras'
+import { resolveAventuras } from '../../data/overlays'
 import { CosmereIcon } from '../../components/CosmereIcon'
-import { Disclosure, PageHeader, SectionTitle, Tabs, TabPanel, type TabItem } from '../../components/ui'
+import { Disclosure, PageHeader, SectionTitle, Spinner, Tabs, TabPanel, type TabItem } from '../../components/ui'
+import { useWorld, useWorldData } from '../../store/campaignStore'
 import { c, eyebrow, font, fs, numeral, page, pill, radius, shadow, tone, type Tone } from '../../theme'
 
 type TabId = 'escenas' | 'reposo' | 'sucesos' | 'estados' | 'dano'
@@ -200,12 +191,29 @@ const td = (first: boolean): CSSProperties => ({
   fontSize: fs.sm + 1, lineHeight: 1.5, color: c.muted,
 })
 
+const SUBTITLE = 'Reglas de escenas, descanso, sucesos, estados y daño'
+
 export function AventurasPage() {
   const [tab, setTab] = useState<TabId>('escenas')
+  // The rules are Cosmere (data/aventuras.ts); what differs between books is the overlay of the world of the campaign
+  const world = useWorld()
+  const { data, isPending } = useWorldData()
+
+  // Stormlight never waits (its WorldData is `initialData`); Mistborn's overlay comes with its lazy chunk: wait for it instead of
+  // flashing the base rules. If the chunk fails to load, `data` is undefined and the base is shown
+  if (isPending) {
+    return (
+      <div style={page}>
+        <PageHeader title="Aventuras" subtitle={SUBTITLE} />
+        <Spinner />
+      </div>
+    )
+  }
+  const r = resolveAventuras(world, data?.overlays.aventuras)
 
   return (
     <div style={page}>
-      <PageHeader title="Aventuras" subtitle="Reglas de escenas, descanso, sucesos, estados y daño" />
+      <PageHeader title="Aventuras" subtitle={SUBTITLE} />
 
       <TabScroller>
         <Tabs
@@ -220,7 +228,7 @@ export function AventurasPage() {
 
       {tab === 'escenas' && (
         <TabPanel idPrefix="aventuras" id="escenas">
-          <SectionList sections={ESCENAS_SECTIONS} headingLevel={2} />
+          <SectionList sections={r.escenas} headingLevel={2} />
         </TabPanel>
       )}
 
@@ -228,12 +236,12 @@ export function AventurasPage() {
         <TabPanel idPrefix="aventuras" id="reposo" style={stack(28)}>
           <section>
             <SectionTitle>Tipos de descanso</SectionTitle>
-            <SectionList sections={DESCANSOS} headingLevel={3} />
+            <SectionList sections={r.descansos} headingLevel={3} />
           </section>
           <section>
             <SectionTitle>Actividades durante el reposo</SectionTitle>
             <div style={stack(8)}>
-              {ACTIVIDADES_REPOSO.map((a, i) => (
+              {r.actividades.map((a, i) => (
                 <div key={a.name} {...rise(i)}>
                   <ActividadCard actividad={a} />
                 </div>
@@ -245,7 +253,7 @@ export function AventurasPage() {
 
       {tab === 'sucesos' && (
         <TabPanel idPrefix="aventuras" id="sucesos">
-          <SectionList sections={SUCESOS_SECTIONS} headingLevel={2} />
+          <SectionList sections={r.sucesos} headingLevel={2} />
         </TabPanel>
       )}
 
@@ -256,7 +264,7 @@ export function AventurasPage() {
               Los estados son condiciones que afectan temporalmente a los personajes. Salvo indicación contraria, una instancia de un estado no puede aplicarse varias veces al mismo objetivo.
             </Callout>
           </div>
-          {ESTADOS.map((e, i) => (
+          {r.estados.map((e, i) => (
             <div key={e.name} {...rise(i)}>
               <EstadoCard estado={e} />
             </div>
@@ -267,13 +275,13 @@ export function AventurasPage() {
       {tab === 'dano' && (
         <TabPanel idPrefix="aventuras" id="dano" style={stack(28)}>
           {/* Reglas de daño */}
-          <SectionList sections={DANO_SECTIONS} headingLevel={2} />
+          <SectionList sections={r.dano} headingLevel={2} />
 
           {/* Tipos de daño */}
           <section>
             <SectionTitle>Tipos de daño</SectionTitle>
             <ul style={{ listStyle: 'none', display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))' }}>
-              {TIPOS_DANO.map((t, i) => (
+              {r.tiposDano.map((t, i) => (
                 <li key={t.name} {...rise(i)}>
                   <DamageTypeCard tipo={t} />
                 </li>
@@ -293,7 +301,7 @@ export function AventurasPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {DURACION_LESIONES.map((row, i) => {
+                  {r.duracionLesiones.map((row, i) => {
                     const t = SEVERITY_TONE[row.tipo] ?? tone.cuarzo
                     return (
                       <tr key={row.tirada}>
@@ -325,7 +333,7 @@ export function AventurasPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {EFECTOS_LESIONES.map((row, i) => (
+                  {r.efectosLesiones.map((row, i) => (
                     <tr key={row.d8}>
                       <td style={{ ...td(i === 0), fontFamily: font.mono, fontSize: fs.base, fontWeight: 600, color: c.brandLight, whiteSpace: 'nowrap' }}>
                         {row.d8}

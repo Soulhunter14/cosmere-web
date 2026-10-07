@@ -1,5 +1,8 @@
 import type { ActivationType } from '../components/TalentActivation'
 
+// Shared rules of the Cosmere RPG (chapter 10 of both books): the NEUTRAL base. Wording that belongs to one world lives in the overlay
+// of that world (T23b, Q12, P8); the pages read the base through the resolver of overlays.ts.
+
 export interface CombatAction {
   name: string
   cost: ActivationType
@@ -21,7 +24,7 @@ export const COMBAT_ACTIONS: { actions: CombatAction[]; freeActions: CombatActio
     { name: 'Obtener ventaja', cost: 'action1', description: 'Usas una habilidad para buscar superioridad sobre tu oponente mediante tácticas, fintas o fuerza superior. Si la prueba tiene éxito, obtienes ventaja en tu próxima prueba con una habilidad diferente contra ese enemigo.' },
     { name: 'Prevenirse', cost: 'action1', description: 'Te escondes tras cobertura a 1,5 metros o menos. Todos los ataques contra ti sufren desventaja. El beneficio termina si atacas o te mueves. Si tienes arma con rasgo Defensiva, puedes crear cobertura móvil.' },
     { name: 'Usar una habilidad', cost: 'action1', description: 'Utilizas una de tus habilidades para realizar tareas desafiantes en el campo de batalla: prueba de Percepción, esconderte con Sigilo, usar Medicina para tratar a un aliado, etc.' },
-    { name: 'Interactuar', cost: 'action1', description: 'Interactúas rápidamente con un objeto que puedes alcanzar sin necesidad de prueba: abrir/cerrar una puerta, recoger un objeto, desenvainar o envainar un arma, sacar algo de tu mochila, pasar algo a un aliado. Puede usarse más de una vez por turno.' },
+    { name: 'Interactuar', cost: 'action1', description: 'Interactúas rápidamente con un objeto que puedes alcanzar sin necesidad de prueba: abrir/cerrar una puerta, recoger un objeto, preparar o guardar un arma, sacar algo de tu mochila, pasar algo a un aliado, comer algo rápidamente, ponerte o quitarte una prenda sencilla. Puede usarse más de una vez por turno.' },
     { name: 'Recuperarse', cost: 'action2', description: 'Respiras profundamente y haces acopio de fuerzas. Tira tu dado de recuperación para recuperar salud y/o concentración, como en un descanso corto. Solo puede usarse una vez por escena.' },
     { name: 'Agarrar', cost: 'action2', description: 'Haz prueba de Atletismo contra Defensa física de un personaje en tu cercanía. Si la superas, queda Inmovilizado hasta que quedes Inconsciente, elijas poner fin al efecto o ya no esté en tu cercanía.' },
     { name: 'Empujar', cost: 'action2', description: 'Haz prueba de Atletismo contra Defensa física de un personaje en tu cercanía. Si la superas, empujas al objetivo 1,5 metros horizontalmente. Si empujas a quien te agarra, el efecto de Agarrar termina.' },
@@ -100,7 +103,7 @@ export const COMBAT_SECTIONS: CombatSection[] = [
   {
     id: 'area',
     title: 'Ataques de zona',
-    summary: 'Algunos ataques (especialmente potencias Radiantes) afectan a todos los personajes dentro de una zona física. Se resuelven haciendo una sola prueba y comparando con cada objetivo.',
+    summary: 'Algunos ataques (de ciertos poderes y capacidades) afectan a todos los personajes dentro de una zona física. Se resuelven haciendo una sola prueba y comparando con cada objetivo.',
     details: [
       { label: 'Resolución', text: 'Haz tu prueba y tira los dados de daño una sola vez. Compara el resultado con la defensa de cada objetivo.' },
       { label: 'Rasguño múltiple', text: 'Para hacer rasguño a varios objetivos que fallaste, debes gastar 1 concentración por cada objetivo.' },

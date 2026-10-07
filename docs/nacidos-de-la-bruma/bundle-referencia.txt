@@ -1,0 +1,37 @@
+Referencia del bundle web (T16) - mundo "Nacidos de la Bruma"
+
+Medida:   2026-10-04, rama nacidos-de-la-bruma, commit aa75586 ("Docs: sincronizacion fin de F1"),
+          arbol de trabajo limpio y ANTES de crear ningun fichero de T16.
+Estado:   F1 completa (T04-T09 fusionadas); todavia sin datos de F3 ni componentes de F4.
+Comando:  npm run build   (tsc -b && vite build; Vite 8.0.3, Node 22.21.1, npm 10.9.4)
+Unidad:   bytes exactos (wc -c) de dist/assets/*.js. Vite informa "kB" = 1000 bytes.
+
+bytes      fichero                       notas
+1444053    index-CJ8DBBy2.js             chunk principal (Vite: 1.444,05 kB; gzip 425,62 kB)
+108        mistborn.data-B17wcj0n.js     WorldData de Mistborn (import() perezoso); vacio hasta que T17-T23 conecten datos
+
+Total de dist/assets/*.js: 1444161 bytes
+Otros: dist/assets/index-CX43Geo2.css 33,65 kB (gzip 7,56 kB); PWA precache: 9 entradas (1447,79 KiB)
+
+Contexto para las comparaciones posteriores (T24b, T27-T30, T45, T46; riesgo 6 de la especificacion):
+- Antes de F1 el chunk principal pesaba 1425267 bytes; F1 (T06b-T09) lo dejo en 1444053 (+18786 bytes). Esta es la referencia vigente.
+- Objetivo en F3 y F6: el chunk principal no crece respecto a esta referencia.
+- Objetivo en F4: chunk principal <= referencia + 40 KB (solo metales.ts, progresionArtes.ts y los tipos pueden entrar en el principal).
+- Siempre por debajo de 2 MiB (2097152 bytes, maximumFileSizeToCacheInBytes por defecto de workbox) o el service worker
+  excluye el fichero del precache y la app pierde el modo offline sin error de build.
+- Los datos de Nacidos de la Bruma viajan en el chunk mistborn.data-*.js (carga perezosa); el barrel src/data/mistborn/index.ts
+  solo lo importa src/worlds/mistborn.data.ts.
+- Comprobacion al cerrar T16 (ficheros de src/data/mistborn/ y PoderDef como import de tipo, aun sin importar desde el codigo en
+  ejecucion): chunk principal 1444053 bytes, identico a la referencia; mistborn.data-*.js sigue en 108 bytes.
+
+== Actualización al cerrar F3 (2026-10-05) ==
+Desde T24a, con rutas perezosas, Rolldown parte el chunk principal en varios chunks eager
+(los <script> y <link rel="modulepreload"> de dist/index.html). La medida vigente es la SUMA
+de esos chunks eager:
+  assets/index-*.js        956 543 B
+  assets/heroicPaths-*.js   80 525 B
+  assets/ui-*.js           419 035 B
+  SUMA EAGER             1 456 103 B   (referencia para F4-F7; ningún dato de Bruma en eager)
+Medir con: node -e "const fs=require('fs');const h=fs.readFileSync('dist/index.html','utf8');let t=0;for(const m of h.matchAll(/(?:src|href)=\"\/(assets\/[^\"]+\.js)\"/g))t+=fs.statSync('dist/'+m[1]).size;console.log(t)"
+
+2026-10-07 · cierre de F4, F5 y F6 (b58a0ee): suma de chunks eager 1 509 137 B (index 1 031 587 + talentRules 202 208 + campaignStore 275 342); chunk mayor 1 031 587 B. Delta sobre F3: +53 034 B (F4 +18 713, F5 +22 691, F6 +9 556, F7 adelantadas +2 074). Nueva referencia para F7.

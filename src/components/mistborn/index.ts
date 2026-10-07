@@ -9,6 +9,9 @@ export { BendicionPicker } from './BendicionPicker'
 export type { BendicionPickerProps } from './BendicionPicker'
 export { MetalPicker } from './MetalPicker'
 export type { MetalPickerProps } from './MetalPicker'
+// The «Equipo inicial» sheet of the Bolsa (T47): the seven packages of the book, loaded lazily by BolsaDetailPage
+export { EquipoInicialSheet } from './EquipoInicialSheet'
+export type { EquipoInicialSheetProps } from './EquipoInicialSheet'
 // The «al elegir camino» flow (T28): pure functions that CharacterDetailPage loads with `await import()` inside its mutations
 export { planAplicarCaminoMetal, planQuitarCaminoMetal, enlazarMetas, metalesDelCamino, faltanHuecosCognitivos, idPoder } from './caminoMetalFlujo'
 export type { EntornoCaminoMetal, SeleccionCaminoMetal, MetaPendiente, PlanCaminoMetal } from './caminoMetalFlujo'

@@ -7,6 +7,7 @@ import { catalogApi } from '../../api/catalog'
 import { Button, Card, ConfirmDialog, ErrorMessage, Field, IconButton, Input, SectionTitle, Sheet, Spinner, Stepper } from '../../components/ui'
 import type { Character, UpdateCharacterRequest, WeaponCatalog, ArmorCatalog, GearItem, CatalogOption } from '../../types'
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
+import { EquipoInicialButton } from './EquipoInicialButton'
 import { CharacterHero } from '../../components/CharacterHero'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
@@ -743,6 +744,9 @@ export function BolsaDetailPage() {
             )}
           </Card>
         </section>
+
+        {/* ─── Equipo inicial: the seven packages of the book (T47). Renders nothing outside Nacidos de la bruma or for who is not the director or the owner ─── */}
+        <EquipoInicialButton campaignId={cId} character={character} catalogWeapons={catalogWeapons} />
 
         {/* ─── Armas / Armaduras / Equipo ─── */}
         {([

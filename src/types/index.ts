@@ -27,6 +27,10 @@ export interface Campaign {
   nextSessionTitle?: string
   world: WorldId
   era: Era | null
+  /** When the director started the campaign; `null` = being prepared (session 0). Optional: a campaign persisted in localStorage before it existed lacks it */
+  iniciadaEn?: string | null
+  /** Character fields (camelCase) that a started campaign locks for players (`CierreCampana.Campos` in the API); always the full list */
+  camposDeCierre?: string[]
 }
 
 export interface CampaignDetail extends Campaign {

@@ -5,10 +5,11 @@
  * components/mistborn/index.ts and importing its data BY FILE, so none of it reaches the main chunk (§8, risk 6).
  */
 import type { CSSProperties } from 'react'
-import { Pencil, ScrollText } from 'lucide-react'
+import { Lock, Pencil, ScrollText } from 'lucide-react'
 import { Button, Card } from '../ui'
 import { RECOMPENSA_POR_DEFECTO, getLegado } from '../../data/mistborn/legados'
 import { useWorldConfig } from '../../store/campaignStore'
+import { AVISO_CERRADO } from '../../lib/cierreCampana'
 import { c, eyebrow, font, fs, pill, tone } from '../../theme'
 
 export interface LegadoCardProps {
@@ -20,15 +21,23 @@ export interface LegadoCardProps {
   onElegir?: () => void
   /** Opens the LegadoPicker on the questions; absent like `onElegir` */
   onResponder?: () => void
+  /** The started campaign locks the legacy for this viewer (a player): says why there is nothing to change */
+  cerrado?: boolean
 }
 
 const nombreEra = (era: string) => (era === 'era1' ? 'Era 1' : 'Era 2')
 
-export function LegadoCard({ legado, respuestas, onElegir, onResponder }: LegadoCardProps) {
+export function LegadoCard({ legado, respuestas, onElegir, onResponder, cerrado = false }: LegadoCardProps) {
   const cfg = useWorldConfig()
   const def = getLegado(legado)
   const t = cfg.eras?.find((e) => e.id === def?.era)?.tone ?? tone.cuarzo
   const conexion = def && getLegado(def.conexion)
+
+  const avisoCerrado = cerrado && (
+    <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.subtle }}>
+      <Lock size={13} aria-hidden /> {AVISO_CERRADO}
+    </p>
+  )
 
   if (!def) {
     return (
@@ -38,6 +47,7 @@ export function LegadoCard({ legado, respuestas, onElegir, onResponder }: Legado
           Sin legado. El legado es el trasfondo del personaje en la aventura (Convicto, Pilluelo, Noble…).
         </p>
         {onElegir && <Button variant="secondary" onClick={onElegir}>Elegir legado</Button>}
+        {avisoCerrado && <div style={{ flexBasis: '100%' }}>{avisoCerrado}</div>}
       </Card>
     )
   }
@@ -118,6 +128,8 @@ export function LegadoCard({ legado, respuestas, onElegir, onResponder }: Legado
           </ul>
         </div>
       )}
+
+      {avisoCerrado}
     </Card>
   )
 }

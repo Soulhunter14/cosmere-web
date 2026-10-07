@@ -2,11 +2,12 @@ import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSPr
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
-  Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
+  Check, ChevronDown, Info, Lock, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { metasApi } from '../../api/metas'
-import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
+import { useCampaignStore, useCampoCerrado, useEra, useWorldConfig } from '../../store/campaignStore'
+import { AVISO_CERRADO } from '../../lib/cierreCampana'
 import { useAuthStore } from '../../store/authStore'
 import {
   Button, Card, ConfirmDialog, ErrorMessage, IconButton, Input, Segmented, SectionTitle, Select, Sheet, Spinner, Stepper, TabPanel, Tabs, Textarea,
@@ -613,6 +614,8 @@ export function CharacterDetailPage() {
   const { isGm, currentCampaign } = useCampaignStore()
   const cfg = useWorldConfig()
   const era = useEra()
+  // Fields that the started campaign locks for a player (the director always edits them)
+  const cerrado = useCampoCerrado()
   const sections = useMemo(() => buildSections(cfg.habilidades), [cfg.habilidades])
   // Ancestries of the world that exist in the era of the campaign (the era only filters options, §3 b)
   const ascendencias = useMemo(() => cfg.ascendencias.filter((a) => isAvailable(a, era)), [cfg.ascendencias, era])
@@ -1708,8 +1711,9 @@ export function CharacterDetailPage() {
                 <LegadoCard
                   legado={char.legado}
                   respuestas={char.legadoRespuestas}
-                  onElegir={!editing && canEdit ? () => setPicker('legado') : undefined}
-                  onResponder={!editing && canEdit ? () => setPicker('legadoPreguntas') : undefined}
+                  onElegir={!editing && canEdit && !cerrado('legado') ? () => setPicker('legado') : undefined}
+                  onResponder={!editing && canEdit && !cerrado('legadoRespuestas') ? () => setPicker('legadoPreguntas') : undefined}
+                  cerrado={canEdit && (cerrado('legado') || cerrado('legadoRespuestas'))}
                 />
               </Suspense>
             )}
@@ -1719,12 +1723,14 @@ export function CharacterDetailPage() {
             {BACKGROUND_FIELDS.map(([k, label], i) => {
               const inputId = `${fieldId}-${k}`
               const value = strField(f, k)
+              // Locked by the started campaign: read only even in edit mode, with the reason below (the server keeps it anyway)
+              const bloqueado = cerrado(k as keyof Character)
               return (
                 <Card key={k} padding="16px 18px" className="rise" style={cardRise(i)}>
                   <h2 style={{ fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, color: c.text, marginBottom: 8 }}>
-                    {editing ? <label htmlFor={inputId}>{label}</label> : label}
+                    {editing && !bloqueado ? <label htmlFor={inputId}>{label}</label> : label}
                   </h2>
-                  {editing ? (
+                  {editing && !bloqueado ? (
                     <Textarea
                       id={inputId}
                       rows={3}
@@ -1735,6 +1741,11 @@ export function CharacterDetailPage() {
                   ) : (
                     <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: value ? c.text : c.subtle, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
                       {value || '—'}
+                    </p>
+                  )}
+                  {editing && bloqueado && (
+                    <p style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: fs.xs, color: c.subtle }}>
+                      <Lock size={13} aria-hidden /> {AVISO_CERRADO}
                     </p>
                   )}
                 </Card>

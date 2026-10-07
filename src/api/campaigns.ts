@@ -26,4 +26,9 @@ export const campaignsApi = {
 
   addMember: (id: number, userId: number) =>
     client.post(`/campaigns/${id}/members`, { userId }),
+
+  // Closing of the campaign (src/lib/cierreCampana.ts): director only
+  iniciar: (id: number) => client.post(`/campaigns/${id}/iniciar`),
+
+  reabrir: (id: number) => client.post(`/campaigns/${id}/reabrir`),
 }

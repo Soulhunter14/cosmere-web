@@ -10,20 +10,25 @@
  * wipe the form) nor for someone who is neither the owner nor the director.
  *
  * Loaded lazily (components/mistborn/index.ts, §7.4 rule 4): neither it nor the data it reads (`useWorldData().poderes`) reach the main chunk.
- * T33 adds its «Nueva meta de nacido del metal» here and T49b its section «Clavos hemalúrgicos»: the sections are independent blocks of the
- * list below.
+ * «Nueva meta de nacido del metal» (T33) and «Añadir poder» are independent blocks of the director at the end of the list below; T49b adds its
+ * section «Clavos hemalúrgicos» as another one.
  */
 import { useId, useState } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, RefreshCw, Target } from 'lucide-react'
 import { Button, Card, EmptyState, ErrorMessage, SectionTitle, Spinner, StatTile } from '../ui'
+import { metasApi } from '../../api/metas'
+import { charactersApi } from '../../api/characters'
 import { useEra, useWorldConfig, useWorldData } from '../../store/campaignStore'
-import type { Character, PoderPersonaje, RecursosPatch } from '../../types'
+import type { Character, PoderPersonaje, RecursosPatch, UpdateCharacterRequest } from '../../types'
 import type { PoderDef } from '../../data/mistborn/tipos'
+import { CAMINOS_NACIDOS_DEL_METAL } from '../../data/mistborn/caminosNacidosDelMetal'
 import { c, fs } from '../../theme'
 import { PoderCard } from './PoderCard'
 import { MetalPicker } from './MetalPicker'
-import { faltaHuecoParaPoder, idPoder, type EntornoCaminoMetal } from './caminoMetalFlujo'
-import { ARTES, NOMBRE_ARTE, cargasMaxDe, desgloseTexto, poderesDe, talentosDe, textoDerivado, type CambioPoder } from './poderes'
+import { enlazarMetas, faltaHuecoParaPoder, idPoder, metalesDelCamino, type EntornoCaminoMetal, type MetaPendiente } from './caminoMetalFlujo'
+import { ARTES, NOMBRE_ARTE, cargasMaxDe, desgloseTexto, nombrePoder, poderesDe, talentosDe, textoDerivado, type CambioPoder } from './poderes'
 
 export interface ArtesMetalicasTabProps {
   character: Character
@@ -49,6 +54,129 @@ export interface ArtesMetalicasTabProps {
 const GRID_DERIVADOS = 'repeat(auto-fit, minmax(max(128px, calc((100% - 24px) / 4)), 1fr))'
 
 const nota = { fontSize: fs.sm, color: c.muted, lineHeight: 1.45 } as const
+
+/** A nascent power of the path with no goal yet: the only kind that a new goal can train (L.141 / PDF 147; L.146 / PDF 152) */
+const naciente = (p: PoderPersonaje) => p.origen === 'camino' && !p.completo && p.metaId === null
+
+const lista = (nombres: string[]) => (nombres.length > 1 ? `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}` : nombres.join(''))
+
+/**
+ * «Nueva meta de nacido del metal» (T33, director): once the first goal is done, the book lets the DJ grant the goal again for another Empujón/Tirón pair
+ * (nacido de la bruma, «Entrenar tus poderes», L.141 / PDF 147) or for another pure metal with its alloy, or atium (feruquimista, «Fabricar tus mentes de
+ * metal», L.146 / PDF 152), «y así sucesivamente». The path already gave every power, nascent, so only the goal is new: the picker offers the nascent
+ * powers without a goal, the goal is created with the title and text of the path, and ONE `PUT` links it (`metaId`) to the powers chosen; the others
+ * keep their state (§5.1). It shows once a power of the path is complete: the conclusion of the first goal marks it on the server (T14) and the switch of
+ * the power card is its shortcut at the table (Q14). Immediate, so it is off while the sheet is being edited (a refetch would wipe the form).
+ */
+function NuevaMetaNacidoDelMetal({ character, editing }: { character: Character; editing: boolean }) {
+  const qc = useQueryClient()
+  const era = useEra()
+  const [eligiendo, setEligiendo] = useState(false)
+  const cId = character.campaignId
+  const chId = character.id
+  // Every cached copy of the character moves together (§2): by prefix, the one read out of combat and the one in combat
+  const prefijo = ['character', cId, chId]
+
+  const crear = useMutation({
+    mutationFn: async ({ meta }: { meta: MetaPendiente; nombres: string }) => {
+      const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? character
+      const creada = await metasApi.create(cId, chId, { titulo: meta.titulo, descripcion: meta.descripcion })
+      try {
+        qc.setQueriesData<Character>({ queryKey: prefijo }, (old) => old && { ...old, poderes: enlazarMetas(old.poderes, [meta], [creada.id]) })
+        return await charactersApi.update(cId, chId, { ...base, poderes: enlazarMetas(base.poderes, [meta], [creada.id]) } as UpdateCharacterRequest)
+      } catch (error) {
+        // The PUT failed: the goal does not stay orphan
+        await metasApi.delete(cId, chId, creada.id).catch(() => undefined)
+        throw error
+      }
+    },
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: prefijo })
+      return { previas: qc.getQueriesData<Character>({ queryKey: prefijo }) }
+    },
+    onError: (_error, _vars, ctx) => ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: prefijo })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+      // The new goal shows up in Metas at once, not after the 30 s of staleTime
+      qc.invalidateQueries({ queryKey: ['metas', cId, chId] })
+    },
+  })
+
+  const camino = CAMINOS_NACIDOS_DEL_METAL.find((p) => p.id === character.caminoMetal)
+  const modo = camino?.seleccionMeta
+  const libres = character.poderes.filter(naciente)
+  // The first goal is done: a power of the path is complete (not counting the alomancia de atium, which is born complete, L.177 / PDF 183)
+  const entrenado = character.poderes.some((p) => p.origen === 'camino' && p.completo && !(p.arte === 'alomancia' && p.metal === 'atium'))
+  if (!camino || (modo !== 'pareja' && modo !== 'puro-aleacion-o-atium') || !entrenado || (libres.length === 0 && !crear.isSuccess && !crear.isPending)) return null
+
+  const { arte } = metalesDelCamino(camino)
+  const def = camino.metasIniciales.find((m) => m.arte === arte)
+  if (!def) return null
+
+  return (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+        {libres.length > 0 && (
+          <>
+            <Button
+              variant="secondary"
+              icon={<Target size={16} aria-hidden />}
+              aria-haspopup="dialog"
+              aria-busy={crear.isPending || undefined}
+              disabled={editing || crear.isPending}
+              onClick={() => { crear.reset(); setEligiendo(true) }}
+            >
+              Nueva meta de nacido del metal
+            </Button>
+            <p style={nota}>
+              {modo === 'pareja'
+                ? `A discreción del director, otra pareja de metales Empujón/Tirón se entrena con una nueva meta «${def.titulo}».`
+                : `A discreción del director, otro metal puro con su aleación, o el atium, fabrica sus mentes de metal con una nueva meta «${def.titulo}».`}
+              {` Poderes nacientes sin meta: ${libres.length}.`}
+            </p>
+          </>
+        )}
+        {crear.isError && <ErrorMessage message="No se ha podido crear la meta. Inténtalo de nuevo." />}
+        {crear.isSuccess && crear.variables && (
+          <>
+            <p role="status" style={{ ...nota, color: c.text }}>Meta «{crear.variables.meta.titulo}» creada para {crear.variables.nombres}.</p>
+            <Link
+              to={`/campaigns/${cId}/personajes/metas/${chId}`}
+              className="ui-link"
+              style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 2px', fontSize: fs.sm, fontWeight: 650 }}
+            >
+              Ver en Metas →
+            </Link>
+          </>
+        )}
+      </div>
+
+      {eligiendo && (
+        <MetalPicker
+          open
+          onClose={() => setEligiendo(false)}
+          arte={arte}
+          modo={modo}
+          era={era}
+          caminoMetal={character.caminoMetal}
+          yaElegidos={[]}
+          nuevaMeta={libres.map(idPoder)}
+          onConfirm={(_poderes, paraMeta) => {
+            setEligiendo(false)
+            const elegidos = libres.filter((p) => paraMeta.includes(idPoder(p)))
+            if (elegidos.length === 0) return
+            const nombres = lista(elegidos.map(nombrePoder))
+            crear.mutate({
+              meta: { titulo: def.titulo, descripcion: `Poderes que entrena: ${nombres}. ${def.descripcion}`, poderes: elegidos.map(idPoder) },
+              nombres,
+            })
+          }}
+        />
+      )}
+    </>
+  )
+}
 
 export function ArtesMetalicasTab({
   character, isGm, editing, puedeActuar, entorno, vivo, onPatch, onAnadirPoder, errorMesa, errorAnadir, anadiendo,
@@ -171,6 +299,8 @@ export function ArtesMetalicasTab({
           </section>
         )
       })}
+
+      {isGm && <NuevaMetaNacidoDelMetal character={character} editing={editing} />}
 
       {isGm && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>

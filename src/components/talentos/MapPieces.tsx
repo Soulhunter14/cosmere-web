@@ -1,9 +1,10 @@
 /**
  * Small presentational pieces of the talent map: the SVG edge layer, the state marks of a cell,
- * the activation glyph and the route step badge. Pure presentation: geometry comes from talentMap.ts.
+ * the activation glyph, the glyph of a metal (goal badge, power bands) and the route step badge.
+ * Pure presentation: geometry comes from talentMap.ts.
  */
 import type { CSSProperties } from 'react'
-import { Check, Plus, Target } from 'lucide-react'
+import { Anvil, Check, Flame, Plus, Target } from 'lucide-react'
 import { CosmereIcon } from '../CosmereIcon'
 import type { ActivationType } from '../TalentActivation'
 import { c, fs } from '../../theme'
@@ -93,6 +94,16 @@ export function IdealGlyph({ size = 12 }: { size?: number }) {
   return <CosmereIcon name="caballeros-radiantes" size={size} style={{ color: 'var(--amatista)', pointerEvents: 'none' }} />
 }
 
+/**
+ * Glyph of the metal of a power: the goal badge of a locked cell and the band of a power plate (§7.7 #4). `poderId` is `${arte}:${metal}`.
+ * Provisional, as `GlifoProvisional` of MetalPicker: the Lucide icon of the art (Anvil for feruchemy, Flame for the rest). T46 replaces its
+ * body with `MetalGlyph` (the official glyph of each metal), which takes the same `poderId`.
+ */
+export function MetalMark({ poderId, size = 12, style }: { poderId?: string | null; size?: number; style?: CSSProperties }) {
+  const Icon = poderId?.startsWith('feruquimia:') ? Anvil : Flame
+  return <Icon size={size} aria-hidden style={{ flexShrink: 0, pointerEvents: 'none', ...style }} />
+}
+
 /** The state mark of a cell: symbol + word/number, never colour alone. */
 export function CellMarkView({ mark, accent, compact }: { mark: CellMark; accent: Accent; compact: boolean }) {
   const num: CSSProperties = { fontSize: compact ? 13.5 : 13, fontWeight: 750, color: c.muted, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }
@@ -116,6 +127,7 @@ export function CellMarkView({ mark, accent, compact }: { mark: CellMark; accent
           {mark.badge === 'nivel' && <span style={tag}>NV{mark.minLevel}</span>}
           {mark.badge === 'ideal' && <IdealGlyph size={compact ? 11 : 12} />}
           {mark.badge === 'dj' && <span style={tag}>DJ</span>}
+          {mark.badge === 'meta' && <MetalMark poderId={mark.poderId} size={12} style={{ color: c.muted }} />}
         </span>
       )
   }

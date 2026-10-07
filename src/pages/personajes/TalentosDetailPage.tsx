@@ -37,7 +37,7 @@ import { MyTalents } from '../../components/talentos/MyTalents'
 import { BudgetSheet } from '../../components/talentos/BudgetSheet'
 import { CellMarkView, IdealGlyph } from '../../components/talentos/MapPieces'
 import { WIDE_MIN, buildPathModels, cellDomId, plural, type EdgeStatusFn } from '../../components/talentos/talentMap'
-import { accentOf, readStore, useContentWidth, usePrefersReducedMotion, writeStore } from '../../components/talentos/talentStyle'
+import { META_LOCKED, accentOf, readStore, useContentWidth, usePrefersReducedMotion, writeStore } from '../../components/talentos/talentStyle'
 
 type Mode = 'arbol' | 'releer'
 interface Goal { nodeId: string; choices: Record<string, string> }
@@ -341,7 +341,7 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
     level: character.level, contentW, edgeStatus, stepOf, targetId, selectedId,
     onSelect: setSelectedId, openLaminas, onToggleLamina: toggleLamina, onCloseLaminas: closeLaminas,
     onOpenSheet: setSheetId, onLearn: requestLearn, onSetGoal: (id: string) => requestSetGoal(id),
-    onRemoveGoal: () => setGoalConfirm({ kind: 'remove' }), busy, surgeRank,
+    onRemoveGoal: () => setGoalConfirm({ kind: 'remove' }), busy, surgeRank, state: tState,
   }
 
   const forgetCount = forgetConfirm ? forgetConfirm.removed.length || 1 : 0
@@ -766,6 +766,9 @@ function StateLegend() {
         <li style={item}>{box({ background: c.s1, border: `1.5px dashed ${a.border}` }, <CellMarkView mark={{ kind: 'available', dj: false }} accent={a} compact={false} />)}disponible</li>
         <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: null, minLevel: 1 }} accent={a} compact={false} />)}a 2 talentos</li>
         <li style={item}>{box({ background: c.s3, border: `1px solid ${c.borderBright}` }, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: 'nivel', minLevel: 6 }} accent={a} compact={false} />)}nivel 6 como pronto</li>
+        {features.artesMetalicas && (
+          <li style={item}>{box(META_LOCKED, <CellMarkView mark={{ kind: 'locked', distance: 2, badge: 'meta', minLevel: 1, poderId: 'alomancia:acero' }} accent={a} compact={false} />)}bloqueado hasta completar su meta</li>
+        )}
         <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <span style={{ fontSize: fs.eyebrow, fontWeight: 750, color: c.muted }}>DJ</span>)}lo decide la DJ</li>
         {features.idealesJurados && (
           <li style={item}>{box({ background: c.s1, border: `1px solid ${c.borderBright}` }, <IdealGlyph size={12} />)}jurar un Ideal</li>

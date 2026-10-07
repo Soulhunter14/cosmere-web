@@ -1,9 +1,13 @@
 /**
  * talentMap — pure model + fixed geometry for the talent map (no React, no DOM measuring).
  *
- * - buildPathModels(graph): one PathModel per path of the graph (heroic path, radiant order, singer),
- *   each with its key talent and its plates (specialty / spren bond / surge / singer grid) at the book's
- *   exact grid positions (data/talentGrids.ts).
+ * - buildPathModels(graph): one PathModel per path of the graph (heroic path, radiant order, singer and, from T37a, the Investida
+ *   path with a flat tree together with the powers it unlocks, the powers outside any path and the ancestry trees), each with its
+ *   key talent and its plates (specialty / spren bond / surge / singer grid / flat tree / power / ancestry) at the book's exact grid
+ *   positions. Grids and card summaries come from the rules the graph was built with (`graph.rules`, §7.7 #4): this module imports
+ *   no world data.
+ * - packRows / plateSlots: the plates of a model in rows of at most 3 slots (a plate of 3 or 4 lanes takes 2).
+ * - otherPowerDefs / buildOtherPowersModel: the «Otros poderes» of an Investida path (powers it unlocks that the character lacks).
  * - mapDims / laminaDims: the fixed geometry profiles (phone miniature, desktop, readable lámina).
  * - tracePlate(): edges drawn ONLY from real prerequisites (parentGroups of the engine), routed by
  *   fixed rules: straight, skip by the outer margin, lateral with arrow, diagonal through the gap
@@ -11,9 +15,7 @@
  *   separate lines. Parents outside the plate become text chips («también requiere: X»).
  */
 import type { Gate, NodeEval, TalentGraph, TalentNode, TalentTree } from '../../lib/talentGraph'
-import { TALENT_GRIDS } from '../../data/talentGrids'
-import { TALENT_SUMMARIES } from '../../data/talentSummaries'
-import { RADIANT_ORDERS } from '../../data/radiantOrders'
+import type { PoderDef } from '../../worlds/types'
 
 // ── Text helpers ─────────────────────────────────────────────────────────────
 
@@ -22,25 +24,29 @@ export function firstSentence(text: string): string {
   const m = text.match(/^[\s\S]*?[.!?](?=\s|$)/)
   return (m ? m[0] : text).trim()
 }
-/** Short book summary of a talent, else the first sentence of its description. */
-export function summaryOf(node: Pick<TalentNode, 'name' | 'description'>): string {
-  return TALENT_SUMMARIES[node.name] ?? firstSentence(node.description)
+/** Short book summary of a talent (`summaries` = `graph.rules.summaries`), else the first sentence of its description. */
+export function summaryOf(node: Pick<TalentNode, 'name' | 'description'>, summaries: Readonly<Record<string, string>>): string {
+  return summaries[node.name] ?? firstSentence(node.description)
 }
 export const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
 
-/** «Cazador · Arquero», «Corredores del Viento · Adhesión», «Cantor» */
+/** «Cazador · Arquero», «Corredores del Viento · Adhesión», «Cantor», «Brumoso · Alomancia de acero», «Kandra» */
 export function sourceOf(node: TalentNode, graph: TalentGraph): string {
   const tree = graph.treeById.get(node.treeId)
   if (!tree) return node.section
   if (tree.kind === 'cantor') return node.isKey ? 'Cantor · ascendencia' : 'Cantor'
   if (node.isKey && tree.kind === 'heroico') return `${tree.pathName} · talento principal`
   if (node.isKey && tree.kind === 'radiante') return `${tree.pathName} · Primer Ideal`
+  // The Investida path, an ancestry and a power name their own tree (pathName = section there): never «Brumoso · Brumoso»
+  if (tree.kind === 'caminoInvestido') return node.isKey ? `${tree.pathName} · talento principal` : tree.pathName
+  if (tree.kind === 'ascendencia') return node.isKey ? `${tree.pathName} · ascendencia` : tree.pathName
+  if (tree.kind === 'poder') return tree.pathName === tree.section ? tree.section : `${tree.pathName} · ${tree.section}`
   return `${tree.pathName} · ${tree.section}`
 }
 
 // ── Path models ──────────────────────────────────────────────────────────────
 
-export type PlateKind = 'especialidad' | 'vinculo' | 'potencia' | 'cantor'
+export type PlateKind = 'especialidad' | 'vinculo' | 'potencia' | 'cantor' | 'caminoInvestido' | 'poder' | 'ascendencia'
 export interface PlateModel {
   tree: TalentTree
   kind: PlateKind
@@ -54,11 +60,13 @@ export interface PlateModel {
   label: string
   /** full name for the lámina and the accessible names */
   fullLabel: string
+  /** `${arte}:${metal}` of the power of a 'poder' plate: its band carries the glyph of the metal */
+  poderId?: string
 }
 export interface PathModel {
-  /** 'heroico:<path>' | 'radiante:<order>' | 'cantor' */
+  /** 'heroico:<path>' | 'radiante:<order>' | 'cantor' | 'caminoInvestido:<path>' | 'poderes' | 'ascendencia:<slug>' */
   id: string
-  kind: 'heroico' | 'radiante' | 'cantor'
+  kind: 'heroico' | 'radiante' | 'cantor' | 'caminoInvestido' | 'poder' | 'ascendencia'
   pathId: string
   title: string
   eyebrow: string
@@ -77,12 +85,14 @@ export function gridKeyOf(tree: TalentTree): string {
   if (tree.kind === 'heroico') return `heroico:${tree.pathId}:${tree.section}`
   if (tree.kind === 'potencia') return `potencia:${tree.section}`
   if (tree.kind === 'radiante') return `radiante:${tree.pathId}`
+  // Investida path, power and ancestry: the id of the tree is the key (`caminoInvestido:<camino>`, `poder:<arte>:<metal>`, `ascendencia:<slug>`)
+  if (tree.kind === 'caminoInvestido' || tree.kind === 'poder' || tree.kind === 'ascendencia') return tree.id
   return 'cantor'
 }
 
 function plateOf(tree: TalentTree, graph: TalentGraph, kind: PlateKind, keyId: string | null, label: string, fullLabel: string): PlateModel {
   const ids = tree.nodeIds.filter((id) => id !== keyId)
-  const grid = TALENT_GRIDS[gridKeyOf(tree)]
+  const grid = graph.rules.grids[gridKeyOf(tree)]
   const pos = new Map<string, { col: number; row: number }>()
   let cols = 2
   if (grid) {
@@ -113,6 +123,12 @@ function plateOf(tree: TalentTree, graph: TalentGraph, kind: PlateKind, keyId: s
   return { tree, kind, cols, rows, pos, order, label, fullLabel }
 }
 
+/** Plate of a power tree: the band says the metal («Acero»), the lámina and the accessible name say «Alomancia de acero» */
+function powerPlate(tree: TalentTree, graph: TalentGraph): PlateModel {
+  const metal = tree.section.replace(/^\S+ de /, '')
+  return { ...plateOf(tree, graph, 'poder', null, metal.charAt(0).toUpperCase() + metal.slice(1), tree.section), poderId: tree.sectionId }
+}
+
 export function buildPathModels(graph: TalentGraph): PathModel[] {
   const out: PathModel[] = []
   for (const root of graph.trees.filter((t) => t.kind === 'heroico' && t.sectionId === 'principal')) {
@@ -128,7 +144,6 @@ export function buildPathModels(graph: TalentGraph): PathModel[] {
   }
   const bond = graph.trees.find((t) => t.kind === 'radiante')
   if (bond) {
-    const order = RADIANT_ORDERS.find((o) => o.id === bond.pathId)
     const key = bond.keyNodeId ? graph.byId.get(bond.keyNodeId) ?? null : null
     const plates: PlateModel[] = []
     if (bond.status === 'ok') {
@@ -137,9 +152,36 @@ export function buildPathModels(graph: TalentGraph): PathModel[] {
         plates.push(plateOf(t, graph, 'potencia', key?.id ?? null, t.section, t.section))
     }
     out.push({
-      id: bond.id, kind: 'radiante', pathId: bond.pathId, title: order?.name ?? bond.pathName, eyebrow: 'Camino radiante',
+      id: bond.id, kind: 'radiante', pathId: bond.pathId, title: bond.pathName, eyebrow: 'Camino radiante',
       color: bond.color, keyNode: key, plates, nodeIds: [...(key ? [key.id] : []), ...plates.flatMap((p) => p.order)],
       isStarting: true, noJugable: bond.status === 'noJugable',
+    })
+  }
+  // The Investida path with a flat tree (T37a): its main talent is the key box; its plates are the flat tree and the trees of the powers
+  // that hang from that talent (the powers of the character that the path unlocks). The starting path comes first, as the heroic one does
+  const camino = graph.trees.find((t) => t.kind === 'caminoInvestido')
+  const poderes = graph.trees.filter((t) => t.kind === 'poder')
+  if (camino) {
+    const key = camino.keyNodeId ? graph.byId.get(camino.keyNodeId) ?? null : null
+    const plates = [
+      plateOf(camino, graph, 'caminoInvestido', key?.id ?? null, 'Talentos', `Talentos de ${camino.section}`),
+      ...poderes.filter((t) => t.keyNodeId === camino.keyNodeId).map((t) => powerPlate(t, graph)),
+    ]
+    const model: PathModel = {
+      id: camino.id, kind: 'caminoInvestido', pathId: camino.pathId, title: camino.pathName, eyebrow: 'Camino', color: camino.color,
+      keyNode: key, plates, nodeIds: [...(key ? [key.id] : []), ...plates.flatMap((p) => p.order)], isStarting: camino.isStartingPath,
+      noJugable: false,
+    }
+    if (camino.isStartingPath) out.unshift(model)
+    else out.push(model)
+  }
+  // Powers that no path of the character unlocks (a spike, an alloy of lerasium, a medallion, or no path at all): one model without a key box
+  const sueltos = poderes.filter((t) => !camino || t.keyNodeId !== camino.keyNodeId)
+  if (sueltos.length) {
+    const plates = sueltos.map((t) => powerPlate(t, graph))
+    out.push({
+      id: 'poderes', kind: 'poder', pathId: 'poderes', title: 'Poderes adicionales', eyebrow: 'Poderes', color: sueltos[0].color,
+      keyNode: null, plates, nodeIds: plates.flatMap((p) => p.order), isStarting: false, noJugable: false,
     })
   }
   const cantor = graph.trees.find((t) => t.kind === 'cantor')
@@ -151,7 +193,55 @@ export function buildPathModels(graph: TalentGraph): PathModel[] {
       keyNode: key, plates: [plate], nodeIds: [...(key ? [key.id] : []), ...plate.order], isStarting: true, noJugable: false,
     })
   }
+  // Ancestry trees with a calendar of their own (T37a): the first auto-granted talent is the key box, the rest of the tree is one plate
+  for (const asc of graph.trees.filter((t) => t.kind === 'ascendencia')) {
+    const key = asc.keyNodeId ? graph.byId.get(asc.keyNodeId) ?? null : null
+    const plate = plateOf(asc, graph, 'ascendencia', key?.id ?? null, 'Talentos', `Talentos de ${asc.section}`)
+    out.push({
+      id: asc.id, kind: 'ascendencia', pathId: asc.pathId, title: asc.pathName, eyebrow: 'Ascendencia', color: asc.color,
+      keyNode: key, plates: [plate], nodeIds: [...(key ? [key.id] : []), ...plate.order], isStarting: true, noJugable: false,
+    })
+  }
   return out
+}
+
+// ── «Otros poderes» and the rows of plates ───────────────────────────────────────────────────────────────────
+
+/** Powers of the world that the Investida path `pathId` unlocks (their `caminos`) and that have a tree but the character does not have */
+export function otherPowerDefs(graph: TalentGraph, pathId: string): PoderDef[] {
+  const own = new Set((graph.options.poderes ?? []).map((p) => `${p.arte}:${p.metal}`))
+  return graph.rules.poderes.filter(
+    (p): p is PoderDef => 'caminos' in p && p.talentos.length > 0 && (p.caminos as readonly string[]).includes(pathId) && !own.has(`${p.arte}:${p.metal}`),
+  )
+}
+
+/** The plates of the powers `defs` in `graph`, a graph built with those powers added to the character's own (a model without a key box) */
+export function buildOtherPowersModel(graph: TalentGraph, defs: readonly PoderDef[], id: string, color: string): PathModel {
+  const wanted = new Set(defs.map((p) => `poder:${p.arte}:${p.metal}`))
+  const plates = graph.trees.filter((t) => t.kind === 'poder' && wanted.has(t.id)).map((t) => powerPlate(t, graph))
+  return {
+    id, kind: 'poder', pathId: id, title: 'Otros poderes', eyebrow: 'Poderes', color, keyNode: null, plates,
+    nodeIds: plates.flatMap((p) => p.order), isStarting: false, noJugable: false,
+  }
+}
+
+/** Plates a row holds (3 slots: the page column fits three miniatures) and how many slots a plate takes (the plates of 3 or 4 lanes take 2) */
+export const PLATES_PER_ROW = 3
+export const plateSlots = (pl: Pick<PlateModel, 'kind' | 'cols'>): number => (pl.kind === 'cantor' || pl.cols > 2 ? 2 : 1)
+
+/** Plates of a model in rows of at most PLATES_PER_ROW slots, as indices into `plates`: a row never outgrows the page column */
+export function packRows(plates: readonly PlateModel[]): number[][] {
+  const rows: number[][] = []
+  let row: number[] = []
+  let used = 0
+  plates.forEach((pl, i) => {
+    const slots = plateSlots(pl)
+    if (row.length && used + slots > PLATES_PER_ROW) { rows.push(row); row = []; used = 0 }
+    row.push(i)
+    used += slots
+  })
+  if (row.length) rows.push(row)
+  return rows
 }
 
 // ── Cell marks (state vocabulary) ────────────────────────────────────────────
@@ -160,18 +250,24 @@ export type CellMark =
   | { kind: 'learned'; granted: boolean }
   | { kind: 'elsewhere' }
   | { kind: 'available'; dj: boolean }
-  | { kind: 'locked'; distance: number | null; badge: 'nivel' | 'ideal' | 'dj' | null; minLevel: number }
+  /** `poderId`: the power whose goal locks the cell (badge 'meta'), for the glyph of its metal */
+  | { kind: 'locked'; distance: number | null; badge: 'meta' | 'nivel' | 'ideal' | 'dj' | null; minLevel: number; poderId?: string | null }
 
 const idealUnmet = (g: Gate) => g.kind === 'ideal' && g.status !== 'met'
+const metaUnmet = (g: Gate): g is Extract<Gate, { kind: 'meta' }> => g.kind === 'meta' && g.status !== 'met'
 
-/** One mark per cell: NV > Ideal > DJ (the cell shows only its own gates, like the book). */
+/**
+ * One mark per cell: goal > NV > Ideal > DJ (the cell shows only its own gates, like the book; a tree closed by its goal stays closed at
+ * any level, so the goal speaks first: the engine's `gateBadge`, T36).
+ */
 export function cellMark(ev: NodeEval | undefined, level: number, granted = false): CellMark {
-  if (!ev) return { kind: 'locked', distance: null, badge: null, minLevel: level }
+  if (!ev) return { kind: 'locked', distance: null, badge: null, minLevel: level, poderId: null }
   if (ev.state === 'learned') return { kind: 'learned', granted }
   if (ev.state === 'learnedElsewhere') return { kind: 'elsewhere' }
   if (ev.state === 'available') return { kind: 'available', dj: ev.needsConfirmation }
+  if (ev.gateBadge === 'meta') return { kind: 'locked', distance: ev.distance, badge: 'meta', minLevel: ev.minLevel, poderId: ev.gates.find(metaUnmet)?.poderIds[0] ?? null }
   const badge = ev.minLevel > level ? 'nivel' : ev.gates.some(idealUnmet) ? 'ideal' : ev.gates.some((g) => g.status === 'confirm') ? 'dj' : null
-  return { kind: 'locked', distance: ev.distance, badge, minLevel: ev.minLevel }
+  return { kind: 'locked', distance: ev.distance, badge, minLevel: ev.minLevel, poderId: null }
 }
 
 /** State in plain words: «Aprendido», «Disponible ahora», «A 4 talentos · lo antes posible en Nv 6». */
@@ -183,7 +279,8 @@ export function stateWords(mark: CellMark, level: number): string {
     default: {
       if (mark.distance === null) return 'Fuera de tus caminos'
       const lv = mark.minLevel > level ? ` · lo antes posible en Nv ${mark.minLevel}` : ''
-      return `A ${mark.distance} ${plural(mark.distance, 'talento', 'talentos')}${lv}`
+      const meta = mark.badge === 'meta' ? ' · bloqueado por una meta' : ''
+      return `A ${mark.distance} ${plural(mark.distance, 'talento', 'talentos')}${meta}${lv}`
     }
   }
 }

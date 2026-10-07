@@ -27,3 +27,8 @@ export type { PlanAnadirPoder } from './caminoMetalFlujo'
 export { BeberVialSheet } from './BeberVialSheet'
 export type { BeberVialSheetProps } from './BeberVialSheet'
 export { conVialBebido, esPoderDelVial, quemaElVial } from './vial'
+// The legacy of the character (adventure «El legado de los nacidos de la bruma»): the card of the «Trasfondo» tab and its picker, both lazy
+export { LegadoCard } from './LegadoCard'
+export type { LegadoCardProps } from './LegadoCard'
+export { LegadoPicker } from './LegadoPicker'
+export type { LegadoPickerProps } from './LegadoPicker'

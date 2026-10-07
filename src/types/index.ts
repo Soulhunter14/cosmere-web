@@ -200,6 +200,10 @@ export interface Character {
   bonosAtributos: Partial<Record<AttrField, number>>
   /** Hemalurgic spikes (T49a): `[]` in Stormlight and in a character with none; `derivadosSet['hemalurgia.clavosMax']` is the limit once there is one */
   clavos: ClavoHemalurgico[]
+  /** Legacy of the adventure «El legado de los nacidos de la bruma» (`convicto`, `pilluelo`…; `src/data/mistborn/legados.ts`): `''` = none, always `''` in Stormlight */
+  legado: string
+  /** Answers to the two questions of the legacy, in their order: `[]` = unanswered, always `[]` in Stormlight */
+  legadoRespuestas: string[]
   createdAt: string
   updatedAt: string
 }

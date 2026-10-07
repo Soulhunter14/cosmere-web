@@ -11,6 +11,9 @@
  * - 'puro-aleacion-o-atium' (feruquimista): every feruchemical power of the era, nascent; a pure metal and its alloy, or atium, for
  *   the goal (L.146 / PDF 152).
  * - 'uno-por-arte' (nacidoble): one alomantic and one feruchemical power, the same metal or different ones (L.155 / PDF 161).
+ * - 'concedido' («Añadir poder», T30, director only): one power the character gets as a reward, with its origin chosen here: a spike, an alloy
+ *   of lerasium (Era 1 only) or a medallion (Era 2 only; L.288-295 / PDF 294-301). It does not depend on the path: any metal of the era the origin
+ *   allows, never a power the character already has, born complete and without a goal.
  * A metal whose pair is not offered (gold in Era 1, whose alloy electro is not in the table) is chosen alone (Q25). Alomancia de
  * atium is complete from the start and trains no goal (L.177 / PDF 183; L.135 / PDF 141).
  *
@@ -19,7 +22,7 @@
  * the picker itself is loaded lazily from components/mistborn/index.ts (§7.4 rule 4).
  */
 import { useId, useState, type ReactNode } from 'react'
-import { Anvil, Check, Flame, RefreshCw } from 'lucide-react'
+import { Anvil, Check, Flame, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button, ErrorMessage, Segmented, Sheet, Spinner } from '../ui'
 import type { Era, PoderPersonaje } from '../../types'
 import type { PoderDef } from '../../data/mistborn/tipos'
@@ -29,24 +32,53 @@ import {
 } from '../../data/mistborn/metales'
 import { CAMINOS_NACIDOS_DEL_METAL, type SeleccionMeta } from '../../data/mistborn/caminosNacidosDelMetal'
 import { useWorldConfig, useWorldData } from '../../store/campaignStore'
-import { buttonReset, c, eyebrow, fs, pill, radius, toneFrom } from '../../theme'
+import { buttonReset, c, eyebrow, fs, pill, radius, tone, toneFrom } from '../../theme'
 import { FilaOpcion } from './FilaOpcion'
+import { NOMBRE_ORIGEN, type OrigenConcedido } from './poderes'
 
 export interface MetalPickerProps {
   open: boolean
   onClose: () => void
-  /** Art whose metals are offered; 'ambas' = one power of each art (nacidoble) */
+  /** Art whose metals are offered; 'ambas' = one power of each art (nacidoble; in 'concedido' mode: the arts the chosen origin allows) */
   arte: ArteMetal | 'ambas'
-  /** How the first goal picks its powers (`CaminoNacidoDelMetal.seleccionMeta`) */
-  modo: SeleccionMeta
+  /** How the first goal picks its powers (`CaminoNacidoDelMetal.seleccionMeta`), or 'concedido' = «Añadir poder»: a reward of the director whose origin is chosen here */
+  modo: SeleccionMeta | 'concedido'
   /** Era of the campaign (`null` = every era) */
   era: Era | null
-  /** Metalborn path the powers come from: with the era it decides which metals exist */
+  /** Metalborn path the powers come from: with the era it decides which metals exist (unused in 'concedido' mode) */
   caminoMetal: string
   /** Power ids (`${arte}:${metal}`) the character keeps from another origin: shown, never offered again */
   yaElegidos: string[]
+  /** 'concedido' mode: the arts whose Investida skill has no free cognitive slot; a spike or an alloy of that art waits until the director frees one (Q4) */
+  sinHueco?: ArteMetal[]
   onConfirm: (poderes: PoderPersonaje[], paraMeta: string[]) => void
 }
+
+/**
+ * The origins of a power that does not come from the path, with what each one is and where it exists. The alloys of lerasium are only found in
+ * Era 1 (L.295 / PDF 301) and the feruchemical medallions are an item of Era 2 (L.293 / PDF 299). No spike, alloy or medallion gives atium (the
+ * tables of spikes and medallions have none, L.291 / PDF 297, L.294 / PDF 300; the server rejects it for the alloy and the medallion, §5.3).
+ */
+const ORIGENES: Record<OrigenConcedido, { corto: string; artes: ArteMetal[]; solo?: Era; texto: string }> = {
+  clavo: {
+    corto: 'Clavo',
+    artes: ['alomancia', 'feruquimia'],
+    texto: 'Un clavo hemalúrgico implantado da la versión completa de un poder alomántico o feruquímico y la habilidad Alomancia o Feruquimia, si no la tenías.',
+  },
+  lerasium: {
+    corto: 'Lerasium',
+    artes: ['alomancia'],
+    solo: 'era1',
+    texto: 'Una pepita de aleación de lerasium da el poder alomántico de su metal, completo, y la habilidad Alomancia si no la tenías.',
+  },
+  medallon: {
+    corto: 'Medallón',
+    artes: ['feruquimia'],
+    solo: 'era2',
+    texto: 'Un medallón feruquímico da un poder feruquímico completo con un máximo fijo de 8 cargas. No da la habilidad Feruquimia.',
+  },
+}
+const ORDEN_ORIGENES: OrigenConcedido[] = ['clavo', 'lerasium', 'medallon']
 
 const ARTE: Record<ArteMetal, { nombre: string; poder: string; poderes: string }> = {
   alomancia: { nombre: 'Alomancia', poder: 'poder alomántico', poderes: 'poderes alománticos' },
@@ -65,8 +97,8 @@ function subtitulo(m: MetalDef, arte: ArteMetal): string {
   return `${CATEGORIAS_ALOMANCIA[m.categoriaAlomancia]} · ${m.interno ? 'Interno' : 'Externo'} · ${m.empujon ? 'Empujón' : 'Tirón'}`
 }
 
-/** Provisional glyph of a metal: the Lucide icon of the art on the metal's tint. T46 replaces it with `MetalGlyph` (official glyphs, §7.8) */
-function GlifoProvisional({ metal, arte, size = 18 }: { metal: MetalDef; arte: ArteMetal; size?: number }) {
+/** Provisional glyph of a metal: the Lucide icon of the art on the metal's tint. T46 replaces it with `MetalGlyph` (official glyphs, §7.8); PoderCard (T30) uses it too */
+export function GlifoProvisional({ metal, arte, size = 18 }: { metal: MetalDef; arte: ArteMetal; size?: number }) {
   const t = toneFrom(metal.color)
   const Icono = arte === 'alomancia' ? Flame : Anvil
   const caja = Math.round(size * 1.9)
@@ -167,12 +199,22 @@ function Resumen({ poder, def, chip }: { poder: string; def: PoderDef | undefine
   )
 }
 
-export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaElegidos, onConfirm }: MetalPickerProps) {
+/** Can this origin give this power? §5.3: an alloy of lerasium gives alomancia and a medallion feruchemy (only the metals its table gives players); a spike gives any, but atium */
+function permiteOrigen(origen: OrigenConcedido, arte: ArteMetal, metal: MetalId, def: PoderDef): boolean {
+  if (metal === 'atium' || !ORIGENES[origen].artes.includes(arte)) return false
+  return origen !== 'medallon' || (def.arte === 'feruquimia' && def.medallon.disponibleParaPJ)
+}
+
+export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaElegidos, sinHueco = [], onConfirm }: MetalPickerProps) {
   const cfg = useWorldConfig()
   const { data, isPending } = useWorldData()
   const resumenId = useId()
-  const artes: ArteMetal[] = arte === 'ambas' ? ['alomancia', 'feruquimia'] : [arte]
-  const [vista, setVista] = useState<ArteMetal>(artes[0])
+  const concedido = modo === 'concedido'
+  const [origen, setOrigen] = useState<OrigenConcedido>('clavo')
+  // 'concedido': the arts follow the origin (an alloy of lerasium is alomantic, a medallion feruchemical); otherwise the prop decides
+  const artes: ArteMetal[] = concedido ? ORIGENES[origen].artes : arte === 'ambas' ? ['alomancia', 'feruquimia'] : [arte]
+  const [vistaElegida, setVista] = useState<ArteMetal>(artes[0])
+  const vista = artes.includes(vistaElegida) ? vistaElegida : artes[0]
   const [elegidos, setElegidos] = useState<string[]>([])
 
   const camino = CAMINOS_NACIDOS_DEL_METAL.find((p) => p.id === caminoMetal)
@@ -183,7 +225,13 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
   const enEra = new Set<MetalId>(porEra ? (era ? porEra[era] : [...porEra.era1, ...porEra.era2]) : [])
   const defs = (data?.poderes ?? []).filter((p): p is PoderDef => 'caminos' in p)
   const defDe = (a: ArteMetal, metal: MetalId) => defs.find((d) => d.arte === a && d.metal === metal)
-  const ofrecidos = (a: ArteMetal) => METALES.filter((m) => enEra.has(m.id) && !!defDe(a, m.id)?.caminos.includes(caminoMetal as CaminoMetalId))
+  const ofrecidos = (a: ArteMetal) => METALES.filter((m) => {
+    const def = defDe(a, m.id)
+    if (!def) return false
+    // 'concedido': any metal of the era that the origin allows, whatever the path (the era only filters options, §3 b)
+    if (concedido) return (era === null || m.eras.includes(era)) && permiteOrigen(origen, a, m.id, def)
+    return enEra.has(m.id) && def.caminos.includes(caminoMetal as CaminoMetalId)
+  })
   const poseido = (a: ArteMetal, metal: MetalId) => yaElegidos.includes(id(a, metal))
   const sinMeta = (a: ArteMetal, metal: MetalId) => defDe(a, metal)?.requiereMeta === false
   const parDe = (a: ArteMetal, m: MetalDef): MetalDef | null => {
@@ -199,23 +247,32 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
     return (par ? [id(a, m.id), id(a, par.id)] : [id(a, m.id)]).sort((x, y) => ordenMetal(x) - ordenMetal(y))
   })
 
+  // 'concedido': born complete and without a goal; a medallion starts with its 8 charges (§5.1, the director can lower them with PATCH recursos)
   const nuevo = (a: ArteMetal, metal: MetalId): PoderPersonaje => ({
-    arte: a, metal, origen: 'camino', completo: sinMeta(a, metal), metaId: null, cargas: 0, ajusteCargasMax: 0, viales: 0, desprovisto: false,
+    arte: a, metal, origen: concedido ? origen : 'camino', completo: concedido || sinMeta(a, metal), metaId: null,
+    cargas: concedido && origen === 'medallon' ? 8 : 0, ajusteCargasMax: 0, viales: 0, desprovisto: false,
   })
   const recibidos = todos ? artes.flatMap((a) => ofrecidos(a).filter((m) => !poseido(a, m.id)).map((m) => nuevo(a, m.id))) : null
-  const paraMeta = elegidos.filter((p) => !sinMeta(...partes(p)))
-  const listo = !!data && (modo === 'uno-por-arte' ? artes.every((a) => elegidos.some((p) => p.startsWith(`${a}:`))) : elegidos.length > 0)
+  const paraMeta = concedido ? [] : elegidos.filter((p) => !sinMeta(...partes(p)))
+  // A spike or an alloy brings the Investida skill of its art: with no free cognitive slot for it, the director frees one first (Q4)
+  const faltaHueco = concedido && origen !== 'medallon' && elegidos.some((p) => sinHueco.includes(partes(p)[0]))
+  const listo = !!data && !faltaHueco && (modo === 'uno-por-arte' ? artes.every((a) => elegidos.some((p) => p.startsWith(`${a}:`))) : elegidos.length > 0)
 
   const confirmar = () => onConfirm(recibidos ?? elegidos.map((p) => nuevo(...partes(p))), paraMeta)
 
-  const titulo = modo === 'uno-por-arte' ? 'Poderes alomántico y feruquímico' : todos ? `Poderes ${artes[0] === 'alomancia' ? 'alománticos' : 'feruquímicos'}` : `Poder ${artes[0] === 'alomancia' ? 'alomántico' : 'feruquímico'}`
-  const descripcion = modo === 'pareja'
-    ? `Obtienes todos los poderes alománticos de tu era en su versión naciente. Elige la pareja Empujón/Tirón que entrenarás primero con la meta «${metaDe('alomancia') ?? 'Entrenar tus poderes'}».`
-    : modo === 'puro-aleacion-o-atium'
-      ? `Obtienes todos los poderes feruquímicos de tu era en su versión naciente. Elige un metal puro y su aleación, o el atium, para la meta «${metaDe('feruquimia') ?? 'Fabricar tus mentes de metal'}».`
-      : modo === 'uno-por-arte'
-        ? `Elige un poder alomántico y uno feruquímico, del mismo metal o de metales distintos. Los dos empiezan en su versión naciente y cada uno tiene su meta: «${metaDe('alomancia') ?? 'Entrenar tu poder'}» y «${metaDe('feruquimia') ?? 'Fabricar tu mente de metal'}».`
-        : `Elige un ${ARTE[artes[0]].poder} disponible en tu era. Empieza en su versión naciente: la meta «${metaDe(artes[0]) ?? ''}» desbloquea la completa.`
+  const disponible = (o: OrigenConcedido) => !ORIGENES[o].solo || era === null || era === ORIGENES[o].solo
+  const nombreEra = (e: Era) => cfg.eras?.find((x) => x.id === e)?.label ?? 'otra era'
+
+  const titulo = concedido ? 'Añadir poder' : modo === 'uno-por-arte' ? 'Poderes alomántico y feruquímico' : todos ? `Poderes ${artes[0] === 'alomancia' ? 'alománticos' : 'feruquímicos'}` : `Poder ${artes[0] === 'alomancia' ? 'alomántico' : 'feruquímico'}`
+  const descripcion = concedido
+    ? 'El director concede un poder completo y sin meta: un clavo hemalúrgico, una aleación de lerasium o un medallón feruquímico.'
+    : modo === 'pareja'
+      ? `Obtienes todos los poderes alománticos de tu era en su versión naciente. Elige la pareja Empujón/Tirón que entrenarás primero con la meta «${metaDe('alomancia') ?? 'Entrenar tus poderes'}».`
+      : modo === 'puro-aleacion-o-atium'
+        ? `Obtienes todos los poderes feruquímicos de tu era en su versión naciente. Elige un metal puro y su aleación, o el atium, para la meta «${metaDe('feruquimia') ?? 'Fabricar tus mentes de metal'}».`
+        : modo === 'uno-por-arte'
+          ? `Elige un poder alomántico y uno feruquímico, del mismo metal o de metales distintos. Los dos empiezan en su versión naciente y cada uno tiene su meta: «${metaDe('alomancia') ?? 'Entrenar tu poder'}» y «${metaDe('feruquimia') ?? 'Fabricar tu mente de metal'}».`
+          : `Elige un ${ARTE[artes[0]].poder} disponible en tu era. Empieza en su versión naciente: la meta «${metaDe(artes[0]) ?? ''}» desbloquea la completa.`
 
   const enVista = ofrecidos(vista)
   const tabla = enVista.filter((m) => m.id !== 'atium')
@@ -277,7 +334,15 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
       footer={
         <>
           <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
-          <Button size="lg" style={{ flex: 2 }} disabled={!listo} onClick={confirmar}>Asignar camino</Button>
+          <Button
+            size="lg"
+            style={{ flex: 2 }}
+            disabled={!listo}
+            aria-describedby={faltaHueco ? `${resumenId}-hueco` : undefined}
+            onClick={confirmar}
+          >
+            {concedido ? 'Añadir poder' : 'Asignar camino'}
+          </Button>
         </>
       }
     >
@@ -291,7 +356,28 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {arte === 'ambas' && (
+          {concedido && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <p style={eyebrow}>Origen</p>
+              <Segmented<OrigenConcedido>
+                ariaLabel="Origen del poder"
+                value={origen}
+                onChange={(o) => { setOrigen(o); setElegidos([]) }}
+                options={ORDEN_ORIGENES.map((o) => ({ value: o, label: ORIGENES[o].corto, ariaLabel: NOMBRE_ORIGEN[o], disabled: !disponible(o) }))}
+              />
+              <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>{ORIGENES[origen].texto}</p>
+              {ORDEN_ORIGENES.flatMap((o) => {
+                const solo = ORIGENES[o].solo
+                return solo && !disponible(o) ? [
+                  <p key={o} style={{ fontSize: fs.sm, color: c.subtle, lineHeight: 1.5 }}>
+                    {NOMBRE_ORIGEN[o]}: solo existe en la {nombreEra(solo)}, no en la era de esta campaña.
+                  </p>,
+                ] : []
+              })}
+            </div>
+          )}
+
+          {artes.length > 1 && (
             <Segmented<ArteMetal>
               ariaLabel="Arte del poder"
               value={vista}
@@ -304,7 +390,9 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
           )}
 
           {enVista.length === 0 ? (
-            <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>Este camino no tiene {ARTE[vista].poderes} en la era de la campaña.</p>
+            <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>
+              {concedido ? `No hay ${ARTE[vista].poderes} que este origen pueda dar en la era de la campaña.` : `Este camino no tiene ${ARTE[vista].poderes} en la era de la campaña.`}
+            </p>
           ) : (
             <div role="group" aria-label={`Metales de ${ARTE[vista].nombre.toLowerCase()}`} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {tabla.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6 }}>{tabla.map(celda)}</div>}
@@ -330,7 +418,12 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
             )}
             {elegidos.length > 0 && (
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 10, borderTop: `1px solid ${c.border}` }}>
-                {artes.map((a) => {
+                {concedido && (
+                  <li style={{ fontSize: fs.sm, color: c.text, lineHeight: 1.45 }}>
+                    Se añade completo y sin meta ({NOMBRE_ORIGEN[origen].toLowerCase()}){origen === 'medallon' ? ', con 8 cargas' : ''}.
+                  </li>
+                )}
+                {!concedido && artes.map((a) => {
                   const propios = paraMeta.filter((p) => p.startsWith(`${a}:`))
                   const completos = elegidos.filter((p) => p.startsWith(`${a}:`) && sinMeta(a, partes(p)[1]))
                   if (propios.length > 0) return <li key={a} style={{ fontSize: fs.sm, color: c.text, lineHeight: 1.45 }}>Meta «{metaDe(a)}»: {lista(propios.map(nombreEn))}.</li>
@@ -345,6 +438,23 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
               </ul>
             )}
           </section>
+
+          {faltaHueco && (
+            <p
+              id={`${resumenId}-hueco`}
+              role="note"
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderRadius: radius.sm,
+                background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`, fontSize: fs.sm, color: c.text, lineHeight: 1.5,
+              }}
+            >
+              <TriangleAlert size={17} aria-hidden style={{ color: tone.topacio.fg, flexShrink: 0, marginTop: 1 }} />
+              <span>
+                No queda ningún hueco libre de habilidad cognitiva para {ARTE[partes(elegidos[0])[0]].nombre}. Libera uno en la pestaña
+                Atributos, en modo edición, y vuelve a añadir el poder.
+              </span>
+            </p>
+          )}
         </div>
       )}
     </Sheet>

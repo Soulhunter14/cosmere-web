@@ -12,7 +12,7 @@ import {
   Button, Card, ConfirmDialog, ErrorMessage, IconButton, Input, Segmented, SectionTitle, Select, Sheet, Spinner, Stepper, TabPanel, Tabs, Textarea,
 } from '../../components/ui'
 import type { EntornoCaminoMetal, MetalPickerProps, SeleccionCaminoMetal } from '../../components/mistborn'
-import type { Character, RecursosPatch, StatDesglose, StatLinea, UpdateCharacterRequest } from '../../types'
+import type { Character, PoderPersonaje, RecursosPatch, StatDesglose, StatLinea, UpdateCharacterRequest } from '../../types'
 import type { AttrField, HabilidadDef } from '../../worlds/types'
 import { isAvailable } from '../../worlds'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
@@ -84,6 +84,8 @@ const FORMA_TONE = toneFrom(CANTOR_COLOR)
 const CaminoMetalPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.CaminoMetalPicker })))
 const BendicionPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.BendicionPicker })))
 const MetalPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.MetalPicker })))
+// The «Artes metálicas» tab (T30): rendered only while that tab is open
+const ArtesMetalicasTab = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.ArtesMetalicasTab })))
 
 /** A metalborn path chosen in CaminoMetalPicker that waits for its metals (MetalPicker, §7.4 step 4) */
 interface CaminoPendiente { camino: string; caminoInicial: 'heroico' | 'metal'; arte: MetalPickerProps['arte']; modo: MetalPickerProps['modo'] }
@@ -561,13 +563,18 @@ const BACKGROUND_FIELDS = [
   ['apariencia', 'Apariencia'], ['notas', 'Notas'],
 ]
 
-type Tab = 'caracteristicas' | 'atributos' | 'background'
+type Tab = 'caracteristicas' | 'atributos' | 'background' | 'artesMetalicas'
 const TAB_PREFIX = 'ficha'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'caracteristicas', label: 'Características' },
   { id: 'atributos', label: 'Atributos' },
   { id: 'background', label: 'Trasfondo' },
 ]
+/**
+ * The tab of a world with metallic arts (`features.artesMetalicas`, §7.4). It goes before «Trasfondo», the tab a player opens least at the table.
+ * Its id is also what a link from another page passes in `navigate(…, { state: { tab: 'artesMetalicas' } })` (the Bolsa: «Cargas en Artes metálicas →»)
+ */
+const TAB_ARTES: { id: Tab; label: string } = { id: 'artesMetalicas', label: 'Artes metálicas' }
 
 export function CharacterDetailPage() {
   const { campaignId, characterId } = useParams<{ campaignId: string; characterId: string }>()
@@ -583,7 +590,8 @@ export function CharacterDetailPage() {
   const { user: currentUser } = useAuthStore()
   const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
   const [form, setForm] = useState<Character | null>(null)
-  const [tab, setTab] = useState<Tab>('caracteristicas')
+  // A link may ask for the «Artes metálicas» tab (`location.state.tab`); if the character has no such tab (`tabActiva`, below) the sheet opens the first one
+  const [tab, setTab] = useState<Tab>(() => ((location.state as { tab?: string } | null)?.tab === TAB_ARTES.id ? TAB_ARTES.id : 'caracteristicas'))
   const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'metal' | 'bendicion' | null>(null)
   const [enCombate, setEnCombate] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
@@ -708,6 +716,27 @@ export function CharacterDetailPage() {
   })
   const caminoOcupado = aplicarCaminoMetal.isPending || quitarCaminoMetal.isPending
 
+  // «Añadir poder» (T30, the director): a power the character gets as a reward (spike, lerasium alloy, medallion). One PUT with the whole character
+  // plus the new power and, if it brings an Investida skill the sheet lacks, its slot (`planAnadirPoder`, §7.4 step 3); optimistic by prefix like the
+  // ones above, from the copy out of combat. The table state of the powers that already exist is kept by the server (§5.1)
+  const anadirPoder = useMutation({
+    mutationFn: async (poder: PoderPersonaje) => {
+      const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? char
+      if (!base) throw new Error('The character is not loaded')
+      const { planAnadirPoder } = await import('../../components/mistborn')
+      const plan = planAnadirPoder(base, poder, entornoCamino)
+      if (plan.faltan.length > 0) throw new Error(`No free cognitive slot for ${plan.faltan.join(', ')}`)
+      optimista(plan.cambio)
+      return charactersApi.update(cId, chId, { ...base, ...plan.cambio } as UpdateCharacterRequest)
+    },
+    onMutate: instantanea,
+    onError: (_error, _poder, ctx) => restaurar(ctx),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: prefijoFicha })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+
   // Table state of the world (Investidura actual, §5.2): PATCH …/recursos and the scene action. Optimistic by prefix like the mutations above,
   // but built for a counter that gets tapped fast: the change is written into every cached copy at the call (`mesa`, synchronously), the
   // requests go out one after the other in the order they were tapped (`colaMesa`), and only the LAST one to settle refetches, so a slow
@@ -752,6 +781,15 @@ export function CharacterDetailPage() {
 
   const isOwner = char.ownerId === currentUser?.id
   const canEdit = isGm || isOwner
+
+  // «Artes metálicas» (T30): whoever has a path or powers sees the tab, and the director always does, because «Añadir poder» lives there and a
+  // character with neither (a human who gets a spike) would have no way to receive it. If the tab goes away under the user (the powers were
+  // removed from another device) the sheet falls back to the first tab
+  const hayArtes = cfg.features.artesMetalicas && (isGm || char.poderes.length > 0 || !!char.caminoMetal)
+  const tabs = hayArtes ? [...TABS.slice(0, 2), TAB_ARTES, ...TABS.slice(2)] : TABS
+  const tabActiva: Tab = tabs.some((t) => t.id === tab) ? tab : 'caracteristicas'
+  // The latest copy of the character in the cache, which already holds the steps tapped before (what the counters of the powers are counted from)
+  const vivo = () => qc.getQueryData<Character>(['character', cId, chId, enCombate]) ?? char
 
   const f = (editing && form ? form : char) as Character
 
@@ -928,8 +966,8 @@ export function CharacterDetailPage() {
       {/* ── Tab bar ───────────────────────────────────── */}
       <div className="sticky-under-topbar glass" style={{ padding: '10px 16px', borderBottom: `1px solid ${c.border}` }}>
         <Tabs<Tab>
-          tabs={TABS}
-          value={tab}
+          tabs={tabs}
+          value={tabActiva}
           onChange={setTab}
           ariaLabel="Secciones de la ficha"
           idPrefix={TAB_PREFIX}
@@ -942,7 +980,7 @@ export function CharacterDetailPage() {
       <div style={{ padding: '20px 16px 48px' }}>
 
         {/* CARACTERÍSTICAS TAB */}
-        {tab === 'caracteristicas' && (
+        {tabActiva === 'caracteristicas' && (
           <TabPanel idPrefix={TAB_PREFIX} id="caracteristicas" style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
 
             {/* Combat toggle + Forma toggle */}
@@ -1260,7 +1298,7 @@ export function CharacterDetailPage() {
         )}
 
         {/* ATRIBUTOS TAB */}
-        {tab === 'atributos' && (
+        {tabActiva === 'atributos' && (
           <TabPanel idPrefix={TAB_PREFIX} id="atributos" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* ── Warning: puntos de atributo ──────────────────────────── */}
@@ -1561,8 +1599,29 @@ export function CharacterDetailPage() {
           </TabPanel>
         )}
 
+        {/* ARTES METÁLICAS TAB (worlds with metallic arts): lazy, rendered only while the tab is open */}
+        {tabActiva === 'artesMetalicas' && (
+          <TabPanel idPrefix={TAB_PREFIX} id="artesMetalicas" style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+            <Suspense fallback={<Spinner />}>
+              <ArtesMetalicasTab
+                character={char}
+                isGm={isGm}
+                editing={editing}
+                puedeActuar={canEdit}
+                entorno={entornoCamino}
+                vivo={vivo}
+                onPatch={(cuerpo) => mesa({ tipo: 'recursos', cuerpo })}
+                onAnadirPoder={(poder) => anadirPoder.mutate(poder)}
+                errorMesa={mesaMutation.isError}
+                errorAnadir={anadirPoder.isError}
+                anadiendo={anadirPoder.isPending}
+              />
+            </Suspense>
+          </TabPanel>
+        )}
+
         {/* BACKGROUND TAB */}
-        {tab === 'background' && (
+        {tabActiva === 'background' && (
           <TabPanel idPrefix={TAB_PREFIX} id="background" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {!editing && (
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>

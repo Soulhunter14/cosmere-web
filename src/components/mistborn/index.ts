@@ -12,3 +12,10 @@ export type { MetalPickerProps } from './MetalPicker'
 // The «al elegir camino» flow (T28): pure functions that CharacterDetailPage loads with `await import()` inside its mutations
 export { planAplicarCaminoMetal, planQuitarCaminoMetal, enlazarMetas, metalesDelCamino, faltanHuecosCognitivos, idPoder } from './caminoMetalFlujo'
 export type { EntornoCaminoMetal, SeleccionCaminoMetal, MetaPendiente, PlanCaminoMetal } from './caminoMetalFlujo'
+// The «Artes metálicas» tab (T30): ArtesMetalicasTab is loaded lazily by the sheet; «Añadir poder» (the director grants a spike, an alloy or a medallion) runs `planAnadirPoder` in its mutation
+export { ArtesMetalicasTab } from './ArtesMetalicasTab'
+export type { ArtesMetalicasTabProps } from './ArtesMetalicasTab'
+export { PoderCard } from './PoderCard'
+export type { PoderCardProps } from './PoderCard'
+export { planAnadirPoder, faltaHuecoParaPoder } from './caminoMetalFlujo'
+export type { PlanAnadirPoder } from './caminoMetalFlujo'

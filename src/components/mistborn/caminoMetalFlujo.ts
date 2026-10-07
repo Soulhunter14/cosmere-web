@@ -267,3 +267,35 @@ export function faltanHuecosCognitivos(base: Character, caminoId: string, entorn
   quitar(b, base)
   return camino.habilidadesInvestidas.filter((h) => !asegurarHabilidad(b, h.nombre, h.grados, 0, entorno)).map((h) => h.nombre)
 }
+
+// «Añadir poder» (T30): the director gives a power that the character gets as a reward, with a spike, an alloy of lerasium or a medallion
+
+const HABILIDAD_DE_ARTE: Record<ArteMetal, HabilidadInvestidaNombre> = { alomancia: 'Alomancia', feruquimia: 'Feruquimia' }
+
+/** A spike or a lerasium alloy also gives the Investida skill of its art (L.290 / PDF 296; L.295 / PDF 301); a medallion gives none (L.293 / PDF 299) */
+const daHabilidad = (poder: Pick<PoderPersonaje, 'origen'>): boolean => poder.origen === 'clavo' || poder.origen === 'lerasium'
+
+export interface PlanAnadirPoder {
+  /** Character fields to write with the PUT: the whole list of powers and, if the power brings a skill that was missing, its slot */
+  cambio: Partial<Character>
+  /** The Investida skill that found no free cognitive slot: the plan must not be saved, the director frees one (Q4) */
+  faltan: string[]
+}
+
+/**
+ * The power added to the list, born complete and without a goal (`poder` comes ready from the picker, §5.3: the server normalises it anyway), and,
+ * for a spike or an alloy, the Investida skill of its art at 0 degrees in the first free cognitive slot when the character has none yet (§7.4
+ * step 3 with no degrees to give). A power the character already has does not change its skill.
+ */
+export function planAnadirPoder(base: Character, poder: PoderPersonaje, entorno: EntornoCaminoMetal): PlanAnadirPoder {
+  const b = borrador(base)
+  b.poderes = [...b.poderes, poder]
+  const faltan: string[] = []
+  if (daHabilidad(poder) && !asegurarHabilidad(b, HABILIDAD_DE_ARTE[poder.arte], 0, 0, entorno)) faltan.push(HABILIDAD_DE_ARTE[poder.arte])
+  return { cambio: b.cambio(), faltan }
+}
+
+/** The Investida skill of `arte` has neither its slot nor a free cognitive one: a spike or an alloy of that art cannot be added yet (Q4) */
+export function faltaHuecoParaPoder(base: Character, arte: ArteMetal, entorno: EntornoCaminoMetal): boolean {
+  return !asegurarHabilidad(borrador(base), HABILIDAD_DE_ARTE[arte], 0, 0, entorno)
+}

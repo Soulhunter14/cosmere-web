@@ -1,16 +1,17 @@
 /**
  * Encyclopedia topics of the Mistborn world (WorldConfig.enciclopedia), in the order of §7.8: Orígenes, Caminos Heroicos,
  * Caminos de nacido del metal, Artes metálicas, Combate, Aventuras and Catálogo. Their ids are the route segments of
- * `encyclopedia/<id>` (App.tsx), except 'catalog'. The emblems are Lucide glyphs [inferido → Q18: the book has no
- * iconography for ancestries or paths] and T46 replaces the provisional ones of the metallic arts; the shared Cosmere
+ * `encyclopedia/<id>` (App.tsx), except 'catalog'. The emblems of ancestries and paths are Lucide glyphs [inferido → Q18: the book has no
+ * iconography for them]; the one of the metallic arts shows the official glyphs of the book (MetalGlyph, T46); the shared Cosmere
  * topics keep the Stormlight wording and tone (P8). A .tsx apart from mistborn.ts because the emblems are JSX; it
  * exports only the list, and it travels in the main bundle, so it imports no data of the world beyond a type (§8, risk 6):
  * the tones of the metalborn paths are the tile's, not the data colours of the paths.
  */
-import { Anvil, Coins, Flame, Pin, Swords } from 'lucide-react'
+import { Coins, Swords } from 'lucide-react'
 import { BalancedRow, EmblemStrip, MiniTile } from '../components/EncyclopediaEmblems'
 import { AVENTURAS_EMBLEMS } from '../components/emblemData'
 import { HeroicPathIcon } from '../components/GameIcons'
+import { MetalGlyph } from '../components/mistborn/MetalGlyph'
 import { HEROIC_PATHS } from '../data/heroicPaths'
 import type { CaminoMetalId } from '../data/mistborn/metales'
 import { ink, tint, tone } from '../theme'
@@ -69,16 +70,16 @@ export const MISTBORN_TOPICS: TopicDef[] = [
     ),
   },
   {
-    // Chapter 6 (from L.161 / PDF 167): alomancia, feruquimia and hemalurgia. Provisional glyphs until T46 (`MetalGlyph`)
+    // Chapter 6 (from L.161 / PDF 167): alomancia, feruquimia and hemalurgia. The tile shows the glyph of steel in the alphabet of each of the two
+    // arts that have one (L.405 / PDF 411); hemalurgia has none (a spike is not a letter), so it is not in the emblem
     id: 'artes-metalicas',
     label: 'Artes metálicas',
     description: 'Alomancia, feruquimia y hemalurgia: los diecisiete metales, sus poderes y los talentos de cada uno.',
     tone: tone.amatista,
     emblem: (
       <EmblemStrip t={tone.amatista}>
-        <Flame size={24} />
-        <Anvil size={24} />
-        <Pin size={24} />
+        <MetalGlyph arte="alomancia" metal="acero" size={28} />
+        <MetalGlyph arte="feruquimia" metal="acero" size={28} />
       </EmblemStrip>
     ),
   },

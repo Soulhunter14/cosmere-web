@@ -7,10 +7,11 @@
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useParams, type LinkProps } from 'react-router-dom'
-import { Anvil, BookOpen, ChevronDown, Flame, Pin, TriangleAlert, X } from 'lucide-react'
+import { BookOpen, ChevronDown, Pin, TriangleAlert, X } from 'lucide-react'
 import type { Era } from '../../../types'
 import type { Talento } from '../../../data/potencias'
 import { getMetal, type ArteMetal, type MetalId } from '../../../data/mistborn/metales'
+import { MetalGlyph } from '../../../components/mistborn/MetalGlyph'
 import { TalentActivation } from '../../../components/TalentActivation'
 import { IconButton } from '../../../components/ui'
 import { useDialogA11y } from '../../../hooks/useDialogA11y'
@@ -203,11 +204,11 @@ export function EraNotice({ eras }: { eras: Era[] }) {
   )
 }
 
-// ── Glyph of a metal. PROVISIONAL until T46: the official glyphs (alomancia Era 1 / Era 2, feruquimia) come with T45 and T46 swaps the
-// body of this component for `MetalGlyph`. Until then, one Lucide icon per art tinted with the colour of the metal (a data colour: toneFrom) ──
+// ── Tile of a metal: its official glyph (MetalGlyph, T46) in the era of the campaign, tinted with the colour of the metal (a data colour:
+// toneFrom). `size` is the nominal size of the icon: the glyph is drawn a quarter bigger, because its artwork leaves a margin inside its square
+// box. Hemalurgy has no glyph (a spike is not a letter of either alphabet, L.405 / PDF 411): its tile keeps the Lucide spike ──
 export function GlifoMetal({ metal, arte, size = 22 }: { metal: MetalId; arte: ArteMetal | 'hemalurgia'; size?: number }) {
   const t = toneFrom(getMetal(metal).color)
-  const Icono = arte === 'alomancia' ? Flame : arte === 'feruquimia' ? Anvil : Pin
   const box = Math.round(size * 1.9)
   return (
     <span
@@ -218,7 +219,7 @@ export function GlifoMetal({ metal, arte, size = 22 }: { metal: MetalId; arte: A
         background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
       }}
     >
-      <Icono size={size} />
+      {arte === 'hemalurgia' ? <Pin size={size} /> : <MetalGlyph metal={metal} arte={arte} size={Math.round(size * 1.25)} />}
     </span>
   )
 }

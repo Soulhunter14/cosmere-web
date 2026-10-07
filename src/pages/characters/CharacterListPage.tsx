@@ -5,7 +5,7 @@ import { Plus, Trash2, ChevronRight, Users, UserCheck, UserX, UserCog, Check } f
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Avatar, Button, ConfirmDialog, EmptyState, Field, IconButton, Input, PageHeader, Sheet, Spinner } from '../../components/ui'
+import { Avatar, Button, ConfirmDialog, EmptyState, Field, IconButton, Input, PageHeader, Segmented, Sheet, Spinner } from '../../components/ui'
 import type { CampaignDetail, Member } from '../../types'
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
@@ -219,6 +219,8 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newOwnerId, setNewOwnerId] = useState<number | null>(null)
+  // Level 0 is the one of «El primer paso» (ARTO006): every attribute at 1, no path and no talents until level 1
+  const [newLevel, setNewLevel] = useState<0 | 1>(1)
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -231,13 +233,13 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
 
   const createMutation = useMutation({
     mutationFn: () => charactersApi.create(id, {
-      name: newName, playerName: '', level: 1,
+      name: newName, playerName: '', level: newLevel,
       ascendencia: '', caminoHeroico: '', caminoRadiante: '', caminoMetal: '', caminoInicial: '',
       ownerId: newOwnerId ?? undefined,
     }),
     onSuccess: (char) => {
       qc.invalidateQueries({ queryKey: ['characters', id] })
-      setCreating(false); setNewName(''); setNewOwnerId(null)
+      setCreating(false); setNewName(''); setNewOwnerId(null); setNewLevel(1)
       navigate(makeDetailPath ? makeDetailPath(char.id) : `/campaigns/${id}/characters/${char.id}`, { state: { editing: true } })
     },
   })
@@ -255,7 +257,7 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
 
   useEffect(() => { if (creating) setTimeout(() => inputRef.current?.focus(), 50) }, [creating])
 
-  const closeModal = () => { setCreating(false); setNewName(''); setNewOwnerId(null) }
+  const closeModal = () => { setCreating(false); setNewName(''); setNewOwnerId(null); setNewLevel(1) }
 
   if (isLoading) return <Spinner />
 
@@ -328,6 +330,21 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
               onKeyDown={(e) => e.key === 'Enter' && newName.trim() && createMutation.mutate()}
             />
           </Field>
+
+          <fieldset style={{ border: 'none', minWidth: 0 }}>
+            <legend style={{ ...eyebrow, padding: 0, marginBottom: 8 }}>Nivel inicial</legend>
+            <Segmented<0 | 1>
+              ariaLabel="Nivel inicial"
+              options={[{ value: 1, label: 'Nivel 1' }, { value: 0, label: 'Nivel 0 · El primer paso' }]}
+              value={newLevel}
+              onChange={setNewLevel}
+            />
+            <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 8, lineHeight: 1.45 }}>
+              {newLevel === 0
+                ? 'Empieza con los seis atributos en 1, sin habilidades, camino ni talentos. La aventura los define y al final pasa a nivel 1.'
+                : 'Creación normal: 12 puntos de atributo, camino inicial y talentos.'}
+            </p>
+          </fieldset>
 
           {players.length > 0 && (
             <fieldset style={{ border: 'none', minWidth: 0 }}>

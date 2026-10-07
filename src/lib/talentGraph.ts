@@ -1497,6 +1497,14 @@ export interface TalentBudget {
  * it, then one per milestone with what it accepts); otherwise the human / singer calendar, as it has always been (P1).
  */
 export function talentSlotsAt(level: number, ascendencia: string, startingPathId?: string | null, rules: TalentRules = STORMLIGHT_TALENTOS): TalentSlot[] {
+  // Level 0 («El primer paso», ARTO006): no path and no talents until level 1; only the talents an ancestry grants by itself keep a slot
+  if (level === 0) {
+    const arbol = arbolDeAscendencia(rules, ascendencia)
+    const quien = (ascendencia ?? '').trim().toLowerCase()
+    return (arbol?.autoGranted ?? []).map((t): TalentSlot => (
+      { level: 1, source: 'ascendencia', label: `Nivel 1 · ${quien}: ${t}`, accepts: ['ascendencia'], mandatory: false, orRank: false }
+    ))
+  }
   const L = Math.max(1, Math.floor(level || 1))
   const cantor = isCantorAncestry(ascendencia)
   const principalName = startingPathId

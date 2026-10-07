@@ -525,6 +525,10 @@ function getPuntosAtributoEsperados(level: number, base: number): number {
   return total
 }
 
+// Level 0 («El primer paso», ARTO006 PDF 5): attributes start at 1 and stay between 0 and 3; skills go up to 2 ranks
+const NIVEL0_TOPE_ATRIBUTO = 3
+const NIVEL0_TOPE_HABILIDAD = 2
+
 const ATTR_KEYS: AttrField[] = ['fuerza', 'velocidad', 'intelecto', 'voluntad', 'discernimiento', 'presencia']
 
 const ATTR_MAP: Record<string, string> = {
@@ -946,7 +950,7 @@ export function CharacterDetailPage() {
               </label>
               <HeroInput
                 id={levelId}
-                type="number" min={1} max={30}
+                type="number" min={0} max={30}
                 value={form?.level ?? 1}
                 onChange={set('level')}
                 style={{ width: 76, minHeight: 40, padding: '6px 10px', textAlign: 'center', ...numeral, fontSize: fs.md }}
@@ -955,10 +959,13 @@ export function CharacterDetailPage() {
           ) : (
             <span style={heroPill}>{`Nv. ${char.level}`}</span>
           )}
-          <span style={heroPill}>
-            <CosmereIcon name="ornamento-rombo" size={9} style={{ color: 'var(--gold-ornament)' }} />
-            {`Rango ${rangoDe(editing ? (form?.level ?? 1) : char.level)}`}
-          </span>
+          {/* Level 0 («El primer paso») has no rank yet: it starts at level 1 */}
+          {(editing ? (form?.level ?? 1) : char.level) > 0 && (
+            <span style={heroPill}>
+              <CosmereIcon name="ornamento-rombo" size={9} style={{ color: 'var(--gold-ornament)' }} />
+              {`Rango ${rangoDe(editing ? (form?.level ?? 1) : char.level)}`}
+            </span>
+          )}
         </div>
 
         <p style={{ fontSize: fs.sm + 1, color: HERO_SOFT, marginTop: 10, lineHeight: 1.4 }}>
@@ -1330,6 +1337,33 @@ export function CharacterDetailPage() {
 
             {/* ── Warning: puntos de atributo ──────────────────────────── */}
             {(() => {
+              // Level 0 («El primer paso», ARTO006 PDF 5 and 19): no allowance of points yet. Every attribute between 0 and 3 and at most
+              // 2 ranks per skill while the adventure hands them out; the level-1 checkpoint is the usual creation, warned below once Nv. 1
+              if ((f.level ?? 1) === 0) {
+                const atributosPasados = ATTR_KEYS.filter((k) => numField(f, k) > NIVEL0_TOPE_ATRIBUTO)
+                const habilidadesPasadas = [
+                  ...cfg.habilidades.map((h) => ({ label: h.label, valor: numField(f, h.field) })),
+                  ...[1, 2, 3, 4, 5, 6].map((n) => ({ label: strField(f, `habilidadPersonalizada${n}`) ?? '', valor: numField(f, `habilidadPersonalizada${n}Valor`) })),
+                ].filter((h) => h.label && h.valor > NIVEL0_TOPE_HABILIDAD)
+                const pasados = [
+                  ...atributosPasados.map((k) => `${ATTR_NAMES[k]} ${numField(f, k)}`),
+                  ...habilidadesPasadas.map((h) => `${h.label} ${h.valor}`),
+                ]
+                return (
+                  <>
+                    <AvisoAtributos t={tone.zafiro} icon={<Info size={18} />} title="Nivel 0 · El primer paso">
+                      {`Cada atributo entre 0 y ${NIVEL0_TOPE_ATRIBUTO} y hasta ${NIVEL0_TOPE_HABILIDAD} grados por habilidad, sin camino ni talentos. `
+                        + `Al pasar a nivel 1: ${ascActual?.puntosAtributoBase ?? 12} puntos de atributo, 5 grados de habilidad (uno en la habilidad `
+                        + 'inicial del camino) y 2 pericias culturales más una por punto de Intelecto.'}
+                    </AvisoAtributos>
+                    {pasados.length > 0 && (
+                      <AvisoAtributos t={tone.topacio} icon={<TriangleAlert size={18} />} title="Por encima del límite del nivel 0">
+                        {`Ahora superan el límite: ${pasados.join(', ')}.`}
+                      </AvisoAtributos>
+                    )}
+                  </>
+                )
+              }
               // Sum of raw attribute values (bonuses of any origin are not part of the allowance: the form's are temporary, the server's come as lines)
               const totalAttr = (f.fuerza ?? 0) + (f.velocidad ?? 0) + (f.intelecto ?? 0)
                 + (f.voluntad ?? 0) + (f.discernimiento ?? 0) + (f.presencia ?? 0)

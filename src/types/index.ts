@@ -403,6 +403,14 @@ export interface WeaponCatalog {
   isCustom: boolean
   description: string
   weight: number
+  /** World the item belongs to (a catalog is served by campaign, so it is the world of the campaign) */
+  world: WorldId
+  /** Era the item exists in (L.254-267 / PDF 260-273 label rows «ERA 1» / «ERA 2»); null = every era of its world */
+  era: 1 | 2 | null
+  /** Price in the money of the world (`WorldConfig.moneda`); null = it has none (every Stormlight weapon, Q13, and the rewards) */
+  price: number | null
+  /** Only obtained as a reward: the Bolsa pickers do not offer it */
+  isRewardOnly: boolean
 }
 
 export interface ArmorCatalog {
@@ -415,6 +423,10 @@ export interface ArmorCatalog {
   isCustom: boolean
   description: string
   weight: number
+  world: WorldId
+  era: 1 | 2 | null
+  price: number | null
+  isRewardOnly: boolean
 }
 
 export interface GearItem {
@@ -423,12 +435,19 @@ export interface GearItem {
   weight: number
   price: number
   description: string
+  world: WorldId
+  era: 1 | 2 | null
+  isRewardOnly: boolean
+  /** `'vial'` for the metal vials of Mistborn (reference of price only: the Bolsa picker does not offer them, Q21); null for the rest */
+  category: string | null
 }
 
 export interface CatalogOption {
   id: number
   name: string
   description: string
+  /** `'cosmere'` marks the options shared by every world (WorldIds.Cosmere); the others belong to one world */
+  world: WorldId | 'cosmere'
 }
 
 // Locked Days

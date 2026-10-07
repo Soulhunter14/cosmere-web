@@ -37,6 +37,7 @@ export const STORMLIGHT: WorldConfig = {
     bonosServidor: false, // T50 turns it on (Q22)
     equipoInicial: false,
     origenes: false,
+    catalogoDePrecios: false,
   },
   // The three legacy tables and the legacy grouping of the NPC page (see skills.ts): T50 points the three surfaces to
   // HABILIDADES_COSMERE and deletes them (the NPC page then groups its attributes as the book does)

@@ -103,6 +103,12 @@ export interface WorldConfig {
     equipoInicial: boolean
     /** Encyclopedia page «Orígenes» (ancestries, Bendiciones, cultures by era); WorldGate protects it (§7.2) */
     origenes: boolean
+    /**
+     * The catalog of the world is the book's full price list (Mistborn, L.254-267 / PDF 260-273): its weapons and armor carry a price and can be
+     * reward-only, so the forms of own items ask for both, and the item pickers of the Bolsa show prices with a search box and subcategory chips
+     * (T41). Stormlight keeps its plain catalog: its weapons and armor have no price (Q13) and its pickers do not change (P1)
+     */
+    catalogoDePrecios: boolean
   }
   /** The 18 standard skills of the character sheet */
   habilidades: HabilidadDef[]

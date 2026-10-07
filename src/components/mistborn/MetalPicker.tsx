@@ -25,7 +25,7 @@
  * the picker itself is loaded lazily from components/mistborn/index.ts (§7.4 rule 4).
  */
 import { useId, useState, type ReactNode } from 'react'
-import { Anvil, Check, Flame, RefreshCw, TriangleAlert } from 'lucide-react'
+import { Check, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button, ErrorMessage, Segmented, Sheet, Spinner } from '../ui'
 import type { Era, PoderPersonaje } from '../../types'
 import type { PoderDef } from '../../data/mistborn/tipos'
@@ -37,6 +37,7 @@ import { CAMINOS_NACIDOS_DEL_METAL, type SeleccionMeta } from '../../data/mistbo
 import { useWorldConfig, useWorldData } from '../../store/campaignStore'
 import { buttonReset, c, eyebrow, fs, pill, radius, tone, toneFrom } from '../../theme'
 import { FilaOpcion } from './FilaOpcion'
+import { MetalGlyph } from './MetalGlyph'
 import { NOMBRE_ORIGEN, type OrigenConcedido } from './poderes'
 
 export interface MetalPickerProps {
@@ -105,10 +106,13 @@ function subtitulo(m: MetalDef, arte: ArteMetal): string {
   return `${CATEGORIAS_ALOMANCIA[m.categoriaAlomancia]} · ${m.interno ? 'Interno' : 'Externo'} · ${m.empujon ? 'Empujón' : 'Tirón'}`
 }
 
-/** Provisional glyph of a metal: the Lucide icon of the art on the metal's tint. T46 replaces it with `MetalGlyph` (official glyphs, §7.8); PoderCard (T30) uses it too */
+/**
+ * Tile of a metal: its official glyph (`MetalGlyph`, T46) on the tint of the metal, in the era of the campaign. The name is the one T28 gave
+ * it while the glyphs were provisional; it stays because the components that came after import it (PoderCard, T30; T31, T33). `size` is the
+ * nominal size of the icon: the glyph is drawn a quarter bigger, because its artwork leaves a margin inside its square box.
+ */
 export function GlifoProvisional({ metal, arte, size = 18 }: { metal: MetalDef; arte: ArteMetal; size?: number }) {
   const t = toneFrom(metal.color)
-  const Icono = arte === 'alomancia' ? Flame : Anvil
   const caja = Math.round(size * 1.9)
   return (
     <span
@@ -119,7 +123,7 @@ export function GlifoProvisional({ metal, arte, size = 18 }: { metal: MetalDef; 
         background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
       }}
     >
-      <Icono size={size} />
+      <MetalGlyph metal={metal.id} arte={arte} size={Math.round(size * 1.25)} />
     </span>
   )
 }
@@ -306,13 +310,12 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
   // button, which dims when disabled (FilaOpcion)
   const filaAtium = (m: MetalDef) => {
     const { selected, disabled, nota } = estado(m)
-    const Icono = vista === 'alomancia' ? Flame : Anvil
     const notaId = `${resumenId}-atium`
     return (
       <div>
         <FilaOpcion
           titulo={m.nombre}
-          icono={<Icono size={20} />}
+          icono={<MetalGlyph metal={m.id} arte={vista} size={28} />}
           t={toneFrom(m.color)}
           selected={selected}
           disabled={disabled}

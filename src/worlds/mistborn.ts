@@ -18,7 +18,7 @@ export const MISTBORN: WorldConfig = {
   nombreCorto: 'Bruma',
   nombreDe: 'de Nacidos de la bruma',
   planeta: 'Scadrial',
-  emblema: 'cosmere-emblem', // provisional until T46 (then 'nacidos-bruma-emblem')
+  emblema: 'nacidos-bruma-emblem', // the emblem of the book (PDF 410), extracted by T45 into the eager glob of lib/cosmereAssets.ts
   // L.372 / PDF 378. Tones are [inferido → Q18]
   eras: [
     { id: 'era1', label: 'Era 1', tone: tone.cuarzo, aviso: 'Era 1: El Mundo de Ceniza. El libro advierte de un tono más sombrío.' },
@@ -110,7 +110,7 @@ export const MISTBORN: WorldConfig = {
   moneda: { simbolo: 'ar', nombre: 'Arquillas', imagen: 'dinero', decimales: 2 },
   // L.50 / PDF 56: carrying capacity and lifting capacity by Fuerza bracket
   tablas: { cargaKg: [25, 50, 125, 250, 1250, 2500], levantamientoKg: [50, 100, 250, 500, 2500, 5000] },
-  enciclopedia: MISTBORN_TOPICS, // the seven topics of §7.8 (T24a); the glyphs of the emblems are provisional Lucide until T46
+  enciclopedia: MISTBORN_TOPICS, // the seven topics of §7.8 (T24a)
   textos: {
     sinInvestidura: 'Solo disponible para alomantes',
     // The Stormlight sentence adapted to the Mistborn paths (§7.7 #4 gives only its opening)

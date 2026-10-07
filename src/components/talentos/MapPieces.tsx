@@ -4,8 +4,9 @@
  * Pure presentation: geometry comes from talentMap.ts.
  */
 import type { CSSProperties } from 'react'
-import { Anvil, Check, Flame, Plus, Target } from 'lucide-react'
+import { Check, Plus, Target } from 'lucide-react'
 import { CosmereIcon } from '../CosmereIcon'
+import { MetalGlyph } from '../mistborn/MetalGlyph'
 import type { ActivationType } from '../TalentActivation'
 import { c, fs } from '../../theme'
 import type { CellMark, EdgeDraw, EdgeStatus, JoinDraw } from './talentMap'
@@ -96,12 +97,14 @@ export function IdealGlyph({ size = 12 }: { size?: number }) {
 
 /**
  * Glyph of the metal of a power: the goal badge of a locked cell and the band of a power plate (§7.7 #4). `poderId` is `${arte}:${metal}`.
- * Provisional, as `GlifoProvisional` of MetalPicker: the Lucide icon of the art (Anvil for feruchemy, Flame for the rest). T46 replaces its
- * body with `MetalGlyph` (the official glyph of each metal), which takes the same `poderId`.
+ * The official glyph of the metal in the era of the campaign (`MetalGlyph`, T46: loaded lazily, so a campaign that never draws one never
+ * downloads the glyphs). A power without id, or without glyph, shows the Lucide icon of its art (Anvil for feruchemy, Flame for the rest).
+ * `size` is the nominal size of the Lucide icon it replaces: the glyph is drawn a fifth bigger, because most of its artwork is smaller
+ * than its square box and, at 11 to 13 px, a glyph of the same size would be too small to read.
  */
 export function MetalMark({ poderId, size = 12, style }: { poderId?: string | null; size?: number; style?: CSSProperties }) {
-  const Icon = poderId?.startsWith('feruquimia:') ? Anvil : Flame
-  return <Icon size={size} aria-hidden style={{ flexShrink: 0, pointerEvents: 'none', ...style }} />
+  const [arte, metal = ''] = (poderId ?? '').split(':')
+  return <MetalGlyph arte={arte === 'feruquimia' ? arte : 'alomancia'} metal={metal} size={Math.round(size * 1.2)} style={{ pointerEvents: 'none', ...style }} />
 }
 
 /** The state mark of a cell: symbol + word/number, never colour alone. */

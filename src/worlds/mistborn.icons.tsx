@@ -1,7 +1,7 @@
 /**
  * JSX helpers of the Mistborn world config (the .tsx twin of stormlight.icons.tsx).
- * Provisional Lucide icons (Q18): the book has no icons for ancestries or metalborn paths, so these stay unless an
- * official glyph can be extracted. The official metal glyphs and the emblem arrive with T45/T46.
+ * Lucide icons (Q18): the book has no icons for ancestries or metalborn paths (its only glyphs are the ones of the metals, drawn
+ * by components/mistborn/MetalGlyph, T46), so these stay: one per ancestry and one per path.
  */
 import type { ReactNode } from 'react'
 import { CloudFog, Container, Flame, Merge, Mountain, Package, UserRound, VenetianMask, type LucideIcon } from 'lucide-react'

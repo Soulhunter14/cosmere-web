@@ -1,7 +1,7 @@
-import { useState, useMemo, useId, useRef, useEffect, type CSSProperties, type KeyboardEvent } from 'react'
+import { useState, useMemo, useId, useRef, useEffect, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, MapPin, Clock, CalendarDays, CalendarCheck, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, MapPin, Clock, CalendarDays, Lock } from 'lucide-react'
 import { sessionsApi } from '../../api/sessions'
 import { proposalsApi } from '../../api/proposals'
 import { lockedDaysApi } from '../../api/lockedDays'
@@ -9,16 +9,20 @@ import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import {
   Input, Spinner, ConfirmDialog, Button, IconButton, Card, Badge, Field,
-  PageHeader, SectionTitle, EmptyState, Sheet,
+  PageHeader, SectionTitle, EmptyState, Sheet, ErrorMessage,
 } from '../../components/ui'
 import { c, eyebrow, font, fs, numeral, page, radius, tint, tone } from '../../theme'
-import type { Session, ProposalResponse, LockedDay } from '../../types'
+import type { Session, ProposalResponse, ProposalDateResponse, LockedDay } from '../../types'
 import {
   StatusBadge,
-  VoteBar,
+  ProposalDates,
   CreateProposalSheet,
   PromoteDialog,
+  dateSlotLabel,
+  slotPassed,
+  toProposedSlots,
 } from './ProposalsPage'
+import { calendarError } from './calendarErrors'
 import type { CreateForm, PromoteForm } from './ProposalsPage'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -64,6 +68,9 @@ const PLAYER_COLORS = [
   'var(--circon)', 'var(--zafiro)', 'var(--amatista)', 'var(--granate)',
 ]
 const PLAYER_COLOR_FALLBACK = 'var(--cuarzo)'
+
+/** Upcoming sessions shown before "Ver N más" */
+const UPCOMING_LIMIT = 5
 
 interface SessionCreateForm {
   title: string
@@ -111,6 +118,12 @@ const iconTile = (t: { fg: string; bg: string; border: string }, size = 36): CSS
 
 const rise = (i: number) => ({ '--i': i }) as CSSProperties
 
+/** Calendar mark for a day with pending proposal slots (hollow ring, unlike the filled session bars) */
+const proposalMark: CSSProperties = {
+  width: 8, height: 8, flexShrink: 0, borderRadius: '50%', boxSizing: 'border-box',
+  border: `2px solid ${c.brand}`,
+}
+
 /** Date/time pickers follow the active theme (index.css forces `color-scheme: dark` on them, which
  *  makes the native calendar/clock glyphs almost invisible on paper). color-scheme is inherited from :root. */
 const nativePickerScheme: CSSProperties = { colorScheme: 'inherit' }
@@ -121,16 +134,23 @@ function ProposalCalendarCard({
   proposal,
   isGm,
   onReject,
-  onPromote,
+  onPromoteDate,
+  onRejectDate,
   onVote,
   votePending,
+  onlyDay,
+  dayNote,
 }: {
   proposal: ProposalResponse
   isGm: boolean
   onReject: (p: ProposalResponse, trigger: HTMLElement) => void
-  onPromote: (p: ProposalResponse, trigger: HTMLElement) => void
+  onPromoteDate: (p: ProposalResponse, d: ProposalDateResponse, trigger: HTMLElement) => void
+  onRejectDate: (p: ProposalResponse, d: ProposalDateResponse, trigger: HTMLElement) => void
   onVote: (proposalId: number, dateId: number, canAttend: boolean) => void
   votePending: boolean
+  /** Selected-day view: only that day's slots, without the whole-proposal action */
+  onlyDay?: Date
+  dayNote?: (day: Date) => ReactNode
 }) {
   return (
     <Card as="article" padding={0}>
@@ -151,36 +171,29 @@ function ProposalCalendarCard({
         </p>
       )}
 
-      {/* Dates with votes */}
+      {/* Days and slots: each slot is voted, promoted and discarded on its own */}
       <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {proposal.dates.map((d, idx) => (
-          <div key={d.id}>
-            {idx > 0 && <div aria-hidden style={{ height: 1, background: c.border, marginBottom: 16 }} />}
-            <VoteBar
-              date={d}
-              isPending={votePending}
-              onVote={(dateId, canAttend) => onVote(proposal.id, dateId, canAttend)}
-            />
-          </div>
-        ))}
+        <ProposalDates
+          proposal={proposal}
+          isGm={isGm}
+          votePending={votePending}
+          onVote={onVote}
+          onPromoteDate={onPromoteDate}
+          onRejectDate={onRejectDate}
+          onlyDay={onlyDay}
+          dayNote={dayNote}
+        />
 
-        {/* GM actions (wrap onto two rows on narrow phones instead of overflowing the page) */}
-        {isGm && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 16, borderTop: `1px solid ${c.border}` }}>
-            <Button
-              onClick={(e) => onPromote(proposal, e.currentTarget)}
-              icon={<CalendarCheck size={16} aria-hidden />}
-              style={{ flex: 1 }}
-            >
-              Promover sesión
-            </Button>
+        {/* GM: close the whole proposal (discards the slots still pending) */}
+        {isGm && !onlyDay && (
+          <div style={{ paddingTop: 16, borderTop: `1px solid ${c.border}` }}>
             <Button
               variant="danger"
+              fullWidth
               onClick={(e) => onReject(proposal, e.currentTarget)}
               icon={<X size={16} aria-hidden />}
-              style={{ flex: 1 }}
             >
-              Rechazar
+              Cerrar propuesta
             </Button>
           </div>
         )}
@@ -215,7 +228,17 @@ export function SessionsPage() {
   // Proposal modals
   const [showCreateProposal, setShowCreateProposal] = useState(false)
   const [confirmReject, setConfirmReject] = useState<ProposalResponse | null>(null)
-  const [promoteTarget, setPromoteTarget] = useState<ProposalResponse | null>(null)
+  const [promoteTarget, setPromoteTarget] = useState<{ proposal: ProposalResponse; date: ProposalDateResponse } | null>(null)
+  const [rejectDateTarget, setRejectDateTarget] = useState<{ proposal: ProposalResponse; date: ProposalDateResponse } | null>(null)
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false)
+
+  /** Last failed action outside a sheet (vote, discard, lock…), shown as a dismissible alert */
+  const [actionError, setActionError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!actionError) return
+    const t = window.setTimeout(() => setActionError(null), 8000)
+    return () => window.clearTimeout(t)
+  }, [actionError])
 
   // Lock days state
   const [lockNote, setLockNote] = useState('')
@@ -245,7 +268,15 @@ export function SessionsPage() {
   const askDelete = (s: Session, trigger: HTMLElement) => { removalTrigger.current = trigger; setConfirmDelete(s) }
   const askUnlock = (l: LockedDay, trigger: HTMLElement) => { removalTrigger.current = trigger; setConfirmUnlock(l) }
   const askReject = (p: ProposalResponse, trigger: HTMLElement) => { removalTrigger.current = trigger; setConfirmReject(p) }
-  const askPromote = (p: ProposalResponse, trigger: HTMLElement) => { removalTrigger.current = trigger; setPromoteTarget(p) }
+  const askPromoteDate = (proposal: ProposalResponse, date: ProposalDateResponse, trigger: HTMLElement) => {
+    removalTrigger.current = trigger
+    promoteDateMutation.reset()
+    setPromoteTarget({ proposal, date })
+  }
+  const askRejectDate = (proposal: ProposalResponse, date: ProposalDateResponse, trigger: HTMLElement) => {
+    removalTrigger.current = trigger
+    setRejectDateTarget({ proposal, date })
+  }
 
   // Once the row has gone, focus would fall to <body>: move it to the control that took its place
   // (the next one in tab order, else the previous one). Does nothing if focus is already somewhere.
@@ -296,6 +327,20 @@ export function SessionsPage() {
     return map
   }, [lockedDays])
 
+  /** Pending slots still ahead, per local day ('yyyy-MM-dd'): marked in the calendar grid */
+  const proposalSlotsByDate = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const p of proposals) {
+      if (p.status !== 'Pending') continue
+      for (const d of p.dates) {
+        if (d.status !== 'Pending' || slotPassed(d)) continue
+        const key = toDateKey(new Date(d.proposedDate))
+        map.set(key, (map.get(key) ?? 0) + 1)
+      }
+    }
+    return map
+  }, [proposals])
+
   const playerMembers = currentCampaign?.members.filter((m) => m.role === 'player') ?? []
   const playerColor = (userId: number) => {
     const idx = playerMembers.findIndex((m) => m.userId === userId)
@@ -304,9 +349,18 @@ export function SessionsPage() {
 
   // ── Session mutations ─────────────────────────────────────────────────────
 
+  /** onError of the actions outside a sheet: refetch what may be stale and show the alert */
+  const failWith = (fallback: string, conflict?: string, refetch?: unknown[]) => (err: unknown) => {
+    if (refetch) qc.invalidateQueries({ queryKey: refetch })
+    setActionError(calendarError(err, fallback, conflict))
+  }
+  const clearError = () => setActionError(null)
+
+  const canCreateSession = form.title.trim().length > 0 && form.date.length > 0 && form.time.length > 0
+
   const createSessionMutation = useMutation({
     mutationFn: () => sessionsApi.create(cId, {
-      title: form.title,
+      title: form.title.trim(),
       date: new Date(`${form.date}T${form.time}:00`).toISOString(),
       location: form.location,
       notes: form.notes,
@@ -320,7 +374,9 @@ export function SessionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (sessionId: number) => sessionsApi.delete(cId, sessionId),
+    onMutate: clearError,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', cId] }),
+    onError: failWith('No se pudo eliminar la sesión.', undefined, ['sessions', cId]),
   })
 
   // ── Proposal mutations ────────────────────────────────────────────────────
@@ -330,9 +386,7 @@ export function SessionsPage() {
       proposalsApi.create(cId, {
         title: createForm.title,
         notes: createForm.notes,
-        proposedDates: createForm.dates.map((d, i) =>
-          new Date(`${d}T${createForm.times[i]}:00`).toISOString()
-        ),
+        proposedSlots: toProposedSlots(createForm),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['proposals', cId] })
@@ -342,36 +396,48 @@ export function SessionsPage() {
 
   const rejectMutation = useMutation({
     mutationFn: (proposalId: number) => proposalsApi.reject(cId, proposalId),
+    onMutate: clearError,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['proposals', cId] }),
+    onError: failWith('No se pudo cerrar la propuesta.', 'La propuesta ya estaba cerrada.', ['proposals', cId]),
   })
 
-  const promoteMutation = useMutation({
-    mutationFn: ({ proposalId, promoteForm }: { proposalId: number; promoteForm: PromoteForm }) =>
-      proposalsApi.promote(cId, proposalId, {
-        proposalDateId: promoteForm.proposalDateId!,
-        title: promoteForm.title,
-        location: promoteForm.location,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['proposals', cId] })
+  const replaceProposal = (updated: ProposalResponse) =>
+    qc.setQueryData<ProposalResponse[]>(['proposals', cId], (prev) =>
+      prev ? prev.map((p) => (p.id === updated.id ? updated : p)) : [updated]
+    )
+
+  const promoteDateMutation = useMutation({
+    mutationFn: ({ proposalId, dateId, promoteForm }: { proposalId: number; dateId: number; promoteForm: PromoteForm }) =>
+      proposalsApi.promoteDate(cId, proposalId, dateId, promoteForm),
+    onSuccess: (updated) => {
+      replaceProposal(updated)
       qc.invalidateQueries({ queryKey: ['sessions', cId] })
       setPromoteTarget(null)
     },
+    onError: () => qc.invalidateQueries({ queryKey: ['proposals', cId] }),
+  })
+
+  const rejectDateMutation = useMutation({
+    mutationFn: ({ proposalId, dateId }: { proposalId: number; dateId: number }) =>
+      proposalsApi.rejectDate(cId, proposalId, dateId),
+    onMutate: clearError,
+    onSuccess: replaceProposal,
+    onError: failWith('No se pudo descartar la franja.', 'Esta franja ya estaba resuelta.', ['proposals', cId]),
   })
 
   const voteMutation = useMutation({
     mutationFn: ({ proposalId, dateId, canAttend }: { proposalId: number; dateId: number; canAttend: boolean }) =>
       proposalsApi.castVote(cId, proposalId, dateId, { canAttend }),
-    onSuccess: (updated) => {
-      qc.setQueryData<ProposalResponse[]>(['proposals', cId], (prev) =>
-        prev ? prev.map((p) => (p.id === updated.id ? updated : p)) : [updated]
-      )
-    },
+    onMutate: clearError,
+    onSuccess: replaceProposal,
+    onError: failWith('No se pudo guardar tu voto.', 'Esta franja ya está cerrada.', ['proposals', cId]),
   })
 
   const addLockMutation = useMutation({
     mutationFn: ({ date, note }: { date: string; note: string }) =>
       lockedDaysApi.add(cId, { date, note }),
+    onMutate: clearError,
+    onError: failWith('No se pudo bloquear el día.', 'Ya tenías este día bloqueado.', ['locked-days', cId]),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['locked-days', cId] })
       setLockNote('')
@@ -381,7 +447,9 @@ export function SessionsPage() {
 
   const removeLockMutation = useMutation({
     mutationFn: (lockedDayId: number) => lockedDaysApi.remove(cId, lockedDayId),
+    onMutate: clearError,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['locked-days', cId] }),
+    onError: failWith('No se pudo desbloquear el día.', undefined, ['locked-days', cId]),
   })
 
   // ── Calendar logic ────────────────────────────────────────────────────────
@@ -419,10 +487,14 @@ export function SessionsPage() {
     const pad = (n: number) => String(n).padStart(2, '0')
     const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
     setForm((f) => ({ ...f, date: dateStr }))
+    createSessionMutation.reset()
     setShowCreate(true)
   }
 
   const pendingProposals = proposals.filter((p) => p.status === 'Pending')
+  const selectedDayProposals = selectedDay
+    ? pendingProposals.filter((p) => p.dates.some((d) => isSameDay(new Date(d.proposedDate), selectedDay)))
+    : []
 
   // Roving tabindex: one day of the grid is in the tab order; arrows move between days.
   const daysInMonth = lastDay.getDate()
@@ -449,6 +521,30 @@ export function SessionsPage() {
     dayRefs.current[next]?.focus()
   }
 
+  /** Under a proposed day: who has it blocked (GM sees every player; a player only their own lock) */
+  const proposalDayNote = (day: Date) => {
+    const locks = lockedByDate.get(toDateKey(day)) ?? []
+    const own = locks.some((l) => l.userId === currentUserId)
+    if (isGm ? locks.length === 0 : !own) return null
+    return (
+      <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 2, fontSize: fs.sm, lineHeight: 1.4, color: tone.rubi.fg }}>
+        <Lock size={13} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+        {isGm ? `Bloqueado por ${namesList.format(locks.map((l) => l.userDisplayName))}` : 'Tienes este día bloqueado'}
+      </p>
+    )
+  }
+
+  const proposalCardProps = {
+    isGm,
+    onReject: askReject,
+    onPromoteDate: askPromoteDate,
+    onRejectDate: askRejectDate,
+    onVote: (proposalId: number, dateId: number, canAttend: boolean) =>
+      voteMutation.mutate({ proposalId, dateId, canAttend }),
+    votePending: voteMutation.isPending,
+    dayNote: proposalDayNote,
+  }
+
   // Players who blocked a day in the visible month (GM legend: colour is never the only cue)
   const monthPrefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-`
   const monthLockers: { userId: number; name: string }[] = []
@@ -457,6 +553,7 @@ export function SessionsPage() {
       monthLockers.push({ userId: l.userId, name: l.userDisplayName })
     }
   }
+  const monthHasProposals = [...proposalSlotsByDate.keys()].some((k) => k.startsWith(monthPrefix))
 
   const ids = {
     month: `${uid}-month`,
@@ -617,9 +714,8 @@ export function SessionsPage() {
 
   // ── Bottom list data (when no day selected) ───────────────────────────────
 
-  const upcoming = sessions
-    .filter((s) => !isPast(new Date(s.date)))
-    .slice(0, 5)
+  const allUpcoming = sessions.filter((s) => !isPast(new Date(s.date)))
+  const upcoming = showAllUpcoming ? allUpcoming : allUpcoming.slice(0, UPCOMING_LIMIT)
   const pastSessions = sessions
     .filter((s) => isPast(new Date(s.date)))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -627,7 +723,7 @@ export function SessionsPage() {
   const upcomingLocks = lockedDays.filter((l) => !isPast(new Date(l.date + 'T00:00:00')))
 
   return (
-    <div ref={pageRef} style={page}>
+    <div ref={pageRef} style={{ ...page, paddingBottom: 88 }}>
 
       <PageHeader
         title="Calendario"
@@ -636,7 +732,12 @@ export function SessionsPage() {
             <Button icon={<Plus size={16} aria-hidden />} onClick={() => openCreate()} aria-label="Nueva sesión">
               Sesión
             </Button>
-            <Button variant="secondary" icon={<Plus size={16} aria-hidden />} onClick={() => setShowCreateProposal(true)} aria-label="Nueva propuesta">
+            <Button
+              variant="secondary"
+              icon={<Plus size={16} aria-hidden />}
+              onClick={() => { createProposalMutation.reset(); setShowCreateProposal(true) }}
+              aria-label="Nueva propuesta"
+            >
               Propuesta
             </Button>
           </>
@@ -702,10 +803,14 @@ export function SessionsPage() {
                   const isSelected = selectedDay ? isSameDay(day, selectedDay) : false
                   const dayLocks = lockedByDate.get(toDateKey(day)) ?? []
                   const ownLocked = !isGm && dayLocks.some((l) => l.userId === currentUserId)
+                  const pendingSlots = proposalSlotsByDate.get(toDateKey(day)) ?? 0
+                  // Up to 3 session marks; with more, 2 marks and "+N"
+                  const shownSessions = daySessions.length > 3 ? 2 : daySessions.length
 
                   const labelParts = [`${WEEKDAYS_LONG[i]} ${dayNum} de ${MONTHS[viewMonth].toLowerCase()}`]
                   if (isToday) labelParts.push('hoy')
                   if (daySessions.length > 0) labelParts.push(`${daySessions.length} ${daySessions.length === 1 ? 'sesión' : 'sesiones'}`)
+                  if (pendingSlots > 0) labelParts.push(`${pendingSlots} ${pendingSlots === 1 ? 'franja propuesta' : 'franjas propuestas'}`)
                   if (isGm && dayLocks.length > 0) labelParts.push(`bloqueado por ${namesList.format(dayLocks.map((l) => l.userDisplayName))}`)
                   if (ownLocked) labelParts.push('bloqueado')
 
@@ -725,8 +830,8 @@ export function SessionsPage() {
                         style={{
                           width: '100%',
                           height: 'clamp(60px, 9vw, 76px)',
-                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                          padding: '6px 2px',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                          padding: '4px 2px',
                           border: 'none',
                           borderRadius: 0,
                           cursor: 'pointer',
@@ -737,7 +842,7 @@ export function SessionsPage() {
                       >
                         <span
                           style={{
-                            width: 28, height: 28, flexShrink: 0, borderRadius: '50%',
+                            width: 26, height: 26, flexShrink: 0, borderRadius: '50%',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontFamily: font.ui, fontSize: fs.sm + 1, lineHeight: 1,
                             fontVariantNumeric: 'tabular-nums',
@@ -748,22 +853,28 @@ export function SessionsPage() {
                         >
                           {dayNum}
                         </span>
-                        <span aria-hidden style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, width: '100%' }}>
-                          {daySessions.slice(0, 2).map((s) => (
-                            <span
-                              key={s.id}
-                              style={{
-                                width: '70%', maxWidth: 44, height: 4, borderRadius: radius.full,
-                                background: isPast(new Date(s.date)) ? tint('var(--cuarzo)', 55) : c.brand,
-                              }}
-                            />
-                          ))}
-                          {daySessions.length > 2 && (
-                            <span style={{ fontSize: fs.xs, fontWeight: 650, lineHeight: 1, color: c.subtle }}>+{daySessions.length - 2}</span>
+                        {/* Marks: one row for sessions and proposals, one for locks; never taller than the cell */}
+                        <span aria-hidden style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, width: '100%', minHeight: 0, overflow: 'hidden' }}>
+                          {(daySessions.length > 0 || pendingSlots > 0) && (
+                            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, height: 8 }}>
+                              {daySessions.slice(0, shownSessions).map((s) => (
+                                <span
+                                  key={s.id}
+                                  style={{
+                                    width: 8, height: 4, borderRadius: radius.full, flexShrink: 0,
+                                    background: isPast(new Date(s.date)) ? tint('var(--cuarzo)', 55) : c.brand,
+                                  }}
+                                />
+                              ))}
+                              {daySessions.length > shownSessions && (
+                                <span style={{ fontSize: fs.eyebrow, fontWeight: 700, lineHeight: 1, color: c.subtle }}>+{daySessions.length - shownSessions}</span>
+                              )}
+                              {pendingSlots > 0 && <span style={proposalMark} />}
+                            </span>
                           )}
-                          {ownLocked && <Lock size={12} strokeWidth={2.4} style={{ color: tone.rubi.fg }} />}
+                          {ownLocked && <Lock size={11} strokeWidth={2.4} style={{ color: tone.rubi.fg, flexShrink: 0 }} />}
                           {isGm && dayLocks.length > 0 && (
-                            <span style={{ display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
+                            <span style={{ display: 'flex', justifyContent: 'center', gap: 3 }}>
                               {dayLocks.slice(0, 4).map((l) => (
                                 <span key={l.id} style={{ width: 6, height: 6, borderRadius: '50%', background: playerColor(l.userId) }} />
                               ))}
@@ -779,23 +890,33 @@ export function SessionsPage() {
           </tbody>
         </table>
 
-        {/* GM legend: which player each lock colour belongs to */}
-        {isGm && monthLockers.length > 0 && (
+        {/* Legend: proposal mark, and (GM) which player each lock colour belongs to */}
+        {(monthHasProposals || (isGm && monthLockers.length > 0)) && (
           <div
             style={{
-              display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 16px',
+              display: 'flex', flexDirection: 'column', gap: 10,
               padding: '12px 16px', borderTop: `1px solid ${c.border}`,
             }}
           >
-            <p style={eyebrow}>Días bloqueados</p>
-            <ul style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
-              {monthLockers.map((m) => (
-                <li key={m.userId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted }}>
-                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: playerColor(m.userId) }} />
-                  {m.name}
-                </li>
-              ))}
-            </ul>
+            {monthHasProposals && (
+              <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: fs.sm, color: c.muted }}>
+                <span aria-hidden style={proposalMark} />
+                Franjas propuestas pendientes
+              </p>
+            )}
+            {isGm && monthLockers.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 16px' }}>
+                <p style={eyebrow}>Días bloqueados</p>
+                <ul style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+                  {monthLockers.map((m) => (
+                    <li key={m.userId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted }}>
+                      <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: playerColor(m.userId) }} />
+                      {m.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -833,6 +954,17 @@ export function SessionsPage() {
               </ul>
             )}
 
+            {/* Open proposals with slots on this day */}
+            {selectedDayProposals.length > 0 && (
+              <ul style={listReset}>
+                {selectedDayProposals.map((p) => (
+                  <li key={p.id}>
+                    <ProposalCalendarCard proposal={p} onlyDay={selectedDay} {...proposalCardProps} />
+                  </li>
+                ))}
+              </ul>
+            )}
+
             {/* Lock section */}
             {renderLockSection(selectedDay)}
           </div>
@@ -850,16 +982,7 @@ export function SessionsPage() {
               <ul style={listReset}>
                 {pendingProposals.map((p, i) => (
                   <li key={p.id} className="rise" style={rise(i)}>
-                    <ProposalCalendarCard
-                      proposal={p}
-                      isGm={isGm}
-                      onReject={askReject}
-                      onPromote={askPromote}
-                      onVote={(proposalId, dateId, canAttend) =>
-                        voteMutation.mutate({ proposalId, dateId, canAttend })
-                      }
-                      votePending={voteMutation.isPending}
-                    />
+                    <ProposalCalendarCard proposal={p} {...proposalCardProps} />
                   </li>
                 ))}
               </ul>
@@ -914,11 +1037,22 @@ export function SessionsPage() {
               <SectionTitle id={ids.upcoming}>Próximas sesiones</SectionTitle>
               <ul style={listReset}>
                 {upcoming.map((s, i) => (
-                  <li key={s.id} className="rise" style={rise(i)}>
+                  <li key={s.id} className="rise" style={rise(Math.min(i, UPCOMING_LIMIT))}>
                     <SessionCard session={s} isGm={isGm} onDelete={(trigger) => askDelete(s, trigger)} />
                   </li>
                 ))}
               </ul>
+              {allUpcoming.length > UPCOMING_LIMIT && (
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  aria-expanded={showAllUpcoming}
+                  onClick={() => setShowAllUpcoming((v) => !v)}
+                  style={{ marginTop: 12 }}
+                >
+                  {showAllUpcoming ? 'Ver menos' : `Ver ${allUpcoming.length - UPCOMING_LIMIT} más`}
+                </Button>
+              )}
             </section>
           )}
 
@@ -953,14 +1087,32 @@ export function SessionsPage() {
         onCancel={() => setConfirmDelete(null)}
       />
 
-      {/* Reject proposal confirmation */}
+      {/* Close proposal confirmation */}
       <ConfirmDialog
         open={!!confirmReject}
-        title={`¿Rechazar "${confirmReject?.title}"?`}
-        message="La propuesta se cerrará y los jugadores no podrán votar más."
-        confirmLabel="Rechazar"
+        title={`¿Cerrar "${confirmReject?.title}"?`}
+        message="Las franjas que sigan pendientes se descartarán y los jugadores no podrán votar más."
+        confirmLabel="Cerrar propuesta"
         onConfirm={() => { if (confirmReject) { rememberRemoval(); rejectMutation.mutate(confirmReject.id) } setConfirmReject(null) }}
         onCancel={() => setConfirmReject(null)}
+      />
+
+      {/* Discard one slot confirmation */}
+      <ConfirmDialog
+        open={!!rejectDateTarget}
+        title="¿Descartar esta franja?"
+        message={rejectDateTarget
+          ? `${dateSlotLabel(rejectDateTarget.date)}. Los jugadores ya no podrán votarla.`
+          : undefined}
+        confirmLabel="Descartar"
+        onConfirm={() => {
+          if (rejectDateTarget) {
+            rememberRemoval()
+            rejectDateMutation.mutate({ proposalId: rejectDateTarget.proposal.id, dateId: rejectDateTarget.date.id })
+          }
+          setRejectDateTarget(null)
+        }}
+        onCancel={() => setRejectDateTarget(null)}
       />
 
       {/* Unlock day confirmation (GM or player) */}
@@ -990,12 +1142,16 @@ export function SessionsPage() {
       {/* Promote dialog */}
       {promoteTarget && (
         <PromoteDialog
-          proposal={promoteTarget}
-          isPending={promoteMutation.isPending}
+          proposal={promoteTarget.proposal}
+          date={promoteTarget.date}
+          isPending={promoteDateMutation.isPending}
+          error={promoteDateMutation.isError
+            ? calendarError(promoteDateMutation.error, 'No se pudo promover la franja.', 'Esta franja ya estaba resuelta. La propuesta se ha actualizado.')
+            : null}
           onCancel={() => setPromoteTarget(null)}
           onConfirm={(promoteForm) => {
             rememberRemoval()
-            promoteMutation.mutate({ proposalId: promoteTarget.id, promoteForm })
+            promoteDateMutation.mutate({ proposalId: promoteTarget.proposal.id, dateId: promoteTarget.date.id, promoteForm })
           }}
         />
       )}
@@ -1009,8 +1165,8 @@ export function SessionsPage() {
           <Button
             size="lg"
             fullWidth
-            onClick={() => createSessionMutation.mutate()}
-            disabled={!form.title || !form.date || createSessionMutation.isPending}
+            onClick={() => canCreateSession && createSessionMutation.mutate()}
+            disabled={!canCreateSession || createSessionMutation.isPending}
             loading={createSessionMutation.isPending}
           >
             {createSessionMutation.isPending ? 'Guardando...' : 'Crear sesión'}
@@ -1069,8 +1225,34 @@ export function SessionsPage() {
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             />
           </Field>
+
+          {createSessionMutation.isError && (
+            <ErrorMessage message={calendarError(createSessionMutation.error, 'No se pudo crear la sesión.')} />
+          )}
         </div>
       </Sheet>
+
+      {/* Failed action outside a sheet */}
+      {actionError && (
+        <div
+          role="alert"
+          className="above-bottomnav fade-in"
+          style={{
+            position: 'fixed', left: 16, right: 88, zIndex: 'var(--z-fab)',
+            display: 'flex', alignItems: 'center', gap: 8, maxWidth: 560,
+            padding: '6px 6px 6px 14px', borderRadius: radius.md,
+            // The gem tint is translucent: lay it over an opaque surface so the page never reads through
+            background: 'linear-gradient(var(--rubi-bg), var(--rubi-bg)), var(--surface-2)',
+            border: '1px solid var(--rubi-border)', color: 'var(--rubi)',
+            boxShadow: 'var(--shadow-2)',
+          }}
+        >
+          <p style={{ flex: 1, minWidth: 0, fontSize: fs.sm + 1, fontWeight: 550, lineHeight: 1.4 }}>{actionError}</p>
+          <IconButton label="Cerrar aviso" size={40} onClick={() => setActionError(null)}>
+            <X size={18} aria-hidden />
+          </IconButton>
+        </div>
+      )}
 
       {/* Create proposal sheet */}
       {showCreateProposal && (
@@ -1078,6 +1260,7 @@ export function SessionsPage() {
           onClose={() => setShowCreateProposal(false)}
           onSubmit={(createForm) => createProposalMutation.mutate(createForm)}
           isPending={createProposalMutation.isPending}
+          error={createProposalMutation.isError ? calendarError(createProposalMutation.error, 'No se pudo crear la propuesta.') : null}
         />
       )}
     </div>
@@ -1089,6 +1272,7 @@ export function SessionsPage() {
 function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: boolean; onDelete: (trigger: HTMLElement) => void }) {
   const date = new Date(session.date)
   const past = isPast(date)
+  const today = isSameDay(date, new Date())
 
   return (
     <Card as="article" padding={14} style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -1117,6 +1301,8 @@ function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: bool
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap', marginTop: 6 }}>
           {past ? (
             <Badge style={{ fontSize: fs.eyebrow, letterSpacing: '0.08em' }}>PASADA</Badge>
+          ) : today ? (
+            <Badge tone="brand" style={{ fontSize: fs.eyebrow, letterSpacing: '0.08em' }}>HOY</Badge>
           ) : (
             <Badge variant="success" style={{ fontSize: fs.eyebrow, letterSpacing: '0.08em' }}>PLANIFICADA</Badge>
           )}
@@ -1125,8 +1311,8 @@ function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: bool
             {date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
           </span>
           {session.location && (
-            <span style={metaText}>
-              <MapPin size={14} aria-hidden />
+            <span style={{ ...metaText, alignItems: 'flex-start', lineHeight: 1.35 }}>
+              <MapPin size={14} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
               {session.location}
             </span>
           )}

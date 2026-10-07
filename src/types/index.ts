@@ -351,10 +351,16 @@ export interface CreateSessionRequest {
 
 // Session Proposals
 export type ProposalStatus = 'Pending' | 'Promoted' | 'Rejected'
+/** Fixed slot of a proposed day (null = free time) */
+export type ProposalSlot = 'morning' | 'afternoon'
+export type ProposalDateStatus = 'Pending' | 'Accepted' | 'Rejected'
 
 export interface ProposalDateResponse {
   id: number
   proposedDate: string
+  slot: ProposalSlot | null
+  status: ProposalDateStatus
+  sessionId: number | null
   canCount: number
   cannotCount: number
   currentUserVote: boolean | null
@@ -372,10 +378,17 @@ export interface ProposalResponse {
   dates: ProposalDateResponse[]
 }
 
+export interface ProposedSlotRequest {
+  date: string
+  slot: ProposalSlot | null
+}
+
 export interface CreateProposalRequest {
   title: string
   notes: string
-  proposedDates: string[]
+  /** Plain dates without slot (older clients); ignored when `proposedSlots` is sent */
+  proposedDates?: string[]
+  proposedSlots?: ProposedSlotRequest[]
 }
 
 export interface CastVoteRequest {
@@ -384,6 +397,11 @@ export interface CastVoteRequest {
 
 export interface PromoteProposalRequest {
   proposalDateId: number
+  title: string
+  location: string
+}
+
+export interface PromoteDateRequest {
   title: string
   location: string
 }

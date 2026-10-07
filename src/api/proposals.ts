@@ -4,6 +4,7 @@ import type {
   CreateProposalRequest,
   CastVoteRequest,
   PromoteProposalRequest,
+  PromoteDateRequest,
 } from '../types'
 
 export const proposalsApi = {
@@ -21,6 +22,16 @@ export const proposalsApi = {
   reject: (campaignId: number, proposalId: number) =>
     client
       .post<ProposalResponse>(`/campaigns/${campaignId}/proposals/${proposalId}/reject`)
+      .then((r) => r.data),
+
+  promoteDate: (campaignId: number, proposalId: number, dateId: number, request: PromoteDateRequest) =>
+    client
+      .post<ProposalResponse>(`/campaigns/${campaignId}/proposals/${proposalId}/dates/${dateId}/promote`, request)
+      .then((r) => r.data),
+
+  rejectDate: (campaignId: number, proposalId: number, dateId: number) =>
+    client
+      .post<ProposalResponse>(`/campaigns/${campaignId}/proposals/${proposalId}/dates/${dateId}/reject`)
       .then((r) => r.data),
 
   castVote: (campaignId: number, proposalId: number, dateId: number, request: CastVoteRequest) =>

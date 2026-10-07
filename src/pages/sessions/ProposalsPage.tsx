@@ -1,14 +1,15 @@
-import { useId, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { useId, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarClock, Check, Plus, X } from 'lucide-react'
+import { CalendarCheck, CalendarClock, Check, Plus, X } from 'lucide-react'
 import { proposalsApi } from '../../api/proposals'
+import { calendarError } from './calendarErrors'
 import { useCampaignStore } from '../../store/campaignStore'
 import {
-  Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, PageHeader, SectionTitle, Sheet, Spinner,
+  Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, Field, IconButton, Input, PageHeader, SectionTitle, Segmented, Sheet, Spinner,
 } from '../../components/ui'
 import { c, eyebrow, font, fs, page, pill, radius, tone, type Tone } from '../../theme'
-import type { ProposalResponse, ProposalDateResponse } from '../../types'
+import type { ProposalResponse, ProposalDateResponse, ProposalSlot, ProposedSlotRequest } from '../../types'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 // (Public helpers kept here because other modules may import them; they are plain functions, not components.)
@@ -34,10 +35,47 @@ export function todayStr() {
 /** 'domingo, 11 de octubre' → 'Domingo, 11 de octubre' (display only) */
 const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
+/** Fixed slots of a proposed day: each one is voted, promoted or discarded on its own */
+const SLOTS: Record<ProposalSlot, { label: string; time: string }> = {
+  morning: { label: 'Mañana', time: '10:00' },
+  afternoon: { label: 'Tarde', time: '15:00' },
+}
+
+/** "Mañana · 10:00" for a slot, "18:00" for a free time */
+const slotLabel = (d: ProposalDateResponse) =>
+  d.slot ? `${SLOTS[d.slot].label} · ${formatTime(d.proposedDate)}` : formatTime(d.proposedDate)
+
+/** "Sábado, 18 de octubre · Mañana · 10:00" */
+// eslint-disable-next-line react-refresh/only-export-components
+export const dateSlotLabel = (d: ProposalDateResponse) => `${sentenceCase(formatDate(d.proposedDate))} · ${slotLabel(d)}`
+
+/** Proposal dates grouped by local day, in order */
+function groupByDay(dates: ProposalDateResponse[]) {
+  const days: { key: string; day: Date; label: string; dates: ProposalDateResponse[] }[] = []
+  for (const d of dates) {
+    const when = new Date(d.proposedDate)
+    const key = when.toDateString()
+    const day = days.find((x) => x.key === key)
+    if (day) day.dates.push(d)
+    else days.push({ key, day: when, label: sentenceCase(formatDate(d.proposedDate)), dates: [d] })
+  }
+  return days
+}
+
+/** The slot's start time has already gone by: it can no longer be voted or promoted */
+// eslint-disable-next-line react-refresh/only-export-components
+export const slotPassed = (d: ProposalDateResponse) => new Date(d.proposedDate).getTime() < Date.now()
+
 const STATUS: Record<string, { label: string; tone: Tone }> = {
   Pending: { label: 'Abierta', tone: tone.brand },
   Promoted: { label: 'Confirmada', tone: tone.esmeralda },
   Rejected: { label: 'Rechazada', tone: tone.rubi },
+}
+
+/** Status of one date or slot once the GM has resolved it */
+const DATE_STATUS: Record<string, { label: string; tone: Tone }> = {
+  Accepted: { label: 'Promovida', tone: tone.esmeralda },
+  Rejected: { label: 'Descartada', tone: tone.rubi },
 }
 
 /** Tinted gem-tone button (Promover = esmeralda). Local until Button gets a `success` variant. */
@@ -52,17 +90,21 @@ const cardList: CSSProperties = { listStyle: 'none', margin: 0, padding: 0, disp
 
 // ─── sub-components ─────────────────────────────────────────────────────────
 
-export function StatusBadge({ status }: { status: string }) {
-  const s = STATUS[status] ?? STATUS.Pending
+function ToneBadge({ label, t }: { label: string; t: Tone }) {
   return (
     <span style={{
-      ...pill(s.tone),
+      ...pill(t),
       fontFamily: font.ui, fontSize: fs.eyebrow, fontWeight: 700, letterSpacing: '0.08em',
       padding: '2px 8px', flexShrink: 0,
     }}>
-      {s.label.toUpperCase()}
+      {label.toUpperCase()}
     </span>
   )
+}
+
+export function StatusBadge({ status }: { status: string }) {
+  const s = STATUS[status] ?? STATUS.Pending
+  return <ToneBadge label={s.label} t={s.tone} />
 }
 
 /** Toggle button for a vote ("Puedo" / "No puedo"): aria-pressed + gem tone + icon when chosen */
@@ -95,35 +137,52 @@ function VoteButton({
   )
 }
 
-export function VoteBar({ date, isPending, onVote }: {
+/** One proposed date or slot (inside its day): votes, and the GM's actions while it is pending */
+function VoteBar({ date, dayLabel, isPending, onVote, actions }: {
   date: ProposalDateResponse
+  dayLabel: string
   isPending: boolean
   onVote: (dateId: number, canAttend: boolean) => void
+  actions?: ReactNode
 }) {
   const total = date.canCount + date.cannotCount
   const canPct = total > 0 ? (date.canCount / total) * 100 : 0
   const cannotPct = total > 0 ? (date.cannotCount / total) * 100 : 0
 
   const myVote = date.currentUserVote // null | true | false
-  const dateLabel = sentenceCase(formatDate(date.proposedDate))
+  const open = date.status === 'Pending'
+  const past = open && slotPassed(date)
+  const resolved = past ? { label: 'Pasada', tone: tone.cuarzo } : DATE_STATUS[date.status]
   const time = formatTime(date.proposedDate)
 
   return (
-    <div role="group" aria-label={`${dateLabel}, ${time}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Date label */}
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <p style={{ minWidth: 0 }}>
-          <span style={{ fontSize: fs.base, fontWeight: 650, color: c.text }}>
-            {dateLabel}
+    <div
+      role="group"
+      aria-label={`${dayLabel}, ${slotLabel(date)}${past ? ', pasada' : ''}`}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 10,
+        padding: 12, borderRadius: radius.md,
+        border: `1px solid ${c.border}`,
+        background: open && !past ? 'transparent' : c.s2,
+      }}
+    >
+      {/* Slot label */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <p style={{ minWidth: 0, display: 'inline-flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: fs.base, fontWeight: 650, color: open && !past ? c.text : c.muted }}>
+            {date.slot ? SLOTS[date.slot].label : time}
           </span>
-          <span style={{ fontSize: fs.sm, fontWeight: 550, color: c.muted, marginLeft: 8, fontVariantNumeric: 'tabular-nums' }}>
-            {time}
-          </span>
+          {date.slot && (
+            <span style={{ fontSize: fs.sm, fontWeight: 550, color: c.muted, fontVariantNumeric: 'tabular-nums' }}>
+              {time}
+            </span>
+          )}
         </p>
-        <span style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>
-          {date.canCount + date.cannotCount === 0
-            ? 'Sin votos'
-            : `${date.canCount} sí · ${date.cannotCount} no`}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>
+            {total === 0 ? 'Sin votos' : `${date.canCount} sí · ${date.cannotCount} no`}
+          </span>
+          {resolved && <ToneBadge label={resolved.label} t={resolved.tone} />}
         </span>
       </div>
 
@@ -135,27 +194,102 @@ export function VoteBar({ date, isPending, onVote }: {
         </div>
       )}
 
-      {/* Vote buttons */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <VoteButton
-          pressed={myVote === true}
-          t={tone.esmeralda}
-          icon={<Check size={16} aria-hidden />}
-          onClick={() => onVote(date.id, true)}
-          disabled={isPending}
-        >
-          Puedo
-        </VoteButton>
-        <VoteButton
-          pressed={myVote === false}
-          t={tone.rubi}
-          icon={<X size={16} aria-hidden />}
-          onClick={() => onVote(date.id, false)}
-          disabled={isPending}
-        >
-          No puedo
-        </VoteButton>
-      </div>
+      {/* Vote buttons (only while the slot is open and still ahead) */}
+      {open && !past && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <VoteButton
+            pressed={myVote === true}
+            t={tone.esmeralda}
+            icon={<Check size={16} aria-hidden />}
+            onClick={() => onVote(date.id, true)}
+            disabled={isPending}
+          >
+            Puedo
+          </VoteButton>
+          <VoteButton
+            pressed={myVote === false}
+            t={tone.rubi}
+            icon={<X size={16} aria-hidden />}
+            onClick={() => onVote(date.id, false)}
+            disabled={isPending}
+          >
+            No puedo
+          </VoteButton>
+        </div>
+      )}
+
+      {open && actions}
+    </div>
+  )
+}
+
+/** The proposal's dates grouped by day; the slots of a day are voted, promoted and discarded independently */
+export function ProposalDates({
+  proposal,
+  isGm,
+  votePending,
+  onVote,
+  onPromoteDate,
+  onRejectDate,
+  onlyDay,
+  dayNote,
+}: {
+  proposal: ProposalResponse
+  isGm: boolean
+  votePending: boolean
+  onVote: (proposalId: number, dateId: number, canAttend: boolean) => void
+  onPromoteDate: (p: ProposalResponse, d: ProposalDateResponse, trigger: HTMLElement) => void
+  onRejectDate: (p: ProposalResponse, d: ProposalDateResponse, trigger: HTMLElement) => void
+  /** Show only the slots of this local day (selected day in the calendar) */
+  onlyDay?: Date
+  /** Extra line under a day's heading (e.g. who has that day blocked) */
+  dayNote?: (day: Date) => ReactNode
+}) {
+  const isPending = proposal.status === 'Pending'
+  const days = groupByDay(proposal.dates).filter((d) => !onlyDay || d.key === onlyDay.toDateString())
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {days.map((day) => (
+        <div key={day.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <p style={{ fontSize: fs.base, fontWeight: 650, color: c.text }}>{day.label}</p>
+            {dayNote?.(day.day)}
+          </div>
+          {day.dates.map((d) => (
+            <VoteBar
+              key={d.id}
+              date={d}
+              dayLabel={day.label}
+              isPending={votePending || !isPending}
+              onVote={(dateId, canAttend) => onVote(proposal.id, dateId, canAttend)}
+              actions={isGm && isPending ? (
+                <div style={{ display: 'grid', gridTemplateColumns: slotPassed(d) ? '1fr' : '1fr 1fr', gap: 8 }}>
+                  {!slotPassed(d) && (
+                    <button
+                      type="button"
+                      className="ui-btn"
+                      aria-label={`Promover ${dateSlotLabel(d)}`}
+                      onClick={(e) => onPromoteDate(proposal, d, e.currentTarget)}
+                      style={toneButton(tone.esmeralda)}
+                    >
+                      <CalendarCheck size={16} aria-hidden />
+                      Promover
+                    </button>
+                  )}
+                  <Button
+                    variant="danger"
+                    aria-label={`Descartar ${dateSlotLabel(d)}`}
+                    onClick={(e) => onRejectDate(proposal, d, e.currentTarget)}
+                  >
+                    Descartar
+                  </Button>
+                </div>
+              ) : undefined}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }
@@ -164,14 +298,16 @@ function ProposalCard({
   proposal,
   isGm,
   onReject,
-  onPromote,
+  onPromoteDate,
+  onRejectDate,
   onVote,
   votePending,
 }: {
   proposal: ProposalResponse
   isGm: boolean
   onReject: (p: ProposalResponse) => void
-  onPromote: (p: ProposalResponse) => void
+  onPromoteDate: (p: ProposalResponse, d: ProposalDateResponse, trigger: HTMLElement) => void
+  onRejectDate: (p: ProposalResponse, d: ProposalDateResponse, trigger: HTMLElement) => void
   onVote: (proposalId: number, dateId: number, canAttend: boolean) => void
   votePending: boolean
 }) {
@@ -200,27 +336,20 @@ function ProposalCard({
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {proposal.dates.map((d, idx) => (
-          <div key={d.id}>
-            {idx > 0 && <div aria-hidden style={{ height: 1, background: c.border, marginBottom: 16 }} />}
-            <VoteBar
-              date={d}
-              isPending={votePending || !isPending}
-              onVote={(dateId, canAttend) => onVote(proposal.id, dateId, canAttend)}
-            />
-          </div>
-        ))}
+        <ProposalDates
+          proposal={proposal}
+          isGm={isGm}
+          votePending={votePending}
+          onVote={onVote}
+          onPromoteDate={onPromoteDate}
+          onRejectDate={onRejectDate}
+        />
 
-        {/* GM actions */}
+        {/* GM: close the whole proposal (discards the slots still pending) */}
         {isGm && isPending && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
-            <button type="button" className="ui-btn" onClick={() => onPromote(proposal)} style={toneButton(tone.esmeralda)}>
-              Promover sesión
-            </button>
-            <Button variant="danger" onClick={() => onReject(proposal)}>
-              Rechazar
-            </Button>
-          </div>
+          <Button variant="danger" onClick={() => onReject(proposal)}>
+            Cerrar propuesta
+          </Button>
         )}
       </div>
     </Disclosure>
@@ -230,67 +359,34 @@ function ProposalCard({
 // ─── promote dialog ──────────────────────────────────────────────────────────
 
 export interface PromoteForm {
-  proposalDateId: number | null
   title: string
   location: string
 }
 
+/** Promotes one date or slot to a session; the other slots of the proposal stay as they are */
 export function PromoteDialog({
   proposal,
+  date,
   onConfirm,
   onCancel,
   isPending,
+  error,
 }: {
   proposal: ProposalResponse
+  date: ProposalDateResponse
   onConfirm: (form: PromoteForm) => void
   onCancel: () => void
   isPending: boolean
+  error?: string | null
 }) {
-  const [form, setForm] = useState<PromoteForm>({
-    proposalDateId: null,
-    title: proposal.title,
-    location: '',
-  })
-  const groupLabelId = useId()
-  const radios = useRef<(HTMLButtonElement | null)[]>([])
-
-  const canSubmit = form.proposalDateId !== null && form.title.trim().length > 0
-
-  const selectedIdx = proposal.dates.findIndex((d) => d.id === form.proposalDateId)
-  const tabStop = selectedIdx >= 0 ? selectedIdx : 0
-  const choose = (i: number) => setForm((f) => ({ ...f, proposalDateId: proposal.dates[i].id }))
-  const onRadioKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
-    if (e.key === 'Tab') {
-      // The radios are the first tab stop of the sheet. The shared focus trap counts the roving
-      // tabindex=-1 radios as focusable, so Shift+Tab from a later selected radio would leave the modal:
-      // wrap to the last control here instead.
-      if (!e.shiftKey || e.defaultPrevented) return
-      const dialog = e.currentTarget.closest<HTMLElement>('[role="dialog"]')
-      if (!dialog) return
-      const tabbables = Array.from(dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]'))
-        .filter((el) => el.tabIndex >= 0 && !el.matches(':disabled') && el.offsetParent !== null)
-      if (tabbables[0] !== e.currentTarget) return
-      e.preventDefault()
-      tabbables[tabbables.length - 1]?.focus()
-      return
-    }
-    const count = proposal.dates.length
-    let next = -1
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (i + 1) % count
-    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (i - 1 + count) % count
-    else if (e.key === 'Home') next = 0
-    else if (e.key === 'End') next = count - 1
-    if (next < 0) return
-    e.preventDefault()
-    choose(next)
-    radios.current[next]?.focus()
-  }
+  const [form, setForm] = useState<PromoteForm>({ title: proposal.title, location: '' })
+  const canSubmit = form.title.trim().length > 0
 
   return (
     <Sheet
       open
       onClose={onCancel}
-      title="Promover propuesta"
+      title="Promover a sesión"
       footer={
         <>
           <Button variant="secondary" size="lg" onClick={onCancel} style={{ flex: 1 }}>
@@ -309,63 +405,24 @@ export function PromoteDialog({
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {/* Date selection */}
-        <div>
-          <p id={groupLabelId} style={{ ...eyebrow, marginBottom: 8 }}>
-            Selecciona la fecha confirmada
+        {/* Chosen date / slot */}
+        <div
+          style={{
+            padding: '10px 14px', borderRadius: radius.md,
+            border: '1px solid var(--brand-border)', background: 'var(--brand-bg)',
+          }}
+        >
+          <p style={{ ...eyebrow, marginBottom: 4 }}>Fecha confirmada</p>
+          <p style={{ fontSize: fs.base, fontWeight: 650, color: c.text }}>{sentenceCase(formatDate(date.proposedDate))}</p>
+          <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+            {slotLabel(date)} · {date.canCount} pueden, {date.cannotCount} no pueden
           </p>
-          <div role="radiogroup" aria-labelledby={groupLabelId} aria-required="true" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {proposal.dates.map((d, i) => {
-              const selected = form.proposalDateId === d.id
-              return (
-                <button
-                  key={d.id}
-                  ref={(el) => { radios.current[i] = el }}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  tabIndex={i === tabStop ? 0 : -1}
-                  onClick={() => choose(i)}
-                  onKeyDown={(e) => onRadioKey(e, i)}
-                  className={selected ? 'ui-btn' : 'ui-btn ui-btn--secondary'}
-                  style={{
-                    width: '100%', minHeight: 60, padding: '10px 14px', borderRadius: radius.md, cursor: 'pointer',
-                    textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
-                    border: `1px solid ${selected ? c.brand : c.borderBright}`,
-                    boxShadow: selected ? `inset 0 0 0 1px ${c.brand}` : 'none',
-                    background: selected ? 'var(--brand-bg)' : c.s2,
-                    color: c.text,
-                  }}
-                >
-                  <span
-                    aria-hidden
-                    style={{
-                      width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      border: `2px solid ${selected ? c.brand : c.borderStrong}`,
-                      background: c.s1,
-                      transition: 'border-color var(--dur-1)',
-                    }}
-                  >
-                    {selected && <span style={{ width: 10, height: 10, borderRadius: '50%', background: c.brand }} />}
-                  </span>
-                  <span style={{ display: 'block', minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: fs.base, fontWeight: 650, color: c.text }}>
-                      {sentenceCase(formatDate(d.proposedDate))}
-                    </span>
-                    <span style={{ display: 'block', fontSize: fs.sm, color: c.muted, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-                      {formatTime(d.proposedDate)} · {d.canCount} pueden, {d.cannotCount} no pueden
-                    </span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
         </div>
 
         {/* Title */}
         <Field label="Título de la sesión">
           <Input
+            data-autofocus
             placeholder="Nombre de la sesión..."
             value={form.title}
             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -380,6 +437,8 @@ export function PromoteDialog({
             onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
           />
         </Field>
+
+        {error && <ErrorMessage message={error} />}
       </div>
     </Sheet>
   )
@@ -387,47 +446,68 @@ export function PromoteDialog({
 
 // ─── create proposal sheet ───────────────────────────────────────────────────
 
+/** What is proposed for a day: both slots, one of them, or a free time */
+type DayMode = 'both' | ProposalSlot | 'custom'
+
+export interface ProposalDayForm {
+  date: string
+  mode: DayMode
+  time: string
+}
+
 export interface CreateForm {
   title: string
   notes: string
-  dates: string[]
-  times: string[]
+  days: ProposalDayForm[]
 }
+
+const DAY_MODES: { value: DayMode; label: string; ariaLabel?: string }[] = [
+  { value: 'both', label: 'Ambas', ariaLabel: 'Mañana y tarde' },
+  { value: 'morning', label: 'Mañana' },
+  { value: 'afternoon', label: 'Tarde' },
+  { value: 'custom', label: 'Otra hora' },
+]
+
+const modeSlots = (mode: DayMode): ProposalSlot[] =>
+  mode === 'both' ? ['morning', 'afternoon'] : mode === 'custom' ? [] : [mode]
+
+/** One proposed date per slot of each day (or one with a free time) */
+// eslint-disable-next-line react-refresh/only-export-components
+export function toProposedSlots(form: CreateForm): ProposedSlotRequest[] {
+  const iso = (date: string, time: string) => new Date(`${date}T${time}:00`).toISOString()
+  return form.days.flatMap((day): ProposedSlotRequest[] =>
+    day.mode === 'custom'
+      ? [{ date: iso(day.date, day.time), slot: null }]
+      : modeSlots(day.mode).map((slot) => ({ date: iso(day.date, SLOTS[slot].time), slot })),
+  )
+}
+
+const modeHint = (mode: DayMode) =>
+  mode === 'custom'
+    ? null
+    : modeSlots(mode).map((s) => `${SLOTS[s].label.toLowerCase()} a las ${SLOTS[s].time}`).join(' y ')
 
 export function CreateProposalSheet({
   onClose,
   onSubmit,
   isPending,
+  error,
 }: {
   onClose: () => void
   onSubmit: (form: CreateForm) => void
   isPending: boolean
+  error?: string | null
 }) {
-  const [form, setForm] = useState<CreateForm>({
-    title: '',
-    notes: '',
-    dates: [todayStr()],
-    times: ['18:00'],
-  })
+  const newDay = (): ProposalDayForm => ({ date: todayStr(), mode: 'both', time: '18:00' })
+  const [form, setForm] = useState<CreateForm>({ title: '', notes: '', days: [newDay()] })
 
-  const addDate = () =>
-    setForm((f) => ({ ...f, dates: [...f.dates, todayStr()], times: [...f.times, '18:00'] }))
+  const addDay = () => setForm((f) => ({ ...f, days: [...f.days, newDay()] }))
+  const removeDay = (idx: number) => setForm((f) => ({ ...f, days: f.days.filter((_, i) => i !== idx) }))
+  const setDay = (idx: number, patch: Partial<ProposalDayForm>) =>
+    setForm((f) => ({ ...f, days: f.days.map((d, i) => (i === idx ? { ...d, ...patch } : d)) }))
 
-  const removeDate = (idx: number) =>
-    setForm((f) => ({
-      ...f,
-      dates: f.dates.filter((_, i) => i !== idx),
-      times: f.times.filter((_, i) => i !== idx),
-    }))
-
-  const setDate = (idx: number, val: string) =>
-    setForm((f) => { const d = [...f.dates]; d[idx] = val; return { ...f, dates: d } })
-
-  const setTime = (idx: number, val: string) =>
-    setForm((f) => { const t = [...f.times]; t[idx] = val; return { ...f, times: t } })
-
-  const canSubmit = form.title.trim().length > 0 && form.dates.every((d) => d.length > 0)
-  const removable = form.dates.length > 1
+  const canSubmit = form.title.trim().length > 0 && form.days.every((d) => d.date.length > 0 && d.time.length > 0)
+  const removable = form.days.length > 1
 
   return (
     <Sheet
@@ -470,47 +550,63 @@ export function CreateProposalSheet({
           />
         </Field>
 
-        {/* Proposed dates */}
+        {/* Proposed days, each with its slots */}
         <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
           <legend style={{ ...eyebrow, padding: 0, marginBottom: 8 }}>
-            Fechas propuestas
+            Días propuestos
           </legend>
           <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {form.dates.map((d, idx) => (
-              <li
-                key={idx}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: removable ? 'minmax(0, 1.7fr) minmax(0, 1fr) 44px' : 'minmax(0, 1.7fr) minmax(0, 1fr)',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <Input
-                  type="date"
-                  aria-label={`Fecha ${idx + 1}`}
-                  value={d}
-                  onChange={(e) => setDate(idx, e.target.value)}
-                  style={{ colorScheme: 'inherit', fontVariantNumeric: 'tabular-nums' }}
-                />
-                <Input
-                  type="time"
-                  aria-label={`Hora ${idx + 1}`}
-                  value={form.times[idx]}
-                  onChange={(e) => setTime(idx, e.target.value)}
-                  style={{ colorScheme: 'inherit', fontVariantNumeric: 'tabular-nums' }}
-                />
-                {removable && (
-                  <IconButton label={`Quitar fecha ${idx + 1}`} size={44} variant="danger" onClick={() => removeDate(idx)}>
-                    <X size={18} aria-hidden />
-                  </IconButton>
-                )}
-              </li>
-            ))}
+            {form.days.map((day, idx) => {
+              const hint = modeHint(day.mode)
+              return (
+                <li
+                  key={idx}
+                  style={{
+                    display: 'flex', flexDirection: 'column', gap: 8,
+                    padding: 10, borderRadius: radius.md, border: `1px solid ${c.border}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Input
+                      type="date"
+                      aria-label={`Día ${idx + 1}`}
+                      value={day.date}
+                      onChange={(e) => setDay(idx, { date: e.target.value })}
+                      style={{ flex: 1, minWidth: 0, colorScheme: 'inherit', fontVariantNumeric: 'tabular-nums' }}
+                    />
+                    {removable && (
+                      <IconButton label={`Quitar día ${idx + 1}`} size={44} variant="danger" onClick={() => removeDay(idx)}>
+                        <X size={18} aria-hidden />
+                      </IconButton>
+                    )}
+                  </div>
+                  <Segmented<DayMode>
+                    ariaLabel={`Franjas del día ${idx + 1}`}
+                    size="sm"
+                    options={DAY_MODES}
+                    value={day.mode}
+                    onChange={(mode) => setDay(idx, { mode })}
+                  />
+                  {day.mode === 'custom' ? (
+                    <Input
+                      type="time"
+                      aria-label={`Hora del día ${idx + 1}`}
+                      value={day.time}
+                      onChange={(e) => setDay(idx, { time: e.target.value })}
+                      style={{ colorScheme: 'inherit', fontVariantNumeric: 'tabular-nums' }}
+                    />
+                  ) : (
+                    <p style={{ fontSize: fs.xs, color: c.subtle }}>
+                      Se propone {hint}. Cada franja se vota y se promueve por separado.
+                    </p>
+                  )}
+                </li>
+              )
+            })}
           </ol>
           <button
             type="button"
-            onClick={addDate}
+            onClick={addDay}
             className="ui-btn ui-btn--ghost"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -519,9 +615,11 @@ export function CreateProposalSheet({
               color: c.brand, fontSize: fs.sm + 1, fontWeight: 650, cursor: 'pointer',
             }}
           >
-            <Plus size={16} aria-hidden /> Añadir fecha
+            <Plus size={16} aria-hidden /> Añadir día
           </button>
         </fieldset>
+
+        {error && <ErrorMessage message={error} />}
       </div>
     </Sheet>
   )
@@ -539,22 +637,22 @@ export function ProposalsPage() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [confirmReject, setConfirmReject] = useState<ProposalResponse | null>(null)
-  const [promoteTarget, setPromoteTarget] = useState<ProposalResponse | null>(null)
+  const [promoteTarget, setPromoteTarget] = useState<{ proposal: ProposalResponse; date: ProposalDateResponse } | null>(null)
+  const [rejectDateTarget, setRejectDateTarget] = useState<{ proposal: ProposalResponse; date: ProposalDateResponse } | null>(null)
 
   const { data: proposals = [], isLoading } = useQuery<ProposalResponse[]>({
     queryKey: ['proposals', cId],
     queryFn: () => proposalsApi.getAll(cId),
   })
 
+  const replaceProposal = (updated: ProposalResponse) =>
+    qc.setQueryData<ProposalResponse[]>(['proposals', cId], (prev) =>
+      prev ? prev.map((p) => (p.id === updated.id ? updated : p)) : [updated]
+    )
+
   const createMutation = useMutation({
     mutationFn: (form: CreateForm) =>
-      proposalsApi.create(cId, {
-        title: form.title,
-        notes: form.notes,
-        proposedDates: form.dates.map((d, i) =>
-          new Date(`${d}T${form.times[i]}:00`).toISOString()
-        ),
-      }),
+      proposalsApi.create(cId, { title: form.title, notes: form.notes, proposedSlots: toProposedSlots(form) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['proposals', cId] })
       setShowCreate(false)
@@ -566,28 +664,26 @@ export function ProposalsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['proposals', cId] }),
   })
 
-  const promoteMutation = useMutation({
-    mutationFn: ({ proposalId, form }: { proposalId: number; form: PromoteForm }) =>
-      proposalsApi.promote(cId, proposalId, {
-        proposalDateId: form.proposalDateId!,
-        title: form.title,
-        location: form.location,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['proposals', cId] })
+  const promoteDateMutation = useMutation({
+    mutationFn: ({ proposalId, dateId, form }: { proposalId: number; dateId: number; form: PromoteForm }) =>
+      proposalsApi.promoteDate(cId, proposalId, dateId, form),
+    onSuccess: (updated) => {
+      replaceProposal(updated)
       qc.invalidateQueries({ queryKey: ['sessions', cId] })
       setPromoteTarget(null)
     },
   })
 
+  const rejectDateMutation = useMutation({
+    mutationFn: ({ proposalId, dateId }: { proposalId: number; dateId: number }) =>
+      proposalsApi.rejectDate(cId, proposalId, dateId),
+    onSuccess: replaceProposal,
+  })
+
   const voteMutation = useMutation({
     mutationFn: ({ proposalId, dateId, canAttend }: { proposalId: number; dateId: number; canAttend: boolean }) =>
       proposalsApi.castVote(cId, proposalId, dateId, { canAttend }),
-    onSuccess: (updated) => {
-      qc.setQueryData<ProposalResponse[]>(['proposals', cId], (prev) =>
-        prev ? prev.map((p) => (p.id === updated.id ? updated : p)) : [updated]
-      )
-    },
+    onSuccess: replaceProposal,
   })
 
   const pending = proposals.filter((p) => p.status === 'Pending')
@@ -603,7 +699,8 @@ export function ProposalsPage() {
             proposal={p}
             isGm={isGm}
             onReject={setConfirmReject}
-            onPromote={setPromoteTarget}
+            onPromoteDate={(proposal, date) => { promoteDateMutation.reset(); setPromoteTarget({ proposal, date }) }}
+            onRejectDate={(proposal, date) => setRejectDateTarget({ proposal, date })}
             onVote={(proposalId, dateId, canAttend) =>
               voteMutation.mutate({ proposalId, dateId, canAttend })
             }
@@ -621,7 +718,7 @@ export function ProposalsPage() {
       <PageHeader
         title="Propuestas"
         actions={isGm && (
-          <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowCreate(true)}>
+          <Button icon={<Plus size={16} aria-hidden />} onClick={() => { createMutation.reset(); setShowCreate(true) }}>
             Nueva propuesta
           </Button>
         )}
@@ -654,12 +751,12 @@ export function ProposalsPage() {
         </div>
       )}
 
-      {/* Reject confirmation */}
+      {/* Close proposal confirmation */}
       <ConfirmDialog
         open={!!confirmReject}
-        title={`¿Rechazar "${confirmReject?.title}"?`}
-        message="La propuesta se cerrará y los jugadores no podrán votar más."
-        confirmLabel="Rechazar"
+        title={`¿Cerrar "${confirmReject?.title}"?`}
+        message="Las fechas que sigan pendientes se descartarán y los jugadores no podrán votar más."
+        confirmLabel="Cerrar propuesta"
         onConfirm={() => {
           if (confirmReject) rejectMutation.mutate(confirmReject.id)
           setConfirmReject(null)
@@ -667,14 +764,35 @@ export function ProposalsPage() {
         onCancel={() => setConfirmReject(null)}
       />
 
+      {/* Discard one date / slot confirmation */}
+      <ConfirmDialog
+        open={!!rejectDateTarget}
+        title="¿Descartar esta franja?"
+        message={rejectDateTarget
+          ? `${dateSlotLabel(rejectDateTarget.date)}. Los jugadores ya no podrán votarla.`
+          : undefined}
+        confirmLabel="Descartar"
+        onConfirm={() => {
+          if (rejectDateTarget) {
+            rejectDateMutation.mutate({ proposalId: rejectDateTarget.proposal.id, dateId: rejectDateTarget.date.id })
+          }
+          setRejectDateTarget(null)
+        }}
+        onCancel={() => setRejectDateTarget(null)}
+      />
+
       {/* Promote dialog */}
       {promoteTarget && (
         <PromoteDialog
-          proposal={promoteTarget}
-          isPending={promoteMutation.isPending}
+          proposal={promoteTarget.proposal}
+          date={promoteTarget.date}
+          isPending={promoteDateMutation.isPending}
+          error={promoteDateMutation.isError
+            ? calendarError(promoteDateMutation.error, 'No se pudo promover la franja.', 'Esta franja ya estaba resuelta.')
+            : null}
           onCancel={() => setPromoteTarget(null)}
           onConfirm={(form) =>
-            promoteMutation.mutate({ proposalId: promoteTarget.id, form })
+            promoteDateMutation.mutate({ proposalId: promoteTarget.proposal.id, dateId: promoteTarget.date.id, form })
           }
         />
       )}
@@ -685,6 +803,7 @@ export function ProposalsPage() {
           onClose={() => setShowCreate(false)}
           onSubmit={(form) => createMutation.mutate(form)}
           isPending={createMutation.isPending}
+          error={createMutation.isError ? calendarError(createMutation.error, 'No se pudo crear la propuesta.') : null}
         />
       )}
     </div>

@@ -2,17 +2,17 @@ import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSPr
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
-  Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap,
+  Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { metasApi } from '../../api/metas'
 import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import {
-  Button, Card, ConfirmDialog, ErrorMessage, IconButton, Input, SectionTitle, Select, Sheet, Spinner, TabPanel, Tabs, Textarea,
+  Button, Card, ConfirmDialog, ErrorMessage, IconButton, Input, Segmented, SectionTitle, Select, Sheet, Spinner, Stepper, TabPanel, Tabs, Textarea,
 } from '../../components/ui'
 import type { EntornoCaminoMetal, MetalPickerProps, SeleccionCaminoMetal } from '../../components/mistborn'
-import type { Character, StatDesglose, UpdateCharacterRequest } from '../../types'
+import type { Character, RecursosPatch, StatDesglose, StatLinea, UpdateCharacterRequest } from '../../types'
 import type { AttrField, HabilidadDef } from '../../worlds/types'
 import { isAvailable } from '../../worlds'
 import { HEROIC_PATHS } from '../../data/heroicPaths'
@@ -87,6 +87,41 @@ const MetalPicker = lazy(() => import('../../components/mistborn').then((m) => (
 
 /** A metalborn path chosen in CaminoMetalPicker that waits for its metals (MetalPicker, §7.4 step 4) */
 interface CaminoPendiente { camino: string; caminoInicial: 'heroico' | 'metal'; arte: MetalPickerProps['arte']; modo: MetalPickerProps['modo'] }
+
+/** What the sheet asks of the table state of the world (§5.2): a PATCH …/recursos, or the start of a scene. T31 adds the vial here */
+type AccionMesa =
+  | { tipo: 'recursos'; cuerpo: RecursosPatch }
+  | { tipo: 'inicio-escena'; sorprendido: boolean }
+
+/**
+ * The cached character as the server will leave it after an `AccionMesa`, as far as the sheet can tell without repeating the rules of the
+ * world (clamps, Desprovisto…): the refetch that follows brings the rest. Written into every cached copy of the character (§2)
+ */
+function conAccionMesa(old: Character, accion: AccionMesa): Character {
+  if (accion.tipo === 'inicio-escena') {
+    const total = old.investidura?.total ?? 0
+    return { ...old, recursos: { ...old.recursos, investiduraActual: accion.sorprendido ? Math.min(1, total) : total } }
+  }
+  const { recursos, poderes } = accion.cuerpo
+  return {
+    ...old,
+    recursos: recursos ? { ...old.recursos, ...recursos } : old.recursos,
+    poderes: poderes
+      ? old.poderes.map((p) => {
+        const cambio = poderes.find((x) => x.arte === p.arte && x.metal === p.metal)
+        if (!cambio) return p
+        return {
+          ...p,
+          ...(cambio.cargas !== undefined && { cargas: cambio.cargas }),
+          ...(cambio.viales !== undefined && { viales: cambio.viales }),
+          ...(cambio.desprovisto !== undefined && { desprovisto: cambio.desprovisto }),
+          ...(cambio.completo !== undefined && { completo: cambio.completo }),
+          ...(cambio.ajusteCargasMax !== undefined && { ajusteCargasMax: cambio.ajusteCargasMax }),
+        }
+      })
+      : old.poderes,
+  }
+}
 
 /* ─── Local primitives ──────────────────────────────────────────────────── */
 
@@ -339,6 +374,96 @@ function AttrCode({ code, name, t }: { code: string; name?: string; t: Tone }) {
   )
 }
 
+/** A Lucide icon that arrives as a component reference from the configuration of the world */
+function Glifo({ icon: Icono, size, style }: { icon: LucideIcon; size: number; style?: CSSProperties }) {
+  return <Icono size={size} style={style} />
+}
+
+/** Notice of the attributes tab, tinted by severity: icon, bold title and one line of explanation */
+function AvisoAtributos({ t, icon, title, children }: { t: Tone; icon: ReactNode; title: string; children: ReactNode }) {
+  return (
+    <div
+      role="status"
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12,
+        background: t.bg, border: `1px solid ${t.border}`,
+        borderRadius: radius.md, padding: '12px 14px',
+      }}
+    >
+      <span aria-hidden style={{ display: 'flex', color: t.fg, marginTop: 1 }}>{icon}</span>
+      <div>
+        <p style={{ fontSize: fs.sm + 1, fontWeight: 700, color: t.fg, lineHeight: 1.35 }}>{title}</p>
+        <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45, marginTop: 2 }}>{children}</p>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * «Investidura actual»: the table state of a world whose characters track it (`WorldConfig.recursos`, §5.2). A counter between 0 and the
+ * maximum of the sheet, and the action that starts a scene: the maximum, or 1 if the character is Sorprendido (L.129 / PDF 135).
+ * Both save at once. Neither moves while the sheet is being edited (a refetch would wipe what is typed in the form) nor for whoever
+ * cannot edit the character. T31 adds «Beber vial» next to «Inicio de escena».
+ */
+function InvestiduraActual({ label, icon, actual, max, enEdicion, puedeActuar, error, index, onCambiar, onInicioEscena }: {
+  label: string
+  icon: ReactNode
+  actual: number
+  max: number
+  enEdicion: boolean
+  /** The owner and the director; for anyone else the counter is read-only and there is no scene action */
+  puedeActuar: boolean
+  error: boolean
+  index: number
+  /** One step up or down from the latest value (not from the one rendered), so that taps in quick succession all count */
+  onCambiar: (delta: number) => void
+  onInicioEscena: (sorprendido: boolean) => void
+}) {
+  const [sorprendido, setSorprendido] = useState(false)
+  const t = tone.amatista
+  return (
+    <div className="rise" style={{ ...tile, '--i': index, marginTop: 16, padding: '12px 14px' } as CSSProperties}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, ...eyebrow, lineHeight: 1.35 }}>
+        <span aria-hidden style={{ display: 'flex', color: t.fg }}>{icon}</span>
+        <span>{label}</span>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <Stepper
+          label={label}
+          value={actual}
+          min={0}
+          max={max}
+          disabled={enEdicion || !puedeActuar}
+          onChange={(v) => onCambiar(v - actual)}
+          format={(v) => <>{v}<span style={{ fontSize: fs.base, fontWeight: 500, color: c.subtle }}> / {max}</span></>}
+        />
+      </div>
+      {puedeActuar && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+          <Segmented
+            ariaLabel="Estado al empezar la escena"
+            stretch={false}
+            value={sorprendido ? 'sorprendido' : 'normal'}
+            onChange={(v) => setSorprendido(v === 'sorprendido')}
+            options={[
+              { value: 'normal', label: 'Normal', disabled: enEdicion },
+              { value: 'sorprendido', label: 'Sorprendido', disabled: enEdicion },
+            ]}
+          />
+          <Button
+            variant="secondary"
+            disabled={enEdicion}
+            onClick={() => { onInicioEscena(sorprendido); setSorprendido(false) }}
+          >
+            Inicio de escena
+          </Button>
+        </div>
+      )}
+      {error && <ErrorMessage message={`No se ha podido guardar la ${label.toLowerCase()}. Inténtalo de nuevo.`} style={{ marginTop: 10 }} />}
+    </div>
+  )
+}
+
 /* ─── Rules helpers ─────────────────────────────────────────────────────── */
 
 // ── Salud máxima calculada (espejo del backend, para preview en edición) ──────
@@ -354,11 +479,12 @@ function getSaludMaxima(level: number, fuerza: number): number {
 }
 
 // ── Desgloses del servidor ───────────────────────────────────────────────────
-// Las líneas «base» de un desglose son las que la previsualización en edición recalcula localmente
-// (Base, atributos y «Forma: X»); el resto son talentos y se conservan tal cual.
+// Las líneas «base» de un desglose son las que la previsualización en edición recalcula localmente: «Base», los atributos y
+// los bonos de atributo de cualquier origen (forma de cantor, Bendición, talento…), que el servidor marca con `esBono` (§5.1);
+// el resto son talentos y se conservan tal cual.
 const ATRIBUTO_RE = /^(Fuerza|Velocidad|Intelecto|Voluntad|Discernimiento|Presencia)\b/
-const esLineaBase = (concepto: string) => concepto === 'Base' || concepto.startsWith('Forma:') || ATRIBUTO_RE.test(concepto)
-const lineasTalento = (s: StatDesglose | undefined) => (s?.lineas ?? []).filter((l) => !esLineaBase(l.concepto))
+const esLineaBase = (l: StatLinea) => l.concepto === 'Base' || l.esBono || ATRIBUTO_RE.test(l.concepto)
+const lineasTalento = (s: StatDesglose | undefined) => (s?.lineas ?? []).filter((l) => !esLineaBase(l))
 const sumaLineas = (ls: StatDesglose['lineas']) => ls.reduce((acc, l) => acc + l.valor, 0)
 const fmtLinea = (l: StatDesglose['lineas'][number]) => `${l.valor} (${l.concepto})`
 const desgloseStr = (s: StatDesglose | undefined) => (s?.lineas ?? []).map(fmtLinea).join(' + ')
@@ -366,14 +492,16 @@ const RANGO_MAX = 5
 const rangoDe = (level: number) => Math.min(RANGO_MAX, Math.max(1, Math.ceil(level / 5)))
 
 // ── Attribute point allowance per level ──────────────────────────────────────
-// Starting pool: 12 points. +1 at levels 3, 6, 9, 12, 15, 18 (table p.29)
-function getPuntosAtributoEsperados(level: number): number {
-  let total = 12
+// Starting pool: the ancestry's `puntosAtributoBase` (12; kandra 6, L.34 / PDF 40). +1 at levels 3, 6, 9, 12, 15, 18 (table p.29; L.27 / PDF 33)
+function getPuntosAtributoEsperados(level: number, base: number): number {
+  let total = base
   for (const hito of [3, 6, 9, 12, 15, 18]) {
     if (level >= hito) total += 1
   }
   return total
 }
+
+const ATTR_KEYS: AttrField[] = ['fuerza', 'velocidad', 'intelecto', 'voluntad', 'discernimiento', 'presencia']
 
 const ATTR_MAP: Record<string, string> = {
   VEL: 'velocidad', FUE: 'fuerza', INT: 'intelecto',
@@ -580,6 +708,39 @@ export function CharacterDetailPage() {
   })
   const caminoOcupado = aplicarCaminoMetal.isPending || quitarCaminoMetal.isPending
 
+  // Table state of the world (Investidura actual, §5.2): PATCH …/recursos and the scene action. Optimistic by prefix like the mutations above,
+  // but built for a counter that gets tapped fast: the change is written into every cached copy at the call (`mesa`, synchronously), the
+  // requests go out one after the other in the order they were tapped (`colaMesa`), and only the LAST one to settle refetches, so a slow
+  // answer never puts an old value back on screen. The answers are never written into the cache (§2: they are computed out of combat): the
+  // refetch brings them. T30 and T31 reuse it for the powers (charges, vials, Desprovisto, Completo) and for the vial.
+  // The queue is a plain promise chain and not the `scope` of TanStack: a scoped mutation only continues while the tab is in the foreground,
+  // so someone who taps three times and puts the phone away would keep only the first tap
+  const colaMesa = useRef<Promise<unknown>>(Promise.resolve())
+  const mesaClave = ['mesa', cId, chId]
+  const mesaMutation = useMutation({
+    mutationKey: mesaClave,
+    mutationFn: ({ accion }: { accion: AccionMesa; previas: [QueryKey, Character | undefined][] }) => {
+      const enviar = () => accion.tipo === 'inicio-escena'
+        ? charactersApi.inicioEscena(cId, chId, accion.sorprendido)
+        : charactersApi.patchRecursos(cId, chId, accion.cuerpo)
+      const turno = colaMesa.current.then(enviar, enviar) // after the previous one, whether it worked or not
+      colaMesa.current = turno.catch(() => undefined)
+      return turno
+    },
+    onError: (_error, { previas }) => restaurar({ previas }),
+    onSettled: () => {
+      if (qc.isMutating({ mutationKey: mesaClave }) > 1) return // another one is still on its way: it refreshes when it settles
+      qc.invalidateQueries({ queryKey: prefijoFicha })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+  const mesa = (accion: AccionMesa) => {
+    void qc.cancelQueries({ queryKey: prefijoFicha }) // starts cancelling at once: a refetch in flight must not overwrite the change
+    const previas = qc.getQueriesData<Character>({ queryKey: prefijoFicha })
+    qc.setQueriesData<Character>({ queryKey: prefijoFicha }, (old) => old && conAccionMesa(old, accion))
+    mesaMutation.mutate({ accion, previas })
+  }
+
   if (isLoading || !char) {
     return (
       <div style={{ maxWidth: 680, margin: '0 auto' }}>
@@ -608,10 +769,27 @@ export function CharacterDetailPage() {
     : (formaBonus[k as FormaBonusKey] ?? 0)
   const bonoInk = cfg.features.bonosServidor ? c.brand : FORMA_TONE.fg
   const bonoSr = cfg.features.bonosServidor ? ' por bonos' : ' por forma'
+  // What the server calls those bonuses («Bendición de la Consciencia, Tamaño desmedido»): every bonus line of every breakdown carries the
+  // same text (§6.3), so the previews in edit mode name them the way the saved breakdowns do
+  const nombreBonos = [char.salud, char.concentracion, char.investidura, char.defensaFisica, char.defensaCognitiva, char.defensaEspiritual]
+    .flatMap((s) => s?.lineas ?? []).find((l) => l.esBono)?.concepto ?? 'Bonos'
   const set = (k: keyof UpdateCharacterRequest) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => prev ? { ...prev, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value } : prev)
 
+  // The ancestry on the form (it changes while editing) sets the attribute points to hand out and the highest value an attribute may take
+  const ascActual = cfg.ascendencias.find((a) => a.id === f.ascendencia)
+  const topeAtributo = (k: string) => ascActual?.topeAtributo?.[k as AttrField] ?? 5
+
   const radiantOrder = RADIANT_ORDERS.find((o) => o.id === f.caminoRadiante)
+
+  // «Investidura actual» (T29): one step from the LATEST value in the cache, which already holds the steps tapped before it
+  const cambiarInvestidura = (delta: number) => {
+    const vivo = qc.getQueryData<Character>(['character', cId, chId, enCombate]) ?? char
+    const total = vivo.investidura?.total ?? 0
+    const actual = Math.min(total, Math.max(0, vivo.recursos.investiduraActual ?? 0))
+    const siguiente = Math.min(total, Math.max(0, actual + delta))
+    if (siguiente !== actual) mesa({ tipo: 'recursos', cuerpo: { recursos: { investiduraActual: siguiente } } })
+  }
 
   const discardEdits = () => { setEditing(false); setForm({ ...char }) }
   const hasUnsavedChanges = !!form && JSON.stringify(form) !== JSON.stringify(char)
@@ -624,8 +802,9 @@ export function CharacterDetailPage() {
 
   // Salud máxima: la calcula el servidor (tabla de progreso con la Fuerza efectiva, forma incluida, más talentos
   // como Robusto). En edición se previsualiza recalculando la parte base con el nivel y la Fuerza del formulario
-  // y conservando las líneas de talentos que devolvió el servidor.
-  const fbFuerza = formaBonus.fuerza ?? 0
+  // y conservando las líneas de talentos que devolvió el servidor. El bono de Fuerza es el de la forma o, en un mundo con
+  // `bonosServidor`, el que manda el servidor (Bendiciones, Tamaño desmedido…): sus líneas no se vuelven a sumar, son «base».
+  const fbFuerza = fbOf('fuerza')
   const saludTotal = editing
     ? getSaludMaxima(f.level ?? 1, (f.fuerza ?? 0) + fbFuerza) + sumaLineas(lineasTalento(char.salud))
     : (char.salud?.total ?? getSaludMaxima(char.level ?? 1, (char.fuerza ?? 0) + fbFuerza))
@@ -797,7 +976,7 @@ export function CharacterDetailPage() {
 
             {/* Identity — Ascendencia · Camino Heroico · Camino Investido del mundo (Orden / Camino de nacido del metal) · Bendición */}
             {(() => {
-              const asc = cfg.ascendencias.find((a) => a.id === f.ascendencia)
+              const asc = ascActual
               const path = HEROIC_PATHS.find((p) => p.id === f.caminoHeroico)
               // The Investida path of the world: the character field that holds it, its name, colour and icon come from the configuration (P4)
               const caminoInv = cfg.caminoInvestido
@@ -881,8 +1060,8 @@ export function CharacterDetailPage() {
               const conc = f.concentracion ?? vacio
               const inv  = f.investidura  ?? vacio
               const mov  = f.movimiento   ?? vacio
-              const formaInk = FORMA_TONE.fg
-              const formaLabel = (v: number) => `${v} (Forma: ${formaActiva})`
+              // Preview line of an attribute bonus: «Forma: X» for a cantor, the server's own name for the bonuses it sends (§6.3)
+              const bonoLabel = (v: number) => cfg.features.bonosServidor ? `${v} (${nombreBonos})` : `${v} (Forma: ${formaActiva})`
 
               // Líneas situacionales (reacciones, infusiones…): visibles pero fuera del total.
               const situacional = (s: StatDesglose) => s.situacional.length > 0 ? (
@@ -898,18 +1077,21 @@ export function CharacterDetailPage() {
 
               // Concentración — la calcula el servidor: 2 + VOL + forma (VOL y concentración directa) + talentos.
               // En edición se previsualiza con la Voluntad del formulario, conservando las líneas de talentos.
+              // La Voluntad suma el bono de atributo (forma o servidor); la concentración directa de la forma sigue saliendo de `formaBonus`.
               const concVol = f.voluntad ?? 0
-              const concFb  = (formaBonus.voluntad ?? 0) + (formaBonus.concentracion ?? 0)
+              const concFb  = fbOf('voluntad') + (formaBonus.concentracion ?? 0)
               const concTalentos = lineasTalento(conc)
               const concShown = editing ? 2 + concVol + concFb + sumaLineas(concTalentos) : conc.total
               const concSub = editing
-                ? [`2 (Base)`, `${concVol} (Voluntad)`, ...(concFb !== 0 ? [formaLabel(concFb)] : []), ...concTalentos.map(fmtLinea)].join(' + ')
+                ? [`2 (Base)`, `${concVol} (Voluntad)`, ...(concFb !== 0 ? [bonoLabel(concFb)] : []), ...concTalentos.map(fmtLinea)].join(' + ')
                 : desgloseStr(conc)
 
-              // Investidura — para Radiantes: 2 + mayor de DIS/PRE (con forma) + talentos. Misma previsualización.
-              const esRadiante = !!f.caminoRadiante
-              const fbDis = formaBonus.discernimiento ?? 0
-              const fbPre = formaBonus.presencia ?? 0
+              // Investidura — 2 + mayor de DIS/PRE (con bono) + talentos. Misma previsualización. Quién la tiene lo decide el mundo: en
+              // Tormentas el director elige la Orden en el formulario y la tarjeta se enciende al instante (`f.caminoRadiante`); en un mundo
+              // sin Orden la decide el servidor, que da un total mayor que 0 solo a quien tiene Investidura (alomantes).
+              const tieneInv = cfg.features.caminoRadiante ? !!f.caminoRadiante : inv.total > 0
+              const fbDis = fbOf('discernimiento')
+              const fbPre = fbOf('presencia')
               const invDis = f.discernimiento ?? 0
               const invPre = f.presencia ?? 0
               const usaDis = invDis + fbDis >= invPre + fbPre
@@ -918,8 +1100,12 @@ export function CharacterDetailPage() {
               const invTalentos = lineasTalento(inv)
               const invShown = editing ? 2 + invBase + invFb + sumaLineas(invTalentos) : inv.total
               const invSub = editing
-                ? [`2 (Base)`, `${invBase} (${usaDis ? 'Discernimiento' : 'Presencia'})`, ...(invFb !== 0 ? [formaLabel(invFb)] : []), ...invTalentos.map(fmtLinea)].join(' + ')
+                ? [`2 (Base)`, `${invBase} (${usaDis ? 'Discernimiento' : 'Presencia'})`, ...(invFb !== 0 ? [bonoLabel(invFb)] : []), ...invTalentos.map(fmtLinea)].join(' + ')
                 : desgloseStr(inv)
+              // Estado de mesa del mundo: «Investidura actual» (T29), solo si el mundo la lleva y el personaje tiene Investidura
+              const recursoInv = cfg.recursos.find((r) => r.clave === 'investiduraActual')
+              const invMax = char.investidura?.total ?? 0
+              const invActual = Math.min(invMax, Math.max(0, char.recursos.investiduraActual ?? 0))
 
               // Desvío — el servidor toma el mayor entre armadura y forma (no se acumulan, Manual pp. 33–37)
               // y añade los talentos situacionales (Réplica fulminante = grados en Disciplina).
@@ -927,7 +1113,7 @@ export function CharacterDetailPage() {
               const desvSub = (desv.lineas.length > 0 && !(desv.lineas.length === 1 && desv.lineas[0].concepto === 'Base')) || desv.situacional.length > 0 ? (
                 <>
                   {desv.lineas.length > 0 && !(desv.lineas.length === 1 && desv.lineas[0].concepto === 'Base') && (
-                    <span style={desv.lineas.some(l => l.concepto.startsWith('Forma:')) ? { color: formaInk } : undefined}>{desgloseStr(desv)}</span>
+                    <span style={desv.lineas.some((l) => l.esBono) ? { color: bonoInk } : undefined}>{desgloseStr(desv)}</span>
                   )}
                   {situacional(desv)}
                 </>
@@ -957,11 +1143,11 @@ export function CharacterDetailPage() {
                       <div style={statValue(tone.heliodoro)}>{concShown}</div>
                     </StatCard>
 
-                    <StatCard index={1} label="Investidura" icon={<StatIcons.investidura size={14} />} t={tone.amatista} sub={esRadiante ? (invSub || undefined) : undefined}>
-                      {esRadiante ? (
+                    <StatCard index={1} label="Investidura" icon={<Glifo icon={cfg.iconos.investidura} size={14} />} t={tone.amatista} sub={tieneInv ? (invSub || undefined) : undefined}>
+                      {tieneInv ? (
                         <div style={statValue(tone.amatista)}>{invShown}</div>
                       ) : (
-                        <div style={{ fontSize: fs.sm, color: c.subtle, lineHeight: 1.4 }}>Solo disponible para Radiantes</div>
+                        <div style={{ fontSize: fs.sm, color: c.subtle, lineHeight: 1.4 }}>{cfg.textos.sinInvestidura}</div>
                       )}
                     </StatCard>
 
@@ -1011,6 +1197,22 @@ export function CharacterDetailPage() {
                       <div style={statValue(tone.circon, disEff >= 9 ? fs.lg : fs.xl + 2)}>{alcance}</div>
                     </StatCard>
                   </div>
+
+                  {recursoInv && tieneInv && (
+                    <InvestiduraActual
+                      key={char.id}
+                      index={6}
+                      label={recursoInv.label}
+                      icon={<Glifo icon={cfg.iconos.investidura} size={14} />}
+                      actual={invActual}
+                      max={invMax}
+                      enEdicion={editing}
+                      puedeActuar={canEdit}
+                      error={mesaMutation.isError}
+                      onCambiar={cambiarInvestidura}
+                      onInicioEscena={(sorprendido) => mesa({ tipo: 'inicio-escena', sorprendido })}
+                    />
+                  )}
                 </div>
               )
             })()}
@@ -1063,39 +1265,37 @@ export function CharacterDetailPage() {
 
             {/* ── Warning: puntos de atributo ──────────────────────────── */}
             {(() => {
-              // Sum of raw attribute values (forma bonuses are temporary, excluded)
+              // Sum of raw attribute values (bonuses of any origin are not part of the allowance: the form's are temporary, the server's come as lines)
               const totalAttr = (f.fuerza ?? 0) + (f.velocidad ?? 0) + (f.intelecto ?? 0)
                 + (f.voluntad ?? 0) + (f.discernimiento ?? 0) + (f.presencia ?? 0)
-              const esperados = getPuntosAtributoEsperados(f.level ?? 1)
+              const esperados = getPuntosAtributoEsperados(f.level ?? 1, ascActual?.puntosAtributoBase ?? 12)
               const diff = totalAttr - esperados
-              if (diff === 0) return null
-
               const exceso = diff > 0
-              const bt = exceso ? tone.topacio : tone.zafiro
-              return (
-                <div
-                  role="status"
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 12,
-                    background: bt.bg, border: `1px solid ${bt.border}`,
-                    borderRadius: radius.md, padding: '12px 14px',
-                  }}
+              const puntos = diff === 0 ? null : (
+                <AvisoAtributos
+                  t={exceso ? tone.topacio : tone.zafiro}
+                  icon={exceso ? <TriangleAlert size={18} /> : <Info size={18} />}
+                  title={exceso ? 'Exceso de puntos de atributo' : 'Puntos de atributo por asignar'}
                 >
-                  <span aria-hidden style={{ display: 'flex', color: bt.fg, marginTop: 1 }}>
-                    {exceso ? <TriangleAlert size={18} /> : <Info size={18} />}
-                  </span>
-                  <div>
-                    <p style={{ fontSize: fs.sm + 1, fontWeight: 700, color: bt.fg, lineHeight: 1.35 }}>
-                      {exceso ? 'Exceso de puntos de atributo' : 'Puntos de atributo por asignar'}
-                    </p>
-                    <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45, marginTop: 2 }}>
-                      {exceso
-                        ? `${totalAttr} puntos asignados, pero a nivel ${f.level} corresponden ${esperados}. Retira ${diff} punto${diff > 1 ? 's' : ''}.`
-                        : `${totalAttr} puntos asignados de ${esperados} disponibles a nivel ${f.level}. Quedan ${-diff} punto${-diff > 1 ? 's' : ''} por repartir.`}
-                    </p>
-                  </div>
-                </div>
+                  {exceso
+                    ? `${totalAttr} puntos asignados, pero a nivel ${f.level} corresponden ${esperados}. Retira ${diff} punto${diff > 1 ? 's' : ''}.`
+                    : `${totalAttr} puntos asignados de ${esperados} disponibles a nivel ${f.level}. Quedan ${-diff} punto${-diff > 1 ? 's' : ''} por repartir.`}
+                </AvisoAtributos>
               )
+
+              // Creation (level 1), only in a world that declares a limit per attribute (L.20 / PDF 26): no attribute takes more than `tope`
+              // points when the character is made, and some ancestries raise one (sangre koloss, Fuerza 4: L.38 / PDF 44). A notice, never a block
+              const tope = cfg.topeCreacionAtributo
+              const limiteDe = (k: AttrField) => ascActual?.topeCreacion?.[k] ?? tope ?? Infinity
+              const pasados = tope !== undefined && (f.level ?? 1) <= 1 ? ATTR_KEYS.filter((k) => numField(f, k) > limiteDe(k)) : []
+              const salvo = Object.entries(ascActual?.topeCreacion ?? {}).map(([k, v]) => `${ATTR_NAMES[k]} (hasta ${v})`)
+              const creacion = pasados.length === 0 ? null : (
+                <AvisoAtributos t={tone.topacio} icon={<TriangleAlert size={18} />} title="Atributos por encima del límite de creación">
+                  {`Al crear el personaje, ningún atributo puede tener más de ${tope} puntos asignados${salvo.length > 0 ? `, salvo ${salvo.join(' y ')}` : ''}. `
+                    + `Ahora superan el límite: ${pasados.map((k) => `${ATTR_NAMES[k]} ${numField(f, k)}`).join(', ')}.`}
+                </AvisoAtributos>
+              )
+              return <>{puntos}{creacion}</>
             })()}
 
             {/* Físico / Cognitivo / Espiritual sections */}
@@ -1147,7 +1347,7 @@ export function CharacterDetailPage() {
                         <div key={k} style={{ background: c.s1, padding: '14px 12px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                           {editing ? (
                             <Input
-                              type="number" min={0} max={5}
+                              type="number" min={0} max={topeAtributo(k)}
                               aria-label={`${ATTR_NAMES[k]} (${label})`}
                               value={numField(form, k)}
                               onChange={set(k as keyof UpdateCharacterRequest)}
@@ -1222,89 +1422,114 @@ export function CharacterDetailPage() {
                       )
                     })}
 
-                    {/* Custom skills for this section (slots n1 and n2) */}
-                    {section.customNs.map((n) => {
-                      const nameKey = `habilidadPersonalizada${n}`
-                      const valorKey = `habilidadPersonalizada${n}Valor`
-                      const attrKey = `habilidadPersonalizada${n}Atributo`
-                      const customName = strField(f, nameKey)
-                      const customBase = numField(f, valorKey)
-                      const customAttrCode = (strField(f, attrKey) ?? '').toUpperCase()
-                      const customAttrKey = customAttrCode && ATTR_MAP[customAttrCode] ? ATTR_MAP[customAttrCode] : null
-                      const customBonus = customAttrKey
-                        ? numField(f, customAttrKey) + fbOf(customAttrKey)
-                        : 0
-                      const customTotal = customBase + customBonus
-                      const isPotencia = !!radiantOrder?.surges.includes(customName)
+                    {/* Custom skills for this section (slots n1 and n2). The Investida skills of the world (Alomancia, Feruquimia) sit in a slot
+                        by exact name and have a block of their own: the rows after it are the free slots */}
+                    {(() => {
+                      const investidaDe = (n: number) => cfg.habilidadesInvestidas.find((h) => h.nombre === strField(f, `habilidadPersonalizada${n}`))
+                      const investidas = section.customNs.filter((n) => investidaDe(n))
+                      const libres = section.customNs.filter((n) => !investidaDe(n))
+                      const fila = (n: number, primera = false) => {
+                        const nameKey = `habilidadPersonalizada${n}`
+                        const valorKey = `habilidadPersonalizada${n}Valor`
+                        const attrKey = `habilidadPersonalizada${n}Atributo`
+                        const customName = strField(f, nameKey)
+                        const customBase = numField(f, valorKey)
+                        const customAttrCode = (strField(f, attrKey) ?? '').toUpperCase()
+                        const customAttrKey = customAttrCode && ATTR_MAP[customAttrCode] ? ATTR_MAP[customAttrCode] : null
+                        const customBonus = customAttrKey
+                          ? numField(f, customAttrKey) + fbOf(customAttrKey)
+                          : 0
+                        const customTotal = customBase + customBonus
+                        const isPotencia = !!radiantOrder?.surges.includes(customName)
+                        const investida = investidaDe(n)
+                        // A surge or an Investida skill: its name and attribute are fixed, only its ranks are edited
+                        const bloqueada = isPotencia || !!investida
+                        const glifo = isPotencia
+                          ? <SurgeIcon surge={customName} size={18} style={{ color: t.fg }} />
+                          : investida ? <Glifo icon={investida.icono} size={18} style={{ color: t.fg }} /> : null
 
-                      if (!editing && !customName) return null
+                        if (!editing && !customName) return null
 
-                      return (
-                        <li key={n} style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          minHeight: 52, padding: '6px 16px',
-                          borderTop: `1px dashed ${t.border}`,
-                        }}>
-                          {editing ? (
-                            <>
-                              {isPotencia ? (
-                                <AttrCode code={customAttrCode} name={customAttrKey ? ATTR_NAMES[customAttrKey] : undefined} t={t} />
-                              ) : (
-                                <Select
-                                  aria-label={`Atributo de habilidad personalizada ${n}`}
-                                  value={strField(form, attrKey) ?? ''}
-                                  onChange={(e) => setForm((prev) => prev ? { ...prev, [attrKey]: e.target.value } : prev)}
-                                  style={{ width: 76, flexShrink: 0, minHeight: 40, padding: '6px 26px 6px 10px', fontSize: fs.sm, fontWeight: 650, backgroundPosition: 'right 7px center' }}
-                                >
-                                  <option value="">—</option>
-                                  {['VEL','FUE','INT','VOL','PRE','DIS'].map((a) => <option key={a} value={a}>{a}</option>)}
-                                </Select>
-                              )}
-                              {isPotencia ? (
-                                <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.base - 1, fontWeight: 600, color: c.text }}>
-                                  <SurgeIcon surge={customName} size={18} style={{ color: t.fg }} />
+                        return (
+                          <li key={n} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            minHeight: 52, padding: '6px 16px',
+                            borderTop: primera ? 'none' : `1px dashed ${t.border}`,
+                          }}>
+                            {editing ? (
+                              <>
+                                {bloqueada ? (
+                                  <AttrCode code={customAttrCode} name={customAttrKey ? ATTR_NAMES[customAttrKey] : undefined} t={t} />
+                                ) : (
+                                  <Select
+                                    aria-label={`Atributo de habilidad personalizada ${n}`}
+                                    value={strField(form, attrKey) ?? ''}
+                                    onChange={(e) => setForm((prev) => prev ? { ...prev, [attrKey]: e.target.value } : prev)}
+                                    style={{ width: 76, flexShrink: 0, minHeight: 40, padding: '6px 26px 6px 10px', fontSize: fs.sm, fontWeight: 650, backgroundPosition: 'right 7px center' }}
+                                  >
+                                    <option value="">—</option>
+                                    {['VEL','FUE','INT','VOL','PRE','DIS'].map((a) => <option key={a} value={a}>{a}</option>)}
+                                  </Select>
+                                )}
+                                {bloqueada ? (
+                                  <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.base - 1, fontWeight: 600, color: c.text }}>
+                                    {glifo}
+                                    {customName}
+                                  </span>
+                                ) : (
+                                  <Input
+                                    aria-label={`Nombre de habilidad personalizada ${n}`}
+                                    value={strField(form, nameKey) ?? ''}
+                                    onChange={(e) => setForm((prev) => prev ? { ...prev, [nameKey]: e.target.value } : prev)}
+                                    placeholder="Habilidad personalizada..."
+                                    style={{ flex: 1, minWidth: 0, minHeight: 40, padding: '6px 10px', fontSize: fs.sm + 1, textOverflow: 'ellipsis' }}
+                                  />
+                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                  <Input
+                                    type="number" min={0} max={10}
+                                    aria-label={`Valor de ${customName || 'habilidad personalizada'}`}
+                                    value={customBase}
+                                    onChange={set(valorKey as keyof UpdateCharacterRequest)}
+                                    style={{ width: 64, minHeight: 40, padding: '6px 8px', textAlign: 'center', fontSize: fs.base, fontVariantNumeric: 'tabular-nums' }}
+                                  />
+                                  <span style={{ fontSize: fs.xs, color: c.subtle, minWidth: 22, fontVariantNumeric: 'tabular-nums' }}>+{customBonus}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {customAttrCode
+                                  ? <AttrCode code={customAttrCode} name={customAttrKey ? ATTR_NAMES[customAttrKey] : undefined} t={t} />
+                                  : <AttrCode code="—" t={t} />}
+                                <span style={{ fontSize: fs.base - 1, color: c.text, fontWeight: 500, flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  {glifo}
                                   {customName}
                                 </span>
-                              ) : (
-                                <Input
-                                  aria-label={`Nombre de habilidad personalizada ${n}`}
-                                  value={strField(form, nameKey) ?? ''}
-                                  onChange={(e) => setForm((prev) => prev ? { ...prev, [nameKey]: e.target.value } : prev)}
-                                  placeholder="Habilidad personalizada..."
-                                  style={{ flex: 1, minWidth: 0, minHeight: 40, padding: '6px 10px', fontSize: fs.sm + 1, textOverflow: 'ellipsis' }}
-                                />
-                              )}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                <Input
-                                  type="number" min={0} max={10}
-                                  aria-label={`Valor de ${customName || 'habilidad personalizada'}`}
-                                  value={customBase}
-                                  onChange={set(valorKey as keyof UpdateCharacterRequest)}
-                                  style={{ width: 64, minHeight: 40, padding: '6px 8px', textAlign: 'center', fontSize: fs.base, fontVariantNumeric: 'tabular-nums' }}
-                                />
-                                <span style={{ fontSize: fs.xs, color: c.subtle, minWidth: 22, fontVariantNumeric: 'tabular-nums' }}>+{customBonus}</span>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              {customAttrCode
-                                ? <AttrCode code={customAttrCode} name={customAttrKey ? ATTR_NAMES[customAttrKey] : undefined} t={t} />
-                                : <AttrCode code="—" t={t} />}
-                              <span style={{ fontSize: fs.base - 1, color: c.text, fontWeight: 500, flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                {isPotencia && <SurgeIcon surge={customName} size={18} style={{ color: t.fg }} />}
-                                {customName}
-                              </span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                                <span style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>{customBase}+{customBonus}</span>
-                                <span style={{ ...numeral, fontSize: fs.md, color: customTotal > 0 ? c.text : c.subtle, minWidth: 20, textAlign: 'right' }}>
-                                  {customTotal}
-                                </span>
-                              </div>
-                            </>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                  <span style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>{customBase}+{customBonus}</span>
+                                  <span style={{ ...numeral, fontSize: fs.md, color: customTotal > 0 ? c.text : c.subtle, minWidth: 20, textAlign: 'right' }}>
+                                    {customTotal}
+                                  </span>
+                                </div>
+                              </>
+                            )}
+                          </li>
+                        )
+                      }
+                      return (
+                        <>
+                          {investidas.length > 0 && (
+                            <li style={{ borderTop: `1px dashed ${t.border}` }}>
+                              <p id={`${fieldId}-inv-${section.key}`} style={{ ...eyebrow, padding: '10px 16px 0' }}>Habilidades Investidas</p>
+                              <ul aria-labelledby={`${fieldId}-inv-${section.key}`} style={{ listStyle: 'none' }}>
+                                {investidas.map((n, i) => fila(n, i === 0))}
+                              </ul>
+                            </li>
                           )}
-                        </li>
+                          {libres.map((n) => fila(n))}
+                        </>
                       )
-                    })}
+                    })()}
                   </ul>
 
                   {/* Situacional bonuses (talents that conditionally affect this defense) */}

@@ -779,6 +779,8 @@ export function Stepper({
   label,
   format,
   size = 'md',
+  disabled,
+  decimals,
 }: {
   value: number
   onChange: (v: number) => void
@@ -789,6 +791,10 @@ export function Stepper({
   label: string
   format?: (v: number) => React.ReactNode
   size?: 'sm' | 'md'
+  /** Both buttons off and the value marked `aria-disabled` (e.g. a counter that must not move while a form is being edited) */
+  disabled?: boolean
+  /** Rounds each step to this many decimals before `onChange` and before the bounds check, so 0.1 + 0.2 gives 0.3 and not 0.30000000000000004 (e.g. money with `step={0.01} decimals={2}`) */
+  decimals?: number
 }) {
   const h = size === 'sm' ? 36 : 44
   const btn: React.CSSProperties = {
@@ -796,13 +802,16 @@ export function Stepper({
     background: c.s2, color: c.text, fontSize: fs.lg, fontWeight: 600, cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0,
   }
+  const round = (v: number) => (decimals === undefined ? v : Number(v.toFixed(decimals)))
+  const less = round(value - step)
+  const more = round(value + step)
   return (
     <div role="group" aria-label={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Restar (${label})`} disabled={value - step < min} onClick={() => onChange(Math.max(min, value - step))}>−</button>
-      <output aria-live="polite" style={{ ...numeral, minWidth: 36, textAlign: 'center', fontSize: size === 'sm' ? fs.lg : fs.xl, color: c.text }}>
+      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Restar (${label})`} disabled={disabled || less < min} onClick={() => onChange(Math.max(min, less))}>−</button>
+      <output aria-live="polite" aria-disabled={disabled || undefined} style={{ ...numeral, minWidth: 36, textAlign: 'center', fontSize: size === 'sm' ? fs.lg : fs.xl, color: c.text }}>
         {format ? format(value) : value}
       </output>
-      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Sumar (${label})`} disabled={value + step > max} onClick={() => onChange(Math.min(max, value + step))}>+</button>
+      <button type="button" className="ui-btn ui-btn--secondary" style={btn} aria-label={`Sumar (${label})`} disabled={disabled || more > max} onClick={() => onChange(Math.min(max, more))}>+</button>
     </div>
   )
 }

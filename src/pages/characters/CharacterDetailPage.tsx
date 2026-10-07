@@ -23,6 +23,7 @@ import { POTENCIAS } from '../../data/potencias'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
 import { CharacterHero } from '../../components/CharacterHero'
 import { CosmereIcon } from '../../components/CosmereIcon'
+import { MetalGlyph } from '../../components/mistborn/MetalGlyph'
 import { HeroicPathIcon, SurgeIcon } from '../../components/GameIcons'
 import { heroButton, heroPill, onGemSoft } from '../../lib/hero'
 import { StatIcons } from '../../lib/gameIcons'
@@ -1086,7 +1087,7 @@ export function CharacterDetailPage() {
                         media={invDef
                           ? (caminoInv.insignia
                             ? cfg.iconos.caminoInvestido(invDef.id, 40)
-                            : <IconBox t={invTone}>{cfg.iconos.caminoInvestido(invDef.id, 20)}</IconBox>)
+                            : <IconBox t={invTone}>{f.poderes.length === 1 ? <MetalGlyph metal={f.poderes[0].metal} arte={f.poderes[0].arte} size={26} /> : cfg.iconos.caminoInvestido(invDef.id, 20)}</IconBox>)
                           : <IconBox><CosmereIcon name="cosmere-emblem" size={20} /></IconBox>}
                         onPick={invPick}
                       />

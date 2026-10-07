@@ -14,13 +14,14 @@
  * (§8, risk 6).
  */
 import { useId, useState } from 'react'
-import { Anvil, Flame, Pin, TriangleAlert } from 'lucide-react'
+import { Pin, TriangleAlert } from 'lucide-react'
 import { Button, Sheet } from '../ui'
 import { METALES, type ArteMetal } from '../../data/mistborn/metales'
 import { TIPOS_CLAVO, type OpcionPoderClavo, type TipoClavo, type TipoClavoPoder } from '../../data/mistborn/hemalurgia'
 import type { ClavoHemalurgico, PoderPersonaje } from '../../types'
 import { c, eyebrow, font, fs, pill, radius, tone, toneFrom } from '../../theme'
 import { FilaOpcion } from './FilaOpcion'
+import { MetalGlyph } from './MetalGlyph'
 import { idPoder } from './caminoMetalFlujo'
 import { NOMBRE_ARTE, subtituloPoder } from './poderes'
 import { implantados, nombreClavo, partesPoder, rangoDeRecompensa } from './clavos'
@@ -114,7 +115,6 @@ export function ClavoPicker({ open, onClose, poderes, clavos, clavosMax, sinHuec
 
   /** The four powers a power spike offers, under its row once it is chosen */
   const opciones = (t: TipoClavoPoder) => {
-    const Icono = t.arte === 'alomancia' ? Flame : Anvil
     // A power the character already has gives a grade and needs no skill; a new one brings the skill of its art, which needs a free cognitive slot.
     // The four powers of a spike are of the same art, so the explanation is one, and it ties to every option it blocks
     const bloqueaOpcion = (op: OpcionPoderClavo) => !tienePoder(op) && sinHueco.includes(t.arte)
@@ -134,7 +134,7 @@ export function ClavoPicker({ open, onClose, poderes, clavos, clavosMax, sinHuec
             <FilaOpcion
               key={op}
               titulo={`${NOMBRE_ARTE[arte]} de ${(def?.nombre ?? id).toLowerCase()}`}
-              icono={<Icono size={20} />}
+              icono={<MetalGlyph metal={id} arte={arte} size={26} />}
               t={def ? toneFrom(def.color) : tone.cuarzo}
               selected={poder === op}
               disabled={bloqueada}

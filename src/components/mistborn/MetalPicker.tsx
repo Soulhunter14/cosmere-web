@@ -87,7 +87,8 @@ const ORIGENES: Record<OrigenConcedido, { corto: string; artes: ArteMetal[]; sol
     texto: 'Un medallón feruquímico da un poder feruquímico completo con un máximo fijo de 8 cargas. No da la habilidad Feruquimia.',
   },
 }
-const ORDEN_ORIGENES: OrigenConcedido[] = ['clavo', 'lerasium', 'medallon']
+// A spike is granted from «Clavos hemalúrgicos» (T49b), which also records the spike, its penalty and its bonus: not offered here
+const ORDEN_ORIGENES: OrigenConcedido[] = ['lerasium', 'medallon']
 
 const ARTE: Record<ArteMetal, { nombre: string; poder: string; poderes: string }> = {
   alomancia: { nombre: 'Alomancia', poder: 'poder alomántico', poderes: 'poderes alománticos' },
@@ -223,7 +224,7 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
   const resumenId = useId()
   const concedido = modo === 'concedido'
   const nueva = nuevaMeta !== undefined
-  const [origen, setOrigen] = useState<OrigenConcedido>('clavo')
+  const [origen, setOrigen] = useState<OrigenConcedido>(era === 'era2' ? 'medallon' : 'lerasium')
   // 'concedido': the arts follow the origin (an alloy of lerasium is alomantic, a medallion feruchemical); otherwise the prop decides
   const artes: ArteMetal[] = concedido ? ORIGENES[origen].artes : arte === 'ambas' ? ['alomancia', 'feruquimia'] : [arte]
   const [vistaElegida, setVista] = useState<ArteMetal>(artes[0])
@@ -280,7 +281,7 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
   const descripcion = nueva
     ? `${modo === 'pareja' ? 'Elige la pareja Empujón/Tirón que entrenará' : 'Elige un metal puro y su aleación, o el atium, para'} la nueva meta «${metaDe(artes[0]) ?? ''}». Solo se ofrecen los poderes nacientes que aún no tienen meta.`
     : concedido
-    ? 'El director concede un poder completo y sin meta: un clavo hemalúrgico, una aleación de lerasium o un medallón feruquímico.'
+    ? 'El director concede un poder completo y sin meta: una aleación de lerasium o un medallón feruquímico. Los clavos hemalúrgicos se implantan en su propia sección de esta pestaña.'
     : modo === 'pareja'
       ? `Obtienes todos los poderes alománticos de tu era en su versión naciente. Elige la pareja Empujón/Tirón que entrenarás primero con la meta «${metaDe('alomancia') ?? 'Entrenar tus poderes'}».`
       : modo === 'puro-aleacion-o-atium'

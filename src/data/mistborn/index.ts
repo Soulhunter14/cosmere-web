@@ -5,6 +5,7 @@
  */
 export * from './aventurasOverlay'
 export * from './combatOverlay'
+export * from './equipoInicial'
 export * from './eras'
 export * from './feruquimia'
 export * from './metales'

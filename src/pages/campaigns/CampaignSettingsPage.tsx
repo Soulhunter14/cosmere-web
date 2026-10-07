@@ -1,15 +1,16 @@
 import { useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, RefreshCw, Check, Link2, Link2Off, LogOut, UserPlus } from 'lucide-react'
+import { Copy, RefreshCw, Check, Link2, Link2Off, Lock, LogOut, PencilRuler, UserPlus } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { campaignsApi } from '../../api/campaigns'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Avatar, Badge, Button, Card, ErrorMessage, PageHeader, SectionTitle, Select, Sheet, Spinner, StatTile, Switch } from '../../components/ui'
+import { Avatar, Badge, Button, Card, ConfirmDialog, ErrorMessage, PageHeader, SectionTitle, Select, Sheet, Spinner, StatTile, Switch } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
 import { getWorld } from '../../worlds'
-import type { Era } from '../../types'
+import type { CampaignDetail, Era } from '../../types'
+import { enumerar, nombresCamposDeCierre } from '../../lib/cierreCampana'
 import { c, eyebrow, font, fs, page, radius, titleText, tone } from '../../theme'
 
 /* The name of the setting or the era inside a StatTile: a heading-sized serif line instead of the big stat numeral */
@@ -45,6 +46,82 @@ function AmbientacionSection({ world, era, index }: { world: string; era: Era | 
       <p style={{ fontSize: fs.xs, color: c.subtle, marginTop: 10, lineHeight: 1.45 }}>
         La ambientación y la era se fijan al crear la campaña y no se pueden cambiar.
       </p>
+    </section>
+  )
+}
+
+/**
+ * State of the campaign (src/lib/cierreCampana.ts): «En preparación» (session 0, the default) or «Iniciada». Everyone sees it; only the
+ * director starts it, which locks the fields of `camposDeCierre` for players, or reopens the preparation. Both ask first.
+ */
+function EstadoCampanaSection({ campaign, isGm, index }: { campaign: CampaignDetail; isGm: boolean; index: number }) {
+  const qc = useQueryClient()
+  const [confirmar, setConfirmar] = useState(false)
+  const iniciada = !!campaign.iniciadaEn
+  const campos = enumerar(nombresCamposDeCierre(campaign.camposDeCierre ?? [], getWorld(campaign.world)))
+  const fecha = campaign.iniciadaEn
+    ? new Date(campaign.iniciadaEn).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
+  const t = iniciada ? tone.brand : tone.topacio
+
+  const mutation = useMutation({
+    mutationFn: () => (iniciada ? campaignsApi.reabrir(campaign.id) : campaignsApi.iniciar(campaign.id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['campaign', campaign.id] })
+      qc.invalidateQueries({ queryKey: ['campaigns'] })
+    },
+  })
+
+  return (
+    <section aria-labelledby="settings-estado" className="rise" style={{ '--i': index } as CSSProperties}>
+      <SectionTitle id="settings-estado">Estado de la campaña</SectionTitle>
+      <Card padding={0}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: '16px 16px 16px 20px' }}>
+          <span
+            aria-hidden
+            style={{
+              width: 36, height: 36, flexShrink: 0, borderRadius: radius.sm,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: t.bg, border: `1px solid ${t.border}`, color: t.fg,
+            }}
+          >
+            {iniciada ? <Lock size={17} /> : <PencilRuler size={17} />}
+          </span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <span style={{ display: 'block', fontSize: fs.base, fontWeight: 650, color: c.text }}>
+              {iniciada ? 'Iniciada' : 'En preparación'}
+            </span>
+            <span style={{ display: 'block', fontSize: fs.sm, color: c.subtle, marginTop: 2, lineHeight: 1.45 }}>
+              {iniciada
+                ? `Desde el ${fecha}. Los jugadores ya no pueden cambiar ${campos}; el director, sí.`
+                : `Sesión 0: los jugadores completan su personaje. Al iniciar la campaña se cerrarán ${campos}.`}
+            </span>
+          </div>
+          {isGm && (
+            <Button
+              variant={iniciada ? 'secondary' : 'primary'}
+              onClick={() => setConfirmar(true)}
+              disabled={mutation.isPending}
+              aria-haspopup="dialog"
+            >
+              {iniciada ? 'Reabrir preparación' : 'Iniciar campaña'}
+            </Button>
+          )}
+        </div>
+      </Card>
+      {mutation.isError && <ErrorMessage message="No se ha podido cambiar el estado de la campaña." style={{ marginTop: 10 }} />}
+      <ConfirmDialog
+        open={confirmar}
+        tone="brand"
+        icon={iniciada ? 'unlock' : 'warning'}
+        title={iniciada ? '¿Reabrir la preparación?' : '¿Iniciar la campaña?'}
+        message={iniciada
+          ? `Los jugadores podrán volver a cambiar ${campos}.`
+          : `Los jugadores ya no podrán cambiar ${campos}. Tú podrás seguir editándolo y reabrir la preparación cuando quieras.`}
+        confirmLabel={iniciada ? 'Reabrir' : 'Iniciar campaña'}
+        onConfirm={() => { setConfirmar(false); mutation.mutate() }}
+        onCancel={() => setConfirmar(false)}
+      />
     </section>
   )
 }
@@ -255,6 +332,9 @@ export function CampaignSettingsPage() {
         )}
 
         {/* ── Setting (read only) ───────────────────────────────── */}
+        {/* ── State of the campaign: preparation / started ─────── */}
+        {campaign && <EstadoCampanaSection campaign={campaign} isGm={isGm} index={1} />}
+
         {campaign && <AmbientacionSection world={campaign.world} era={campaign.era} index={1} />}
 
         {/* ── Account ──────────────────────────────────────────── */}

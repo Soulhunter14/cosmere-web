@@ -109,6 +109,8 @@ export interface WorldConfig {
      * (T41). Stormlight keeps its plain catalog: its weapons and armor have no price (Q13) and its pickers do not change (P1)
      */
     catalogoDePrecios: boolean
+    /** Legacy of the character (adventure «El legado de los nacidos de la bruma»): card and picker on the «Trasfondo» tab */
+    legados: boolean
   }
   /** The 18 standard skills: the character sheet, the dice roller and the NPC page all read this table */
   habilidades: HabilidadDef[]

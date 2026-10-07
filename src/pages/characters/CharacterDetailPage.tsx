@@ -2,11 +2,12 @@ import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSPr
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
-  Check, ChevronDown, Info, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
+  Check, ChevronDown, Info, Lock, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { metasApi } from '../../api/metas'
-import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
+import { useCampaignStore, useCampoCerrado, useEra, useWorldConfig } from '../../store/campaignStore'
+import { AVISO_CERRADO } from '../../lib/cierreCampana'
 import { useAuthStore } from '../../store/authStore'
 import {
   Button, Card, ConfirmDialog, ErrorMessage, IconButton, Input, Segmented, SectionTitle, Select, Sheet, Spinner, Stepper, TabPanel, Tabs, Textarea,
@@ -91,6 +92,9 @@ const MetalPicker = lazy(() => import('../../components/mistborn').then((m) => (
 const ArtesMetalicasTab = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.ArtesMetalicasTab })))
 // «Beber vial» (T31): the sheet of the vial, mounted only while it is open
 const BeberVialSheet = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.BeberVialSheet })))
+// The legacy (adventure «El legado de los nacidos de la bruma»): its card on the «Trasfondo» tab and its picker, while each one is shown
+const LegadoCard = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.LegadoCard })))
+const LegadoPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.LegadoPicker })))
 
 /** A metalborn path chosen in CaminoMetalPicker that waits for its metals (MetalPicker, §7.4 step 4) */
 interface CaminoPendiente { camino: string; caminoInicial: 'heroico' | 'metal'; arte: MetalPickerProps['arte']; modo: MetalPickerProps['modo'] }
@@ -610,6 +614,8 @@ export function CharacterDetailPage() {
   const { isGm, currentCampaign } = useCampaignStore()
   const cfg = useWorldConfig()
   const era = useEra()
+  // Fields that the started campaign locks for a player (the director always edits them)
+  const cerrado = useCampoCerrado()
   const sections = useMemo(() => buildSections(cfg.habilidades), [cfg.habilidades])
   // Ancestries of the world that exist in the era of the campaign (the era only filters options, §3 b)
   const ascendencias = useMemo(() => cfg.ascendencias.filter((a) => isAvailable(a, era)), [cfg.ascendencias, era])
@@ -618,11 +624,13 @@ export function CharacterDetailPage() {
   const [form, setForm] = useState<Character | null>(null)
   // A link may ask for the «Artes metálicas» tab (`location.state.tab`); if the character has no such tab (`tabActiva`, below) the sheet opens the first one
   const [tab, setTab] = useState<Tab>(() => ((location.state as { tab?: string } | null)?.tab === TAB_ARTES.id ? TAB_ARTES.id : 'caracteristicas'))
-  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'metal' | 'bendicion' | 'vial' | null>(null)
+  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'metal' | 'bendicion' | 'vial' | 'legado' | 'legadoPreguntas' | null>(null)
   const [enCombate, setEnCombate] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   // Flow «al elegir camino» (§7.4): the path that waits for its metals, and the confirmation of a removal or of a change of path
   const [caminoPendiente, setCaminoPendiente] = useState<CaminoPendiente | null>(null)
+  // A change of legacy that would drop the answers of the old one, waiting for confirmation
+  const [confirmarLegado, setConfirmarLegado] = useState<Pick<Character, 'legado' | 'legadoRespuestas'> | null>(null)
   const [confirmarCamino, setConfirmarCamino] = useState<{ tipo: 'quitar' } | { tipo: 'cambiar'; camino: string; seleccion: SeleccionCaminoMetal } | null>(null)
   const nameId = useId()
   const levelId = useId()
@@ -665,9 +673,9 @@ export function CharacterDetailPage() {
   const optimista = (cambio: Partial<Character>) => qc.setQueriesData<Character>({ queryKey: prefijoFicha }, (old) => old && { ...old, ...cambio })
   const restaurar = (ctx: { previas: [QueryKey, Character | undefined][] } | undefined) => ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data))
 
-  // The Blessings (T27). The metalborn path has its own mutations below: it also writes talents, skills and powers and creates goals
+  // The Blessings (T27) and the legacy. The metalborn path has its own mutations below: it also writes talents, skills and powers and creates goals
   const identidadMutation = useMutation({
-    mutationFn: (cambio: Partial<Pick<Character, 'bendiciones'>>) => {
+    mutationFn: (cambio: Partial<Pick<Character, 'bendiciones' | 'legado' | 'legadoRespuestas'>>) => {
       const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? char
       if (!base) return Promise.reject(new Error('The character is not loaded'))
       return charactersApi.update(cId, chId, { ...base, ...cambio } as UpdateCharacterRequest)
@@ -1697,15 +1705,32 @@ export function CharacterDetailPage() {
                 </Button>
               </div>
             )}
+            {/* The legacy (worlds with legacies): the owner or the director change it outside edit mode, with an immediate save */}
+            {cfg.features.legados && (
+              <Suspense fallback={<Spinner />}>
+                <LegadoCard
+                  legado={char.legado}
+                  respuestas={char.legadoRespuestas}
+                  onElegir={!editing && canEdit && !cerrado('legado') ? () => setPicker('legado') : undefined}
+                  onResponder={!editing && canEdit && !cerrado('legadoRespuestas') ? () => setPicker('legadoPreguntas') : undefined}
+                  cerrado={canEdit && (cerrado('legado') || cerrado('legadoRespuestas'))}
+                />
+              </Suspense>
+            )}
+            {identidadMutation.isError && picker === null && cfg.features.legados && (
+              <ErrorMessage message="No se ha podido guardar el cambio. Inténtalo de nuevo." />
+            )}
             {BACKGROUND_FIELDS.map(([k, label], i) => {
               const inputId = `${fieldId}-${k}`
               const value = strField(f, k)
+              // Locked by the started campaign: read only even in edit mode, with the reason below (the server keeps it anyway)
+              const bloqueado = cerrado(k as keyof Character)
               return (
                 <Card key={k} padding="16px 18px" className="rise" style={cardRise(i)}>
                   <h2 style={{ fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, color: c.text, marginBottom: 8 }}>
-                    {editing ? <label htmlFor={inputId}>{label}</label> : label}
+                    {editing && !bloqueado ? <label htmlFor={inputId}>{label}</label> : label}
                   </h2>
-                  {editing ? (
+                  {editing && !bloqueado ? (
                     <Textarea
                       id={inputId}
                       rows={3}
@@ -1716,6 +1741,11 @@ export function CharacterDetailPage() {
                   ) : (
                     <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: value ? c.text : c.subtle, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
                       {value || '—'}
+                    </p>
+                  )}
+                  {editing && bloqueado && (
+                    <p style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: fs.xs, color: c.subtle }}>
+                      <Lock size={13} aria-hidden /> {AVISO_CERRADO}
                     </p>
                   )}
                 </Card>
@@ -1931,6 +1961,34 @@ export function CharacterDetailPage() {
           />
         </Suspense>
       )}
+      {(picker === 'legado' || picker === 'legadoPreguntas') && (
+        <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>
+          <LegadoPicker
+            open
+            onClose={() => setPicker(null)}
+            value={char.legado}
+            respuestas={char.legadoRespuestas}
+            pasoInicial={picker === 'legadoPreguntas' ? 'preguntas' : 'legado'}
+            onConfirm={(legado, legadoRespuestas) => {
+              setPicker(null)
+              // Another legacy has other questions: the answers written for the old one go, so ask first
+              if (legado !== char.legado && char.legadoRespuestas.some((r) => r.trim() !== '')) setConfirmarLegado({ legado, legadoRespuestas })
+              else identidadMutation.mutate({ legado, legadoRespuestas })
+            }}
+          />
+        </Suspense>
+      )}
+      <ConfirmDialog
+        open={confirmarLegado !== null}
+        title="¿Cambiar de legado?"
+        message="Las preguntas del nuevo legado son otras: se borrarán las respuestas que escribiste para el legado anterior."
+        confirmLabel="Cambiar y borrar respuestas"
+        onConfirm={() => {
+          if (confirmarLegado) identidadMutation.mutate(confirmarLegado)
+          setConfirmarLegado(null)
+        }}
+        onCancel={() => setConfirmarLegado(null)}
+      />
       {/* The vial (T31): the same kind of lazy sheet; the metals it holds go up as `beber-vial` and the page closes it, like the pickers above */}
       {picker === 'vial' && (
         <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>

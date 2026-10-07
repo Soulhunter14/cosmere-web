@@ -39,6 +39,7 @@ export const MISTBORN: WorldConfig = {
     equipoInicial: true,
     origenes: true,
     catalogoDePrecios: true,
+    legados: true,
   },
   // The book's table (T26), read on the sheet, the dice roller (from T43) and the NPC page: the same one Stormlight reads since T50
   habilidades: HABILIDADES_COSMERE,

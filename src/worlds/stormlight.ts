@@ -36,6 +36,7 @@ export const STORMLIGHT: WorldConfig = {
     equipoInicial: false,
     origenes: false,
     catalogoDePrecios: false,
+    legados: false,
   },
   // The book's skill table, the same one every world reads on the sheet, the dice roller and the NPC page (T50, Q3)
   habilidades: HABILIDADES_COSMERE,

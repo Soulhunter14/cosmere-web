@@ -27,6 +27,10 @@ export interface Campaign {
   nextSessionTitle?: string
   world: WorldId
   era: Era | null
+  /** When the director started the campaign; `null` = being prepared (session 0). Optional: a campaign persisted in localStorage before it existed lacks it */
+  iniciadaEn?: string | null
+  /** Character fields (camelCase) that a started campaign locks for players (`CierreCampana.Campos` in the API); always the full list */
+  camposDeCierre?: string[]
 }
 
 export interface CampaignDetail extends Campaign {
@@ -200,6 +204,10 @@ export interface Character {
   bonosAtributos: Partial<Record<AttrField, number>>
   /** Hemalurgic spikes (T49a): `[]` in Stormlight and in a character with none; `derivadosSet['hemalurgia.clavosMax']` is the limit once there is one */
   clavos: ClavoHemalurgico[]
+  /** Legacy of the adventure «El legado de los nacidos de la bruma» (`convicto`, `pilluelo`…; `src/data/mistborn/legados.ts`): `''` = none, always `''` in Stormlight */
+  legado: string
+  /** Answers to the two questions of the legacy, in their order: `[]` = unanswered, always `[]` in Stormlight */
+  legadoRespuestas: string[]
   createdAt: string
   updatedAt: string
 }

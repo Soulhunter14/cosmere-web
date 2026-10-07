@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useQuery } from '@tanstack/react-query'
-import type { CampaignDetail, Era, WorldId } from '../types'
+import type { CampaignDetail, Character, Era, WorldId } from '../types'
 import { getWorld } from '../worlds'
 import type { WorldConfig } from '../worlds/types'
 
@@ -38,6 +38,15 @@ export const useCampaignStore = create<CampaignState>()(
 
 // Era of the current campaign. `null` in Stormlight and also when the persisted campaign (localStorage) predates eras.
 export const useEra = (): Era | null => useCampaignStore((s) => s.currentCampaign?.era ?? null)
+
+// Whether a field of the character is locked for the viewer because the campaign has started (src/lib/cierreCampana.ts). The director
+// always edits, so for them nothing is locked. Returns a function so the sheet asks field by field with a single hook
+export function useCampoCerrado(): (campo: keyof Character) => boolean {
+  const isGm = useCampaignStore((s) => s.isGm)
+  const iniciada = useCampaignStore((s) => !!s.currentCampaign?.iniciadaEn)
+  const campos = useCampaignStore((s) => s.currentCampaign?.camposDeCierre)
+  return (campo) => !isGm && iniciada && (campos ?? []).includes(campo)
+}
 
 // World of the current campaign. getWorld resolves '', null, undefined and unknown ids (e.g. a campaign persisted
 // before worlds existed) to Stormlight, so no world literal is needed here.

@@ -46,7 +46,10 @@ export const MISTBORN: WorldConfig = {
     { nombre: 'Alomancia', atributo: 'voluntad', codigo: 'VOL', icono: Flame, ataque: true },
     { nombre: 'Feruquimia', atributo: 'intelecto', codigo: 'INT', icono: Anvil, ataque: false },
   ],
-  // Tones and icons are [inferido → Q18]. Sangre koloss: +1 to the Fuerza maximum (L.38 / PDF 44); Kandra: 6 points (L.34 / PDF 40)
+  // At creation no attribute takes more than 3 points (L.20 / PDF 26)
+  topeCreacionAtributo: 3,
+  // Tones and icons are [inferido → Q18]. Sangre koloss: +1 to the Fuerza maximum and up to 4 points in Fuerza at creation (L.38 / PDF 44);
+  // Kandra: 6 points to hand out (L.34 / PDF 40)
   ascendencias: [
     { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icono: iconoHumano, puntosAtributoBase: 12 },
     {
@@ -60,7 +63,10 @@ export const MISTBORN: WorldConfig = {
         { id: 'fortaleza', nombre: 'Fortaleza' },
       ],
     },
-    { id: 'Sangre koloss', label: 'Sangre koloss', tone: tone.topacio, icono: iconoSangreKoloss, eras: ['era2'], puntosAtributoBase: 12, topeAtributo: { fuerza: 6 } },
+    {
+      id: 'Sangre koloss', label: 'Sangre koloss', tone: tone.topacio, icono: iconoSangreKoloss, eras: ['era2'], puntosAtributoBase: 12,
+      topeAtributo: { fuerza: 6 }, topeCreacion: { fuerza: 4 },
+    },
   ],
   caminoInvestido: {
     field: 'caminoMetal',

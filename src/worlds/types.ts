@@ -114,6 +114,11 @@ export interface WorldConfig {
   columnasPnj?: AtributosColumna
   /** Investida skills that live in a custom slot by exact name: [] | Alomancia (VOL, attack) / Feruquimia (INT) */
   habilidadesInvestidas: { nombre: string; atributo: AttrField; codigo: string; icono: LucideIcon; ataque: boolean }[]
+  /**
+   * Most points one attribute can take when the character is made, at level 1 (Mistborn: 3, L.20 / PDF 26). The sheet warns above it, it never blocks.
+   * Absent: the world declares no such limit and the sheet shows no notice (Stormlight, P1)
+   */
+  topeCreacionAtributo?: number
   /** tone and icono are ReactNode-ready on purpose: a bare LucideIcon without tone would be a visual regression in Stormlight (P1) */
   ascendencias: {
     id: string
@@ -122,7 +127,10 @@ export interface WorldConfig {
     icono: (size: number) => ReactNode
     eras?: Era[]
     puntosAtributoBase: number
+    /** Highest value an attribute can reach for this ancestry when it differs from the usual 5 (sangre koloss: Fuerza 6) */
     topeAtributo?: Partial<Record<AttrField, number>>
+    /** `topeCreacionAtributo` of an attribute when this ancestry has its own (sangre koloss: Fuerza 4, L.38 / PDF 44) */
+    topeCreacion?: Partial<Record<AttrField, number>>
     /**
      * The ancestry carries Blessings (the kandra, L.34-35 / PDF 40-41): id and short name of each, for the identity tile of the sheet. Light twin
      * of `BENDICIONES_KANDRA` (data/mistborn/origenes.ts), which stays in the lazy chunk of the picker (§8, risk 6): keep both in step

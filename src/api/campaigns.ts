@@ -1,5 +1,5 @@
 import client from './client'
-import type { Campaign, CampaignDetail, Era, WorldId } from '../types'
+import type { Campaign, CampaignDetail, Era, UserCandidate, WorldId } from '../types'
 
 export const campaignsApi = {
   getAll: () => client.get<Campaign[]>('/campaigns').then((r) => r.data),
@@ -20,4 +20,10 @@ export const campaignsApi = {
 
   regenerateCode: (id: number) =>
     client.post<string>(`/campaigns/${id}/invite/regenerate`).then((r) => r.data),
+
+  getCandidates: (id: number) =>
+    client.get<UserCandidate[]>(`/campaigns/${id}/members/candidates`).then((r) => r.data),
+
+  addMember: (id: number, userId: number) =>
+    client.post(`/campaigns/${id}/members`, { userId }),
 }

@@ -1,11 +1,11 @@
 import { useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Copy, RefreshCw, Check, Link2, Link2Off, LogOut } from 'lucide-react'
+import { Copy, RefreshCw, Check, Link2, Link2Off, LogOut, UserPlus } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { campaignsApi } from '../../api/campaigns'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
-import { Avatar, Badge, Button, Card, ErrorMessage, PageHeader, SectionTitle, Sheet, Spinner, StatTile, Switch } from '../../components/ui'
+import { Avatar, Badge, Button, Card, ErrorMessage, PageHeader, SectionTitle, Select, Sheet, Spinner, StatTile, Switch } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
 import { getWorld } from '../../worlds'
@@ -46,6 +46,80 @@ function AmbientacionSection({ world, era, index }: { world: string; era: Era | 
         La ambientación y la era se fijan al crear la campaña y no se pueden cambiar.
       </p>
     </section>
+  )
+}
+
+/**
+ * GM only: adds an already registered user to the campaign as a player, one at a time. It does not use the invite
+ * code, so it also works while invitations are disabled.
+ */
+function AddPlayerRow({ campaignId }: { campaignId: number }) {
+  const qc = useQueryClient()
+  const [userId, setUserId] = useState('')
+
+  const { data: candidates, isLoading, error } = useQuery({
+    queryKey: ['campaign-candidates', campaignId],
+    queryFn: () => campaignsApi.getCandidates(campaignId),
+  })
+
+  const addMutation = useMutation({
+    mutationFn: (id: number) => campaignsApi.addMember(campaignId, id),
+    onSuccess: () => {
+      setUserId('')
+      qc.invalidateQueries({ queryKey: ['campaign', campaignId] })
+      qc.invalidateQueries({ queryKey: ['campaign-candidates', campaignId] })
+    },
+  })
+
+  const empty = !isLoading && !error && candidates?.length === 0
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px 16px 20px', borderTop: `1px solid ${c.border}` }}>
+      <span
+        aria-hidden
+        style={{
+          width: 36, height: 36, flexShrink: 0, borderRadius: radius.sm,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: tone.brand.bg, border: `1px solid ${tone.brand.border}`, color: c.brandLight,
+        }}
+      >
+        <UserPlus size={17} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <label htmlFor="settings-add-player" style={{ display: 'block', fontSize: fs.base, fontWeight: 650, color: c.text }}>
+          Añadir jugador existente
+        </label>
+        <span style={{ display: 'block', fontSize: fs.sm, color: c.subtle, marginTop: 2 }}>
+          {empty ? 'Todos los usuarios ya están en la campaña' : 'Elige un usuario registrado y añádelo como jugador'}
+        </span>
+        {!empty && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+            <Select
+              id="settings-add-player"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              disabled={isLoading || !!error || addMutation.isPending}
+              style={{ flex: '1 1 180px', minWidth: 0 }}
+            >
+              <option value="">{isLoading ? 'Cargando…' : 'Elige un usuario'}</option>
+              {candidates?.map((u) => (
+                <option key={u.userId} value={u.userId}>{u.displayName} · @{u.username}</option>
+              ))}
+            </Select>
+            <Button
+              onClick={() => addMutation.mutate(Number(userId))}
+              disabled={!userId}
+              loading={addMutation.isPending}
+              icon={<UserPlus size={15} aria-hidden />}
+            >
+              Añadir
+            </Button>
+          </div>
+        )}
+        {error && <ErrorMessage message="No se pudieron cargar los usuarios." style={{ marginTop: 10 }} />}
+        {addMutation.isError && <ErrorMessage message="No se ha podido añadir al jugador." style={{ marginTop: 10 }} />}
+      </div>
+    </div>
   )
 }
 
@@ -173,6 +247,9 @@ export function CampaignSettingsPage() {
                   onChange={(next) => toggleInviteMutation.mutate(next)}
                 />
               </div>
+
+              {/* Add an existing user */}
+              <AddPlayerRow campaignId={id} />
             </Card>
           </section>
         )}

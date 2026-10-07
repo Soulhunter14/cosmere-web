@@ -41,6 +41,13 @@ export interface Member {
   role: 'gm' | 'player'
 }
 
+/** A registered user who is not in the campaign yet: the GM can add them as a player */
+export interface UserCandidate {
+  userId: number
+  username: string
+  displayName: string
+}
+
 // Stat breakdown (computed by the rules engine)
 export interface StatLinea {
   concepto: string

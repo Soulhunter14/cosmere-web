@@ -66,6 +66,9 @@ export default defineConfig({
     port: 5173,
     host: true,
     allowedHosts: true,
+    // Vite 8 lo activa al detectar un agente (Claude Code). Con el WebSocket de HMR caído, cada send() fallido
+    // dispara otro unhandledrejection que se vuelve a reenviar: bucle infinito que cuelga Claude Desktop.
+    forwardConsole: false,
     proxy: {
       '/api': {
         target: 'http://localhost:5200',

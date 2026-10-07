@@ -14,6 +14,9 @@
  * - 'concedido' («Añadir poder», T30, director only): one power the character gets as a reward, with its origin chosen here: a spike, an alloy
  *   of lerasium (Era 1 only) or a medallion (Era 2 only; L.288-295 / PDF 294-301). It does not depend on the path: any metal of the era the origin
  *   allows, never a power the character already has, born complete and without a goal.
+ * - `nuevaMeta` (T33, «Nueva meta de nacido del metal», director only): the path already gave every power, so nothing is created. In 'pareja' or
+ *   'puro-aleacion-o-atium' mode only the nascent powers that have no goal yet (the ids in `nuevaMeta`) can be chosen for the new goal, and the
+ *   rest of the era's table is shown as taken (L.141 / PDF 147; L.146 / PDF 152: «y así sucesivamente»).
  * A metal whose pair is not offered (gold in Era 1, whose alloy electro is not in the table) is chosen alone (Q25). Alomancia de
  * atium is complete from the start and trains no goal (L.177 / PDF 183; L.135 / PDF 141).
  *
@@ -51,6 +54,11 @@ export interface MetalPickerProps {
   yaElegidos: string[]
   /** 'concedido' mode: the arts whose Investida skill has no free cognitive slot; a spike or an alloy of that art waits until the director frees one (Q4) */
   sinHueco?: ArteMetal[]
+  /**
+   * «Nueva meta de nacido del metal» (T33): ids (`${arte}:${metal}`) of the nascent powers without a goal, the only ones the new goal can train.
+   * The character already has all its powers, so `onConfirm` hands back no powers, only the ids of the goal
+   */
+  nuevaMeta?: string[]
   onConfirm: (poderes: PoderPersonaje[], paraMeta: string[]) => void
 }
 
@@ -205,11 +213,12 @@ function permiteOrigen(origen: OrigenConcedido, arte: ArteMetal, metal: MetalId,
   return origen !== 'medallon' || (def.arte === 'feruquimia' && def.medallon.disponibleParaPJ)
 }
 
-export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaElegidos, sinHueco = [], onConfirm }: MetalPickerProps) {
+export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaElegidos, sinHueco = [], nuevaMeta, onConfirm }: MetalPickerProps) {
   const cfg = useWorldConfig()
   const { data, isPending } = useWorldData()
   const resumenId = useId()
   const concedido = modo === 'concedido'
+  const nueva = nuevaMeta !== undefined
   const [origen, setOrigen] = useState<OrigenConcedido>('clavo')
   // 'concedido': the arts follow the origin (an alloy of lerasium is alomantic, a medallion feruchemical); otherwise the prop decides
   const artes: ArteMetal[] = concedido ? ORIGENES[origen].artes : arte === 'ambas' ? ['alomancia', 'feruquimia'] : [arte]
@@ -232,7 +241,7 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
     if (concedido) return (era === null || m.eras.includes(era)) && permiteOrigen(origen, a, m.id, def)
     return enEra.has(m.id) && def.caminos.includes(caminoMetal as CaminoMetalId)
   })
-  const poseido = (a: ArteMetal, metal: MetalId) => yaElegidos.includes(id(a, metal))
+  const poseido = (a: ArteMetal, metal: MetalId) => yaElegidos.includes(id(a, metal)) || (nuevaMeta !== undefined && enEra.has(metal) && !nuevaMeta.includes(id(a, metal)))
   const sinMeta = (a: ArteMetal, metal: MetalId) => defDe(a, metal)?.requiereMeta === false
   const parDe = (a: ArteMetal, m: MetalDef): MetalDef | null => {
     const par = m.pareja ? getMetal(m.pareja) : null
@@ -252,19 +261,21 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
     arte: a, metal, origen: concedido ? origen : 'camino', completo: concedido || sinMeta(a, metal), metaId: null,
     cargas: concedido && origen === 'medallon' ? 8 : 0, ajusteCargasMax: 0, viales: 0, desprovisto: false,
   })
-  const recibidos = todos ? artes.flatMap((a) => ofrecidos(a).filter((m) => !poseido(a, m.id)).map((m) => nuevo(a, m.id))) : null
+  const recibidos = todos && !nueva ? artes.flatMap((a) => ofrecidos(a).filter((m) => !poseido(a, m.id)).map((m) => nuevo(a, m.id))) : null
   const paraMeta = concedido ? [] : elegidos.filter((p) => !sinMeta(...partes(p)))
   // A spike or an alloy brings the Investida skill of its art: with no free cognitive slot for it, the director frees one first (Q4)
   const faltaHueco = concedido && origen !== 'medallon' && elegidos.some((p) => sinHueco.includes(partes(p)[0]))
   const listo = !!data && !faltaHueco && (modo === 'uno-por-arte' ? artes.every((a) => elegidos.some((p) => p.startsWith(`${a}:`))) : elegidos.length > 0)
 
-  const confirmar = () => onConfirm(recibidos ?? elegidos.map((p) => nuevo(...partes(p))), paraMeta)
+  const confirmar = () => onConfirm(nueva ? [] : (recibidos ?? elegidos.map((p) => nuevo(...partes(p)))), paraMeta)
 
   const disponible = (o: OrigenConcedido) => !ORIGENES[o].solo || era === null || era === ORIGENES[o].solo
   const nombreEra = (e: Era) => cfg.eras?.find((x) => x.id === e)?.label ?? 'otra era'
 
-  const titulo = concedido ? 'Añadir poder' : modo === 'uno-por-arte' ? 'Poderes alomántico y feruquímico' : todos ? `Poderes ${artes[0] === 'alomancia' ? 'alománticos' : 'feruquímicos'}` : `Poder ${artes[0] === 'alomancia' ? 'alomántico' : 'feruquímico'}`
-  const descripcion = concedido
+  const titulo = nueva ? 'Nueva meta de nacido del metal' : concedido ? 'Añadir poder' : modo === 'uno-por-arte' ? 'Poderes alomántico y feruquímico' : todos ? `Poderes ${artes[0] === 'alomancia' ? 'alománticos' : 'feruquímicos'}` : `Poder ${artes[0] === 'alomancia' ? 'alomántico' : 'feruquímico'}`
+  const descripcion = nueva
+    ? `${modo === 'pareja' ? 'Elige la pareja Empujón/Tirón que entrenará' : 'Elige un metal puro y su aleación, o el atium, para'} la nueva meta «${metaDe(artes[0]) ?? ''}». Solo se ofrecen los poderes nacientes que aún no tienen meta.`
+    : concedido
     ? 'El director concede un poder completo y sin meta: un clavo hemalúrgico, una aleación de lerasium o un medallón feruquímico.'
     : modo === 'pareja'
       ? `Obtienes todos los poderes alománticos de tu era en su versión naciente. Elige la pareja Empujón/Tirón que entrenarás primero con la meta «${metaDe('alomancia') ?? 'Entrenar tus poderes'}».`
@@ -284,7 +295,7 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
     const completa = sinMeta(vista, m.id)
     // A metal of a pair goes alone when its pair is not in the era (gold in Era 1, Q25) or the character already has it
     const solo = todos && !completa && !tiene && m.pareja !== null && !parDe(vista, m)
-    const nota = tiene ? 'Ya lo tiene'
+    const nota = tiene && !(nueva && completa) ? (nueva ? 'Con meta o completo' : 'Ya lo tiene')
       : todos && completa ? 'Completa desde el principio: no necesita meta'
         : !todos && completa ? 'Se usa completa desde el principio: sin meta'
           : solo ? (m.pareja && poseido(vista, m.pareja) ? 'Ya tiene su pareja' : 'Sin pareja en esta era') : undefined
@@ -341,7 +352,7 @@ export function MetalPicker({ open, onClose, arte, modo, era, caminoMetal, yaEle
             aria-describedby={faltaHueco ? `${resumenId}-hueco` : undefined}
             onClick={confirmar}
           >
-            {concedido ? 'Añadir poder' : 'Asignar camino'}
+            {concedido ? 'Añadir poder' : nueva ? 'Crear meta' : 'Asignar camino'}
           </Button>
         </>
       }

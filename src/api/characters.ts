@@ -2,7 +2,7 @@ import client from './client'
 import type { Character, CreateCharacterRequest, RecursosPatch, UpdateCharacterRequest } from '../types'
 
 // What Nacidos de la bruma adds to every character response (§5.1)
-type MistbornFields = 'caminoMetal' | 'caminoInicial' | 'poderes' | 'recursos' | 'bendiciones' | 'derivadosSet' | 'bonosAtributos'
+type MistbornFields = 'caminoMetal' | 'caminoInicial' | 'poderes' | 'recursos' | 'bendiciones' | 'derivadosSet' | 'bonosAtributos' | 'clavos'
 
 // A character as it arrives from the wire: an API older than T11 (parallel worktrees in development) does not send the Mistborn fields
 type CharacterWire = Omit<Character, MistbornFields> & Partial<Pick<Character, MistbornFields>>
@@ -20,6 +20,7 @@ export const normalizeCharacter = (c: CharacterWire): Character => ({
   bendiciones: c.bendiciones ?? [],
   derivadosSet: c.derivadosSet ?? {},
   bonosAtributos: c.bonosAtributos ?? {},
+  clavos: c.clavos ?? [],
 })
 
 export const charactersApi = {

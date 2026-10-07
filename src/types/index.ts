@@ -77,6 +77,19 @@ export interface PoderPersonaje {
   desprovisto: boolean
 }
 
+// Hemalurgic spike of a Mistborn character (T49a, §9): its own list in `Character.clavos`, apart from `poderes`. Only the director writes it
+// (the server keeps the saved list when anyone else sends one)
+export interface ClavoHemalurgico {
+  /** ASCII id of the metal of the spike: one of the 12 of the table «Efectos conocidos de los clavos hemalúrgicos» (cinc, cobre, estano, hierro, acero…; L.291 / PDF 297) */
+  metalClavo: string
+  /** `${arte}:${metal}` of the power a power spike grants (one of the four of its metal; the power travels in `poderes` with `origen: 'clavo'`); null in an attribute spike */
+  poderElegido: string | null
+  /** true while implanted: only then does it take effect (L.290 / PDF 296) */
+  implantado: boolean
+  /** «Clavo secreto» (L.289 / PDF 295): informative only in v1 */
+  secreto: boolean
+}
+
 // Characters
 export interface Character {
   id: number
@@ -176,12 +189,15 @@ export interface Character {
   derivadosSet: Record<string, StatDesglose>
   /** Attribute bonuses of any origin, without zeros; the sheet and the dice roller add them only when `features.bonosServidor` is true */
   bonosAtributos: Partial<Record<AttrField, number>>
+  /** Hemalurgic spikes (T49a): `[]` in Stormlight and in a character with none; `derivadosSet['hemalurgia.clavosMax']` is the limit once there is one */
+  clavos: ClavoHemalurgico[]
   createdAt: string
   updatedAt: string
 }
 
 export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante' | 'caminoMetal' | 'caminoInicial'> & { ownerId?: number }
 // `poderes`, `bendiciones` and `caminoInicial` do travel in the PUT; `recursos` (and the table state of each power) go with PATCH …/recursos
+// `clavos` travels too (T49b), but only the director's list is written: for anyone else the server keeps the saved one
 export type UpdateCharacterRequest = Omit<Character,
   'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas' |
   'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |

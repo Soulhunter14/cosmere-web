@@ -16,17 +16,21 @@
 import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, RefreshCw, Target } from 'lucide-react'
-import { Button, Card, EmptyState, ErrorMessage, SectionTitle, Spinner, StatTile } from '../ui'
+import { Pin, Plus, RefreshCw, Target } from 'lucide-react'
+import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorMessage, SectionTitle, Spinner, StatTile } from '../ui'
 import { metasApi } from '../../api/metas'
 import { charactersApi } from '../../api/characters'
 import { useEra, useWorldConfig, useWorldData } from '../../store/campaignStore'
 import type { Character, PoderPersonaje, RecursosPatch, UpdateCharacterRequest } from '../../types'
 import type { PoderDef } from '../../data/mistborn/tipos'
+import type { ArteMetal } from '../../data/mistborn/metales'
+import type { OpcionPoderClavo, TipoClavo } from '../../data/mistborn/hemalurgia'
 import { CAMINOS_NACIDOS_DEL_METAL } from '../../data/mistborn/caminosNacidosDelMetal'
-import { c, fs } from '../../theme'
+import { c, font, fs } from '../../theme'
 import { PoderCard } from './PoderCard'
 import { MetalPicker } from './MetalPicker'
+import { ClavoPicker, GlifoClavo } from './ClavoPicker'
+import { efectoClavo, implantados, nombreClavo, planExtraerClavo, planImplantarClavo, tipoDeClavo } from './clavos'
 import { enlazarMetas, faltaHuecoParaPoder, idPoder, metalesDelCamino, type EntornoCaminoMetal, type MetaPendiente } from './caminoMetalFlujo'
 import { ARTES, NOMBRE_ARTE, cargasMaxDe, desgloseTexto, nombrePoder, poderesDe, talentosDe, textoDerivado, type CambioPoder } from './poderes'
 
@@ -178,6 +182,192 @@ function NuevaMetaNacidoDelMetal({ character, editing }: { character: Character;
   )
 }
 
+/** What the section asks its mutation for: implant a spike (and the power it grants, if any) or extract the one at `indice` of the list */
+type OrdenClavo = { tipo: 'implantar'; clavo: TipoClavo; poder: OpcionPoderClavo | null } | { tipo: 'extraer'; indice: number }
+
+/**
+ * «Clavos hemalúrgicos» (T49b, director): the hemalurgic spikes the character wears, a reward of the DJ (L.288-292 / PDF 294-298). «Implantar clavo» opens
+ * the picker of the 12 types of the book's table; «Extraer clavo» asks first, because it takes the spike off the list and its power with it. Both are ONE
+ * `PUT` with the whole character (the copy out of combat, as the other immediate changes of the sheet) plus the new list of spikes and, if the spike grants a
+ * power the character does not have, that power as `origen: 'clavo'` (`planImplantarClavo`; T49a: a spike whose power is not among the powers grants
+ * nothing). The effects are the server's: the attribute bonus, the lines of Defensa espiritual and the maximum of spikes (`hemalurgia.clavosMax`) come back
+ * with the refetch; nothing is computed here. Only the director writes the spikes (`RestringirCambiosNoGm`), so the section is the director's. Immediate, so it
+ * is off while the sheet is being edited (a refetch would wipe the form).
+ */
+function ClavosHemalurgicos({ character, editing, entorno, sinHueco }: {
+  character: Character
+  editing: boolean
+  entorno: EntornoCaminoMetal
+  /** Arts whose Investida skill has no free cognitive slot */
+  sinHueco: ArteMetal[]
+}) {
+  const qc = useQueryClient()
+  const tituloId = useId()
+  const [eligiendo, setEligiendo] = useState(false)
+  const [extrayendo, setExtrayendo] = useState<number | null>(null)
+  const cId = character.campaignId
+  const chId = character.id
+  // Every cached copy of the character moves together (§2): by prefix, the one read out of combat and the one in combat
+  const prefijo = ['character', cId, chId]
+
+  const guardar = useMutation({
+    mutationFn: async (orden: OrdenClavo) => {
+      const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? character
+      const plan = orden.tipo === 'implantar'
+        ? planImplantarClavo(base, orden.clavo, orden.poder, entorno)
+        : { cambio: planExtraerClavo(base, orden.indice).cambio, faltan: [] }
+      if (plan.faltan.length > 0) throw new Error(`No free cognitive slot for ${plan.faltan.join(', ')}`)
+      // The list moves at once in every cached copy; the derived values (bonuses, defences, maximum of spikes) arrive with the refetch
+      qc.setQueriesData<Character>({ queryKey: prefijo }, (old) => old && { ...old, ...plan.cambio })
+      return charactersApi.update(cId, chId, { ...base, ...plan.cambio } as UpdateCharacterRequest)
+    },
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: prefijo })
+      return { previas: qc.getQueriesData<Character>({ queryKey: prefijo }) }
+    },
+    onError: (_error, _orden, ctx) => ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: prefijo })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+    },
+  })
+
+  const clavos = character.clavos
+  const puestos = implantados(clavos).length
+  const max = character.derivadosSet['hemalurgia.clavosMax']?.total
+  const ocupado = editing || guardar.isPending
+  const aExtraer = extrayendo !== null ? clavos[extrayendo] : undefined
+  const plan = aExtraer && extrayendo !== null ? planExtraerClavo(character, extrayendo) : null
+
+  return (
+    <section aria-labelledby={tituloId}>
+      <SectionTitle id={tituloId}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Pin size={18} aria-hidden />
+          Clavos hemalúrgicos
+        </span>
+      </SectionTitle>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p style={nota}>
+          Recompensas del director (L.288 / PDF 294). Un clavo de atributo sube un atributo en 1; uno de poder concede un poder completo. Cada clavo implantado
+          resta Defensa espiritual.
+        </p>
+
+        {clavos.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Badge tone={max !== undefined && puestos > max ? 'topacio' : 'cuarzo'}>
+              {puestos}{max !== undefined ? ` de ${max}` : ''} {puestos === 1 && max === undefined ? 'clavo implantado' : 'clavos implantados'}
+            </Badge>
+            {max !== undefined && puestos > max && <span style={nota}>Supera el máximo de su rango.</span>}
+          </div>
+        )}
+
+        {guardar.isError && <ErrorMessage message="No se ha podido guardar el cambio de los clavos. Inténtalo de nuevo." />}
+
+        {clavos.length === 0 ? (
+          <p style={nota}>Este personaje no lleva ningún clavo.</p>
+        ) : (
+          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {clavos.map((k, i) => {
+              const tipo = tipoDeClavo(k.metalClavo)
+              const nombre = nombreClavo(k.metalClavo)
+              return (
+                <Card as="li" key={i} padding="14px 16px" style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <GlifoClavo metal={k.metalClavo} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h3 style={{ fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, lineHeight: 1.25, color: c.text, overflowWrap: 'anywhere' }}>{nombre}</h3>
+                      <p style={{ ...nota, marginTop: 2 }}>{tipo?.tipo === 'poder' ? `Concede: ${efectoClavo(k)}` : efectoClavo(k)}</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge tone={k.implantado ? 'esmeralda' : 'cuarzo'}>{k.implantado ? 'Implantado' : 'Sin implantar'}</Badge>
+                      {k.secreto && <Badge tone="amatista">Secreto</Badge>}
+                    </div>
+                    <Button variant="secondary" aria-label={`Extraer ${nombre.toLowerCase()}`} aria-haspopup="dialog" disabled={ocupado} onClick={() => setExtrayendo(i)}>
+                      Extraer clavo
+                    </Button>
+                  </div>
+                </Card>
+              )
+            })}
+          </ul>
+        )}
+
+        {puestos > 0 && (
+          <p style={nota}>
+            Defensa espiritual: <strong style={{ color: c.text }}>{character.defensaEspiritual.total}</strong>. Con algún clavo y Defensa espiritual 9 o menos, el
+            personaje empieza cada escena Desorientado hasta que termine (L.290 / PDF 296).
+          </p>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+          <Button
+            variant="secondary"
+            icon={<Plus size={16} aria-hidden />}
+            aria-haspopup="dialog"
+            aria-busy={guardar.isPending || undefined}
+            disabled={ocupado}
+            onClick={() => { guardar.reset(); setEligiendo(true) }}
+          >
+            Implantar clavo
+          </Button>
+          {guardar.isSuccess && guardar.variables && (
+            <p role="status" style={{ ...nota, color: c.text }}>
+              {guardar.variables.tipo === 'implantar' ? `${nombreClavo(guardar.variables.clavo.metal)} implantado.` : 'Clavo extraído.'}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {eligiendo && (
+        <ClavoPicker
+          open
+          onClose={() => setEligiendo(false)}
+          poderes={character.poderes}
+          clavos={clavos}
+          clavosMax={max}
+          sinHueco={sinHueco}
+          onConfirm={(clavo, poder) => {
+            setEligiendo(false)
+            guardar.mutate({ tipo: 'implantar', clavo, poder })
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!aExtraer}
+        title={aExtraer ? `¿Extraer el ${nombreClavo(aExtraer.metalClavo).toLowerCase()}?` : ''}
+        message={aExtraer && (
+          <>
+            {aExtraer.implantado ? (
+              <>
+                {character.name} deja de recibir los efectos del clavo{tipoDeClavo(aExtraer.metalClavo)?.tipo === 'atributo' ? ` (${efectoClavo(aExtraer)})` : ''} y la reducción
+                de Defensa espiritual.
+              </>
+            ) : (
+              <>Este clavo ya no estaba implantado: solo se quita de la lista de {character.name}.</>
+            )}
+            {plan?.poderQuitado && <> También pierde el poder que concedía, <strong>{nombrePoder(plan.poderQuitado)}</strong>.</>}
+            {aExtraer.implantado && ' En mesa, extraerlo cuesta 1 acción y una prueba de Medicina CD 10 (L.290 / PDF 296); aquí solo se anota el resultado.'}
+          </>
+        )}
+        confirmLabel="Extraer clavo"
+        tone="danger"
+        icon="warning"
+        onConfirm={() => {
+          const indice = extrayendo
+          setExtrayendo(null)
+          if (indice !== null) guardar.mutate({ tipo: 'extraer', indice })
+        }}
+        onCancel={() => setExtrayendo(null)}
+      />
+    </section>
+  )
+}
+
 export function ArtesMetalicasTab({
   character, isGm, editing, puedeActuar, entorno, vivo, onPatch, onAnadirPoder, errorMesa, errorAnadir, anadiendo,
 }: ArtesMetalicasTabProps) {
@@ -299,6 +489,9 @@ export function ArtesMetalicasTab({
           </section>
         )
       })}
+
+      {/* «Clavos hemalúrgicos» (T49b): the director's, and only where the world has metallic arts (`features.artesMetalicas`, the same gate as the tab) */}
+      {isGm && cfg.features.artesMetalicas && <ClavosHemalurgicos character={character} editing={editing} entorno={entorno} sinHueco={sinHueco} />}
 
       {isGm && <NuevaMetaNacidoDelMetal character={character} editing={editing} />}
 

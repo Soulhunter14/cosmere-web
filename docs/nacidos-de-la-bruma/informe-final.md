@@ -50,7 +50,7 @@ Se aplican solas al arrancar la API, en este orden:
 
    `cosmere-web/docs/` es la copia de trabajo de estos documentos. La rama de integración ya tiene la misma copia sincronizada.
 3. **Fusionar** `nacidos-de-la-bruma` en `main` en los dos repos.
-4. **En el servidor, antes de `deploy.sh`.** Entra con `ssh -p 2222 xpujol@83.51.10.55` y ejecuta:
+4. **En el servidor, antes de `deploy.sh`.** Entra con `ssh -p 2222 xpujol@albertsalud.ddns.net` y ejecuta:
 
    ```bash
    cd ~/cosmere && sudo docker exec cosmere-postgres pg_dump -U jira -d cosmere -Fc > backup-$(date +%F).dump && sudo docker tag cosmere-api:latest cosmere-api:prev && sudo docker tag cosmere-web:latest cosmere-web:prev

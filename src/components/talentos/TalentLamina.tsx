@@ -76,12 +76,12 @@ export function TalentLamina({ id, plate, graph, evaluation, level, contentW, ac
 }) {
   const Hn = `h${headingLevel}` as 'h3' | 'h4'
   const wide = contentW >= WIDE_MIN
-  // the singer plate has 3 lanes: narrower cards over the whole lámina width
+  // the plates of 3 lanes (the singer) and of 4 (the nacidoble path): narrower cards over the whole lámina width
   const d = useMemo(() => {
     const base = laminaDims(contentW)
     if (plate.cols <= 2) return base
     const W = Math.min(contentW, wide ? 648 : 420)
-    return { ...base, channel: 12, cellW: Math.floor((W - 2 * base.margin - 24) / 3) }
+    return { ...base, channel: 12, cellW: Math.floor((W - 2 * base.margin - 12 * (plate.cols - 1)) / plate.cols) }
   }, [contentW, plate.cols, wide])
   const lam = useMemo(() => tracePlate(plate, graph, d, edgeStatus), [plate, graph, d, edgeStatus])
   const { box } = lam
@@ -185,7 +185,7 @@ export function TalentLamina({ id, plate, graph, evaluation, level, contentW, ac
                 )}
                 {wide && (
                   <span style={{ fontSize: fs.xs + 0.5, color: c.muted, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: bits.length ? 2 : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {summaryOf(node)}
+                    {summaryOf(node, graph.rules.summaries)}
                   </span>
                 )}
                 <span style={{ marginTop: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, fontSize: fs.xs, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: mark.kind === 'learned' || mark.kind === 'elsewhere' || mark.kind === 'available' ? accent.fg : c.text }}>

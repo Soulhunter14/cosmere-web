@@ -1,22 +1,27 @@
 /**
- * PathAtlas — one path (heroic path, radiant order or singer) as a miniature of the book's double page:
- * key-talent box with a double gold frame, bus, plates with a filled gold band and the 2×4 cells at the
- * book's grid positions, requirement lines from real prerequisites only. A tap on a cell opens an inline
- * brief card under the map; a tap on a band opens the readable lámina. Fixed geometry (talentMap.ts).
+ * PathAtlas — one path (heroic path, radiant order, singer, Investida path with its powers, ancestry) as a miniature of the book's
+ * double page: key-talent box with a double gold frame, bus, plates with a filled gold band and the 2×4 cells at the book's grid
+ * positions, requirement lines from real prerequisites only. A tap on a cell opens an inline brief card under the map; a tap on a band
+ * opens the readable lámina. Fixed geometry (talentMap.ts). The plates go in rows of at most 3 slots, each row with its own bus; the
+ * atlas of an Investida path also offers «Otros poderes»: the plates of the powers the path unlocks that the character lacks, read only.
  */
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { Check, ChevronDown, Hourglass, Music, Plus, Target, X } from 'lucide-react'
-import { Button, IconButton } from '../ui'
+import { Button, Disclosure, IconButton } from '../ui'
 import { HeroicPathIcon } from '../GameIcons'
 import { RadiantOrderIcon } from '../RadiantOrderIcon'
 import { c, eyebrow, font, fs, radius, shadow, titleText, tone } from '../../theme'
-import type { TalentEvaluation, TalentGraph, TalentNode } from '../../lib/talentGraph'
+import { buildTalentGraph, evaluate, type TalentEvaluation, type TalentGraph, type TalentNode, type TalentState } from '../../lib/talentGraph'
+import { useEra, useWorldConfig } from '../../store/campaignStore'
+import { isAvailable } from '../../worlds'
+import type { PoderDef, WorldConfig } from '../../worlds/types'
 import {
-  WIDE_MIN, cellDomId, cellMark, mapDims, plural, relationsOf, requiresText, sourceOf, stateWords, summaryOf, tracePlate,
+  WIDE_MIN, buildOtherPowersModel, cellDomId, cellMark, mapDims, otherPowerDefs, packRows, plateSlots, plural, relationsOf, requiresText,
+  sourceOf, stateWords, summaryOf, tracePlate,
   type CellMark, type Dims, type EdgeStatusFn, type PathModel, type PlateModel, type PlateTrace,
 } from './talentMap'
-import { ACTIVATION, BAND_BG, BAND_FG, accentOf, type Accent } from './talentStyle'
-import { ActIcon, CellMarkView, EdgeLayer, StepBadge } from './MapPieces'
+import { ACTIVATION, BAND_BG, BAND_FG, META_LOCKED, accentOf, type Accent } from './talentStyle'
+import { ActIcon, CellMarkView, EdgeLayer, MetalMark, StepBadge } from './MapPieces'
 import { TalentLamina } from './TalentLamina'
 
 export interface AtlasProps {
@@ -41,6 +46,13 @@ export interface AtlasProps {
   /** a path the character has not entered yet (its key talent costs 1 talent) */
   explore?: boolean
   surgeRank?: (surge: string) => number
+  /**
+   * The talent state of the character. With it, the atlas of an Investida path offers «Otros poderes»: the powers the path unlocks that the
+   * character lacks, built into a second graph and evaluated against this same state (read only, nothing in them can be learned)
+   */
+  state?: TalentState
+  /** `'otros'`: the plates of «Otros poderes» inside their Disclosure: no heading, no key box, no bus, a read-only brief card (internal) */
+  variant?: 'otros'
   /** right side of the key box status row (singer: active form + Cambiar) */
   keyExtra?: ReactNode
   /** under the header (radiant: Ideales jurados; notes) */
@@ -66,23 +78,48 @@ function cellLabel(node: TalentNode, mark: CellMark, missing: string[], level: n
   return parts.join(' ')
 }
 
-const pathIcon = (model: PathModel, accent: Accent, size: number) =>
+/** The icon of each world (§7.1): the Investida path and the ancestries are told by the config of the world, never by an id of a world */
+const pathIcon = (model: PathModel, accent: Accent, size: number, cfg: WorldConfig) =>
   model.kind === 'heroico' ? <HeroicPathIcon id={model.pathId} size={size} style={{ color: accent.fg }} />
   : model.kind === 'radiante' ? <RadiantOrderIcon orderId={model.pathId} size={size + 4} decorative />
+  : model.kind === 'caminoInvestido' ? <span aria-hidden style={{ display: 'inline-flex', color: accent.fg }}>{cfg.iconos.caminoInvestido(model.pathId, size)}</span>
+  : model.kind === 'ascendencia' ? <span aria-hidden style={{ display: 'inline-flex', color: accent.fg }}>{cfg.ascendencias.find((a) => a.id === model.title)?.icono(size)}</span>
+  : model.kind === 'poder' ? <MetalMark poderId={model.plates[0]?.poderId} size={size} style={{ color: accent.fg }} />
   : <Music size={size - 2} aria-hidden style={{ color: accent.fg }} />
+
+/** The root of an atlas: a section named by its heading, or (the plates of «Otros poderes») a plain group inside the Disclosure */
+function AtlasRoot({ bare, titleId, label, children }: { bare: boolean; titleId: string; label: string; children: ReactNode }) {
+  if (bare) return <div role="group" aria-label={label}>{children}</div>
+  return <section aria-labelledby={titleId} id={`${titleId}-section`} style={{ marginTop: 28, scrollMarginTop: 150 }}>{children}</section>
+}
 
 export function PathAtlas(props: AtlasProps) {
   const { model, graph, evaluation, level, contentW, edgeStatus, stepOf, targetId, selectedId, onSelect } = props
+  const cfg = useWorldConfig()
+  const era = useEra()
+  const bare = props.variant === 'otros'
   const [hoverId, setHoverId] = useState<string | null>(null)
   const [availOpen, setAvailOpen] = useState(false)
   const wide = contentW >= WIDE_MIN
   const d = useMemo(() => mapDims(contentW), [contentW])
   const accent = useMemo(() => accentOf(model.color), [model.color])
+  // a plate of 3 or 4 lanes spans two plates (the singer, the nacidoble path)
   const traces = useMemo(
-    () => model.plates.map((pl) => tracePlate(pl, graph, d, edgeStatus, pl.kind === 'cantor' ? 2 * d.plateW + d.plateGap : undefined)),
+    () => model.plates.map((pl) => {
+      const slots = plateSlots(pl)
+      return tracePlate(pl, graph, d, edgeStatus, slots > 1 ? slots * d.plateW + (slots - 1) * d.plateGap : undefined)
+    }),
     [model, graph, d, edgeStatus],
   )
-  const rowW = traces.reduce((s, t) => s + t.box.width, 0) + d.plateGap * Math.max(0, traces.length - 1)
+  // rows of at most 3 slots, each centred, with its own bus and its own width (a single row for every Stormlight path)
+  const rows = useMemo(() => packRows(model.plates), [model.plates])
+  const rowLayout = rows.map((idx) => {
+    let off = 0
+    const centers: number[] = []
+    for (const i of idx) { centers.push(off + traces[i].box.width / 2); off += traces[i].box.width + d.plateGap }
+    return { idx, centers, w: Math.max(0, off - d.plateGap) }
+  })
+  const rowW = Math.max(0, ...rowLayout.map((r) => r.w))
   const related = useMemo(() => (hoverId ? relationsOf(graph, hoverId) : null), [graph, hoverId])
 
   const stateOf = (id: string) => evaluation.nodes.get(id)?.state
@@ -94,15 +131,20 @@ export function PathAtlas(props: AtlasProps) {
   const briefId = `${titleId}-brief`
   const key = model.keyNode
   const selectedHere = selectedId && model.nodeIds.includes(selectedId) ? selectedId : null
+  // the Investida path says what it is in the words of its world («Camino de nacido del metal»); the other models carry their own
+  const eyebrowText = model.kind === 'caminoInvestido' && cfg.caminoInvestido ? cfg.caminoInvestido.label : model.eyebrow
 
-  // caret of the brief card: centre of the selected cell, relative to the centred plates row
+  // caret of the brief card: centre of the selected cell, relative to the centred row of plates that holds it
   let caretX = rowW / 2
+  let caretRow = 0
   if (selectedHere && selectedHere !== key?.id) {
-    let off = 0
-    for (let i = 0; i < traces.length; i++) {
-      const r = traces[i].rects.get(selectedHere)
-      if (r) { caretX = off + r.x + r.w / 2; break }
-      off += traces[i].box.width + d.plateGap
+    for (let ri = 0; ri < rowLayout.length; ri++) {
+      let off = 0
+      for (const i of rowLayout[ri].idx) {
+        const r = traces[i].rects.get(selectedHere)
+        if (r) { caretX = off + r.x + r.w / 2; caretRow = ri }
+        off += traces[i].box.width + d.plateGap
+      }
     }
   }
   const closeBrief = () => {
@@ -119,76 +161,106 @@ export function PathAtlas(props: AtlasProps) {
 
   const openPlates = model.plates.filter((pl) => props.openLaminas.has(pl.tree.id))
   const busH = wide ? 20 : 16
-  const centers: number[] = []
-  {
-    let off = 0
-    for (const t of traces) { centers.push(off + t.box.width / 2); off += t.box.width + d.plateGap }
-  }
   const keyOwned = key ? evaluation.learned.has(key.name) : true
   const busColour = keyOwned ? accent.ink : c.subtle
+  // a bus joins the plates to the key box; without one (the plates of «Otros poderes», powers outside a path) the rows keep a gap of their own
+  const busDrawn = !bare && !!key
   const allChips = traces.flatMap((t) => t.chips)
 
+  // The brief card goes under the row that holds its cell when more rows follow it, so that its caret never points at another row
+  const briefNode = selectedHere ? graph.byId.get(selectedHere) : undefined
+  const briefAfterRow = selectedHere && selectedHere !== key?.id && rowLayout.length > 1 && caretRow < rowLayout.length - 1 ? caretRow : -1
+  const brief = selectedHere && briefNode ? (
+    <BriefCard
+      id={briefId}
+      node={briefNode}
+      graph={graph}
+      evaluation={evaluation}
+      level={level}
+      accent={accent}
+      caretLeft={`calc(50% - ${(rowLayout[caretRow]?.w ?? rowW) / 2}px + ${caretX}px)`}
+      isGoal={targetId === selectedHere}
+      explore={!!props.explore}
+      readOnly={bare}
+      busy={props.busy}
+      onClose={closeBrief}
+      onOpenSheet={() => props.onOpenSheet(selectedHere)}
+      onLearn={() => props.onLearn(selectedHere)}
+      onSetGoal={() => props.onSetGoal(selectedHere)}
+      onRemoveGoal={props.onRemoveGoal}
+      headingLevel={subLevel}
+    />
+  ) : null
+
+  // «Otros poderes»: the powers the Investida path unlocks that the character lacks and the era has (nothing without the talent state)
+  const otherDefs = useMemo(
+    () => (!bare && props.state && model.kind === 'caminoInvestido' ? otherPowerDefs(graph, model.pathId).filter((p) => isAvailable(p, era)) : []),
+    [bare, props.state, model.kind, model.pathId, graph, era],
+  )
+
   return (
-    <section aria-labelledby={titleId} id={`${titleId}-section`} style={{ marginTop: 28, scrollMarginTop: 150 }}>
-      <header style={{ marginBottom: 10 }}>
-        <p style={{ ...eyebrow, color: c.gold }}>{model.eyebrow}{props.explore ? ' · por explorar' : ''}</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
-          <H id={titleId} style={{ ...titleText, fontSize: wide ? fs.xl : 20, color: c.text, display: 'inline-flex', alignItems: 'center', gap: 8, margin: 0 }}>
-            {pathIcon(model, accent, wide ? 22 : 20)}
-            {model.title}
-          </H>
-          <span
-            aria-label={`${owned} de ${model.nodeIds.length} talentos tuyos`}
-            style={{ fontSize: fs.xs, fontWeight: 700, color: c.muted, background: c.s2, border: `1px solid ${c.border}`, borderRadius: radius.full, padding: '1px 8px', fontVariantNumeric: 'tabular-nums' }}
-          >
-            {owned}/{model.nodeIds.length}
-          </span>
-          {available.length > 0 && (
-            <button
-              type="button"
-              className="ui-link"
-              aria-expanded={availOpen}
-              aria-controls={`${titleId}-avail`}
-              onClick={() => setAvailOpen((v) => !v)}
-              style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 36, padding: '0 2px', background: 'none', border: 'none', cursor: 'pointer', color: c.brand, fontSize: fs.sm, fontWeight: 650, textDecoration: 'none' }}
+    <AtlasRoot bare={bare} titleId={titleId} label={model.title}>
+      {!bare && (
+        <header style={{ marginBottom: 10 }}>
+          <p style={{ ...eyebrow, color: c.gold }}>{eyebrowText}{props.explore ? ' · por explorar' : ''}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+            <H id={titleId} style={{ ...titleText, fontSize: wide ? fs.xl : 20, color: c.text, display: 'inline-flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              {pathIcon(model, accent, wide ? 22 : 20, cfg)}
+              {model.title}
+            </H>
+            <span
+              aria-label={`${owned} de ${model.nodeIds.length} talentos tuyos`}
+              style={{ fontSize: fs.xs, fontWeight: 700, color: c.muted, background: c.s2, border: `1px solid ${c.border}`, borderRadius: radius.full, padding: '1px 8px', fontVariantNumeric: 'tabular-nums' }}
             >
-              {available.length} {plural(available.length, 'disponible', 'disponibles')}
-              <ChevronDown size={15} aria-hidden style={{ transform: availOpen ? 'rotate(180deg)' : undefined, transition: 'transform var(--dur-2)' }} />
-            </button>
+              {owned}/{model.nodeIds.length}
+            </span>
+            {available.length > 0 && (
+              <button
+                type="button"
+                className="ui-link"
+                aria-expanded={availOpen}
+                aria-controls={`${titleId}-avail`}
+                onClick={() => setAvailOpen((v) => !v)}
+                style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 36, padding: '0 2px', background: 'none', border: 'none', cursor: 'pointer', color: c.brand, fontSize: fs.sm, fontWeight: 650, textDecoration: 'none' }}
+              >
+                {available.length} {plural(available.length, 'disponible', 'disponibles')}
+                <ChevronDown size={15} aria-hidden style={{ transform: availOpen ? 'rotate(180deg)' : undefined, transition: 'transform var(--dur-2)' }} />
+              </button>
+            )}
+          </div>
+          {availOpen && available.length > 0 && (
+            <ul id={`${titleId}-avail`} aria-label="Se pueden aprender ahora" style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {available.map((id) => {
+                const n = graph.byId.get(id)
+                if (!n) return null
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => focusCell(id)}
+                      className="ui-btn ui-btn--secondary"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '0 12px', borderRadius: radius.full, border: `1.5px dashed ${accent.border}`, background: c.s1, color: c.text, fontSize: fs.sm, fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      <Plus size={14} strokeWidth={3} aria-hidden style={{ color: accent.fg }} />
+                      {n.name}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
           )}
-        </div>
-        {availOpen && available.length > 0 && (
-          <ul id={`${titleId}-avail`} aria-label="Se pueden aprender ahora" style={{ listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-            {available.map((id) => {
-              const n = graph.byId.get(id)
-              if (!n) return null
-              return (
-                <li key={id}>
-                  <button
-                    type="button"
-                    onClick={() => focusCell(id)}
-                    className="ui-btn ui-btn--secondary"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36, padding: '0 12px', borderRadius: radius.full, border: `1.5px dashed ${accent.border}`, background: c.s1, color: c.text, fontSize: fs.sm, fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    <Plus size={14} strokeWidth={3} aria-hidden style={{ color: accent.fg }} />
-                    {n.name}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </header>
+        </header>
+      )}
 
-      {props.intro}
+      {!bare && props.intro}
 
-      {model.noJugable && (
+      {!bare && model.noJugable && (
         <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5, padding: '12px 14px', borderRadius: radius.md, border: `1px dashed ${c.borderBright}`, background: c.s2 }}>
           No jugable: los talentos de esta orden están reservados a la DJ. Elige otra orden en la ficha para planificar un camino radiante.
         </p>
       )}
 
-      {key && (
+      {!bare && key && (
         <KeyBox
           node={key}
           model={model}
@@ -212,41 +284,51 @@ export function PathAtlas(props: AtlasProps) {
 
       {model.plates.length > 0 && (
         <>
-          <svg aria-hidden focusable="false" width={rowW} height={busH} style={{ display: 'block', margin: '0 auto', overflow: 'visible' }}>
-            <path
-              d={`M${rowW / 2} 0V${busH / 2}${centers.length > 1 ? `M${centers[0]} ${busH / 2}H${centers[centers.length - 1]}` : ''}${centers.map((x) => `M${x} ${busH / 2}V${busH}`).join('')}`}
-              stroke={hoverId && hoverId === key?.id ? c.text : busColour}
-              strokeWidth={keyOwned ? d.strokeMet : d.stroke}
-              fill="none"
-              strokeLinecap="round"
-            />
-          </svg>
-          <div style={{ display: 'flex', gap: d.plateGap, justifyContent: 'center', width: rowW, maxWidth: '100%', margin: '0 auto' }}>
-            {model.plates.map((pl, i) => (
-              <Plate
-                key={pl.tree.id}
-                plate={pl}
-                trace={traces[i]}
-                d={d}
-                wide={wide}
-                accent={accent}
-                graph={graph}
-                evaluation={evaluation}
-                level={level}
-                stepOf={stepOf}
-                targetId={targetId}
-                selectedId={selectedHere}
-                hoverId={hoverId}
-                related={related}
-                briefId={briefId}
-                laminaId={`lamina-${pl.tree.id.replace(/[^a-z0-9]+/gi, '-')}`}
-                laminaOpen={props.openLaminas.has(pl.tree.id)}
-                onToggleLamina={() => props.onToggleLamina(pl.tree.id)}
-                onHover={setHoverId}
-                onSelect={(id) => onSelect(selectedHere === id ? null : id)}
-              />
-            ))}
-          </div>
+          {rowLayout.map((row, ri) => (
+            <Fragment key={ri}>
+              {busDrawn && (
+                <svg aria-hidden focusable="false" width={row.w} height={busH} style={{ display: 'block', margin: ri === 0 ? '0 auto' : '6px auto 0', overflow: 'visible' }}>
+                  <path
+                    d={`${ri === 0 ? `M${row.w / 2} 0V${busH / 2}` : ''}${row.centers.length > 1 ? `M${row.centers[0]} ${busH / 2}H${row.centers[row.centers.length - 1]}` : ''}${row.centers.map((x) => `M${x} ${busH / 2}V${busH}`).join('')}`}
+                    stroke={hoverId && hoverId === key?.id ? c.text : busColour}
+                    strokeWidth={keyOwned ? d.strokeMet : d.stroke}
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+              <div style={{ display: 'flex', gap: d.plateGap, justifyContent: 'center', width: row.w, maxWidth: '100%', margin: ri > 0 && !busDrawn ? '14px auto 0' : '0 auto' }}>
+                {row.idx.map((i) => {
+                  const pl = model.plates[i]
+                  return (
+                    <Plate
+                      key={pl.tree.id}
+                      plate={pl}
+                      trace={traces[i]}
+                      d={d}
+                      wide={wide}
+                      accent={accent}
+                      graph={graph}
+                      evaluation={evaluation}
+                      level={level}
+                      stepOf={stepOf}
+                      targetId={targetId}
+                      selectedId={selectedHere}
+                      hoverId={hoverId}
+                      related={related}
+                      briefId={briefId}
+                      laminaId={`lamina-${pl.tree.id.replace(/[^a-z0-9]+/gi, '-')}`}
+                      laminaOpen={props.openLaminas.has(pl.tree.id)}
+                      onToggleLamina={() => props.onToggleLamina(pl.tree.id)}
+                      onHover={setHoverId}
+                      onSelect={(id) => onSelect(selectedHere === id ? null : id)}
+                    />
+                  )
+                })}
+              </div>
+              {ri === briefAfterRow && brief}
+            </Fragment>
+          ))}
           {props.plateNote}
         </>
       )}
@@ -261,30 +343,7 @@ export function PathAtlas(props: AtlasProps) {
         </ul>
       )}
 
-      {selectedHere && (() => {
-        const node = graph.byId.get(selectedHere)
-        if (!node) return null
-        return (
-          <BriefCard
-            id={briefId}
-            node={node}
-            graph={graph}
-            evaluation={evaluation}
-            level={level}
-            accent={accent}
-            caretLeft={`calc(50% - ${rowW / 2}px + ${caretX}px)`}
-            isGoal={targetId === selectedHere}
-            explore={!!props.explore}
-            busy={props.busy}
-            onClose={closeBrief}
-            onOpenSheet={() => props.onOpenSheet(selectedHere)}
-            onLearn={() => props.onLearn(selectedHere)}
-            onSetGoal={() => props.onSetGoal(selectedHere)}
-            onRemoveGoal={props.onRemoveGoal}
-            headingLevel={subLevel}
-          />
-        )
-      })()}
+      {briefAfterRow < 0 && brief}
 
       {openPlates.length > 0 && (
         <div style={{ marginTop: 16 }}>
@@ -330,8 +389,53 @@ export function PathAtlas(props: AtlasProps) {
           ))}
         </div>
       )}
+      {props.state && otherDefs.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <Disclosure
+            title="Otros poderes"
+            summary={`${otherDefs.length} ${plural(otherDefs.length, 'poder', 'poderes')} de tu camino que no tienes · solo consulta`}
+            icon={<MetalMark poderId={`${otherDefs[0].arte}:${otherDefs[0].metal}`} size={20} />}
+            headingLevel={subLevel}
+          >
+            <OtrosPoderes atlas={props} defs={otherDefs} state={props.state} />
+          </Disclosure>
+        </div>
+      )}
       {props.outro}
-    </section>
+    </AtlasRoot>
+  )
+}
+
+// ── «Otros poderes»: the plates of the powers the character lacks, in the Disclosure of the Investida path ──────────
+
+/**
+ * Mounted only while the Disclosure is open: builds a second graph with the powers added to the character's own and evaluates it against the
+ * same state, then draws their plates with the atlas itself (variant 'otros': no heading, no key box, no bus, read-only brief card).
+ * The Disclosure panel keeps 17 px of padding on each side: the plates are laid out for that narrower column.
+ */
+function OtrosPoderes({ atlas, defs, state }: { atlas: AtlasProps; defs: PoderDef[]; state: TalentState }) {
+  const { graph, model } = atlas
+  const other = useMemo(() => {
+    const options = { ...graph.options, poderes: [...(graph.options.poderes ?? []), ...defs.map((p) => ({ arte: p.arte, metal: p.metal }))] }
+    const exGraph = buildTalentGraph(options, graph.rules)
+    return { graph: exGraph, evaluation: evaluate(exGraph, state), model: buildOtherPowersModel(exGraph, defs, `otros:${model.id}`, model.color) }
+  }, [graph, defs, state, model.id, model.color])
+  return (
+    <PathAtlas
+      {...atlas}
+      variant="otros"
+      model={other.model}
+      graph={other.graph}
+      evaluation={other.evaluation}
+      contentW={atlas.contentW - 34}
+      headingLevel={3}
+      explore={false}
+      keyExtra={undefined}
+      intro={undefined}
+      plateNote={undefined}
+      outro={undefined}
+      keyOwnedNote={undefined}
+    />
   )
 }
 
@@ -364,8 +468,8 @@ function KeyBox({ node, model, evaluation, level, accent, wide, explore, selecte
   const ico: CSSProperties = { display: 'inline', verticalAlign: '-2px', marginRight: 4 }
   if (mark.kind === 'learned' || mark.kind === 'elsewhere') {
     const why = ownedNote ?? (node.autoGranted
-      ? model.kind === 'cantor' ? 'ascendencia' : 'tu talento de nivel 1'
-      : model.kind === 'heroico' ? 'has entrado en este camino' : 'aprendido')
+      ? model.kind === 'cantor' || model.kind === 'ascendencia' ? 'ascendencia' : 'tu talento de nivel 1'
+      : model.kind === 'heroico' || model.kind === 'caminoInvestido' ? 'has entrado en este camino' : 'aprendido')
     status = (
       <span style={{ color: accent.fg, fontWeight: 650 }}>
         <Check size={14} strokeWidth={3} aria-hidden style={ico} />
@@ -469,7 +573,7 @@ function Plate({ plate, trace, d, wide, accent, graph, evaluation, level, stepOf
   const avail = plate.order.filter((id) => evaluation.nodes.get(id)?.state === 'available').length
   const activeIdx = Math.min(active, Math.max(0, plate.order.length - 1))
   // long names in the phone miniature: tighter letters and no chevron (the open state is the ring)
-  const longLabel = plate.label.length > 11
+  const longLabel = plate.label.length > (plate.poderId ? 8 : 11)
 
   const move = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const cur = plate.pos.get(plate.order[i])
@@ -515,6 +619,7 @@ function Plate({ plate, trace, d, wide, accent, graph, evaluation, level, stepOf
           boxShadow: laminaOpen ? `0 0 0 2px var(--bg), 0 0 0 3.5px ${c.text}` : undefined,
         }}
       >
+        {plate.poderId && <MetalMark poderId={plate.poderId} size={wide ? 13 : 11} />}
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, letterSpacing: longLabel ? 0 : undefined }}>{plate.label}</span>
         {!(longLabel && !wide) && <ChevronDown size={wide ? 13 : 11} strokeWidth={2.75} aria-hidden style={{ flexShrink: 0, transform: laminaOpen ? 'rotate(180deg)' : undefined }} />}
       </button>
@@ -542,6 +647,7 @@ function Plate({ plate, trace, d, wide, accent, graph, evaluation, level, stepOf
           mark.kind === 'learned' ? { background: accent.wash(15), border: `1.5px solid ${accent.borderStrong}` }
           : mark.kind === 'elsewhere' ? { background: accent.wash(6), border: `1.5px dotted ${accent.borderStrong}` }
           : mark.kind === 'available' ? { background: c.s1, border: `1.5px dashed ${accent.border}` }
+          : mark.badge === 'meta' ? META_LOCKED
           : mark.badge === 'nivel' ? { background: c.s3, border: `1px solid ${c.borderBright}` }
           : { background: c.s1, border: `1px solid ${c.borderBright}` }
         const ring = sel ? `0 0 0 2.5px ${c.text}` : isHover ? `0 0 0 2px ${c.text}` : isRel ? `0 0 0 2px ${c.muted}` : step || target ? `0 0 0 2px ${c.brand}` : undefined
@@ -599,7 +705,7 @@ function Plate({ plate, trace, d, wide, accent, graph, evaluation, level, stepOf
 
 // ── Brief card (inline, under the map) ───────────────────────────────────────
 
-function BriefCard({ id, node, graph, evaluation, level, accent, caretLeft, isGoal, explore, busy, onClose, onOpenSheet, onLearn, onSetGoal, onRemoveGoal, headingLevel }: {
+function BriefCard({ id, node, graph, evaluation, level, accent, caretLeft, isGoal, explore, readOnly, busy, onClose, onOpenSheet, onLearn, onSetGoal, onRemoveGoal, headingLevel }: {
   id: string
   node: TalentNode
   graph: TalentGraph
@@ -609,6 +715,8 @@ function BriefCard({ id, node, graph, evaluation, level, accent, caretLeft, isGo
   caretLeft: string
   isGoal: boolean
   explore: boolean
+  /** talents of a power the character lacks («Otros poderes»): nothing to learn, no sheet, no goal */
+  readOnly: boolean
   busy: boolean
   onClose: () => void
   onOpenSheet: () => void
@@ -652,7 +760,7 @@ function BriefCard({ id, node, graph, evaluation, level, accent, caretLeft, isGo
       <p style={{ fontSize: fs.xs + 0.5, color: c.muted, marginTop: 2, lineHeight: 1.4 }}>
         {sourceOf(node, graph)} · {ACTIVATION[node.activation].label}{node.autoGranted ? ' · concedido' : ''}
       </p>
-      <p style={{ fontSize: fs.sm + 1, color: c.text, marginTop: 6, lineHeight: 1.5 }}>{summaryOf(node)}</p>
+      <p style={{ fontSize: fs.sm + 1, color: c.text, marginTop: 6, lineHeight: 1.5 }}>{summaryOf(node, graph.rules.summaries)}</p>
       <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, marginTop: 8, color: stateColour, fontWeight: 650 }}>
         <StateIcon size={15} strokeWidth={owned || mark.kind === 'available' ? 3 : 2.25} aria-hidden style={{ flexShrink: 0 }} />
         {words}
@@ -663,10 +771,12 @@ function BriefCard({ id, node, graph, evaluation, level, accent, caretLeft, isGo
           <span style={{ fontWeight: 650, color: c.text }}>Falta:</span> {ev.missing.join(' · ')}
         </p>
       )}
-      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-        <Button variant="secondary" size="md" onClick={onOpenSheet} aria-haspopup="dialog" style={{ flex: 1 }}>Ficha</Button>
-        {action}
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <Button variant="secondary" size="md" onClick={onOpenSheet} aria-haspopup="dialog" style={{ flex: 1 }}>Ficha</Button>
+          {action}
+        </div>
+      )}
     </div>
   )
 }

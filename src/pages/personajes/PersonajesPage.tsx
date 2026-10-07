@@ -1,13 +1,13 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Target, BookOpen, Sparkles, ShoppingBag, ChevronRight, Users } from 'lucide-react'
+import { Target, BookOpen, Sparkles, ShoppingBag, ChevronRight, Users, Coins } from 'lucide-react'
 import { CharacterListPage } from '../characters/CharacterListPage'
 import { MetasPage } from './MetasPage'
 import { TalentosPage } from './TalentosPage'
 import { BolsaPage } from './BolsaPage'
 import { EmptyState, PageHeader, Spinner, TabPanel, Tabs, type TabItem } from '../../components/ui'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useEra, useWorldConfig } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { charactersApi } from '../../api/characters'
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
@@ -16,6 +16,7 @@ import { CharacterHero } from '../../components/CharacterHero'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { characterGradient } from '../../lib/avatar'
 import { cosmereImage } from '../../lib/cosmereAssets'
+import { monedaImagen } from '../../lib/moneda'
 import { buttonReset, c, card, eyebrow, font, fs, page, radius, shadow, titleText, tone, type Tone } from '../../theme'
 
 /* Text on the CharacterHero / character gradient (lib/avatar + CharacterHero: ≥ 7:1 on every palette) */
@@ -140,6 +141,8 @@ function PlayerPersonajesPage() {
   const cId = Number(campaignId)
   const { user } = useAuthStore()
   const navigate = useNavigate()
+  const cfg = useWorldConfig()
+  const era = useEra()
 
   const { data: characters = [], isLoading } = useQuery({
     queryKey: ['characters', cId],
@@ -165,6 +168,8 @@ function PlayerPersonajesPage() {
 
   const activeMetas = character.metas?.filter((m) => m.estado === 'activa').length ?? 0
   const sphere = cosmereImage('esfera-broam-esmeralda')
+  // Nacidos de la bruma: the Bolsa tile carries the official illustration of the money of the era instead of the sphere
+  const dinero = monedaImagen(cfg.moneda, era)
 
   const actions: { key: string; title: string; subtitle: string; to: string; tile: ReactNode }[] = [
     {
@@ -195,11 +200,13 @@ function PlayerPersonajesPage() {
     {
       key: 'bolsa',
       title: 'Bolsa',
-      subtitle: 'Inventario, marcos y equipo',
+      subtitle: `Inventario, ${cfg.moneda.nombre.toLowerCase()} y equipo`,
       to: `/campaigns/${cId}/personajes/bolsa/${character.id}`,
       tile: (
         <ToneTile t={tone.esmeralda}>
-          {sphere ? <img src={sphere} alt="" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /> : <ShoppingBag size={20} />}
+          {cfg.features.arquillas
+            ? (dinero ? <img src={dinero} alt="" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /> : <Coins size={20} />)
+            : (sphere ? <img src={sphere} alt="" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /> : <ShoppingBag size={20} />)}
         </ToneTile>
       ),
     },

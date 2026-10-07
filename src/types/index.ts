@@ -48,6 +48,8 @@ export interface StatLinea {
   descripcionCondicion?: string
   /** Attribute-bonus line of any origin (cantor form, Blessing, talent, spike), flagged by the server (§5.1): the sheet reads this instead of the concept text */
   esBono: boolean
+  /** Informative line with no numeric effect (hemalurgy «Desorientado al inicio de escena»): the sheet prints only its concept. Absent in every other line */
+  sinValor?: boolean
 }
 
 export interface StatDesglose {

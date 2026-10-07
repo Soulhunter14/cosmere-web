@@ -1129,7 +1129,7 @@ export function CharacterDetailPage() {
                 <div style={{ marginTop: 4 }}>
                   {s.situacional.map((l, i) => (
                     <div key={i} style={{ color: c.muted }}>
-                      {l.valor >= 0 ? '+' : ''}{l.valor}{s.unidad === 'm' ? ' m' : ''} {l.concepto}
+                      {!l.sinValor && <>{l.valor >= 0 ? '+' : ''}{l.valor}{s.unidad === 'm' ? ' m' : ''} </>}{l.concepto}
                       {l.descripcionCondicion ? ` · ${l.descripcionCondicion}` : ''}
                     </div>
                   ))}
@@ -1307,7 +1307,7 @@ export function CharacterDetailPage() {
                             {defStat.situacional.map((s, si) => (
                               <li key={si} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: si > 0 ? 2 : 0, fontSize: fs.xs }}>
                                 <span style={{ color: c.muted }}>{s.concepto}</span>
-                                <span style={{ fontWeight: 700, color: t.fg, fontVariantNumeric: 'tabular-nums' }}>{s.valor >= 0 ? '+' : ''}{s.valor}</span>
+                                {!s.sinValor && <span style={{ fontWeight: 700, color: t.fg, fontVariantNumeric: 'tabular-nums' }}>{s.valor >= 0 ? '+' : ''}{s.valor}</span>}
                               </li>
                             ))}
                           </ul>
@@ -1610,9 +1610,11 @@ export function CharacterDetailPage() {
                               {s.concepto}
                               {s.descripcionCondicion && <span style={{ color: c.subtle }}> · {s.descripcionCondicion}</span>}
                             </span>
-                            <span style={{ fontSize: fs.sm, fontWeight: 700, color: s.valor >= 0 ? t.fg : tone.rubi.fg, fontVariantNumeric: 'tabular-nums' }}>
-                              {s.valor >= 0 ? '+' : ''}{s.valor}
-                            </span>
+                            {!s.sinValor && (
+                              <span style={{ fontSize: fs.sm, fontWeight: 700, color: s.valor >= 0 ? t.fg : tone.rubi.fg, fontVariantNumeric: 'tabular-nums' }}>
+                                {s.valor >= 0 ? '+' : ''}{s.valor}
+                              </span>
+                            )}
                           </li>
                         ))}
                       </ul>

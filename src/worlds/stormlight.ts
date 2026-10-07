@@ -1,16 +1,14 @@
 /**
  * Configuration of the Stormlight world (Roshar; manual «Archivo de las Tormentas»).
- * Every value is what the app already shows today: this file describes the current behaviour, it changes none (P1).
+ * It describes what the app already shows, except the two things T50 changed on purpose (Q3, Q22): the skill table, now the book's one (the same
+ * for every world), and `bonosServidor`, now on (the sheet, the dice roller and the Bolsa add the attribute bonus the server computes, a cantor's form).
  * Meeting-point file: later tasks add lines, they never reorder them.
  */
 import { Gem } from 'lucide-react'
 import { tone } from '../theme'
 import { RADIANT_ORDERS } from '../data/radiantOrders'
 import type { WorldConfig } from './types'
-import {
-  COLUMNAS_STORMLIGHT_PNJ_LEGADO,
-  HABILIDADES_STORMLIGHT_LEGADO, HABILIDADES_STORMLIGHT_PNJ_LEGADO, HABILIDADES_STORMLIGHT_TIRADOR_LEGADO,
-} from './skills'
+import { HABILIDADES_COSMERE } from './skills'
 import { iconoHumano, iconoOrden, iconoOyente } from './stormlight.icons'
 import { STORMLIGHT_TOPICS } from './stormlight.topics'
 import { DATA } from './stormlight.data'
@@ -34,17 +32,13 @@ export const STORMLIGHT: WorldConfig = {
     mencionSpren: true,
     pestanaAventura: true,
     eras: false,
-    bonosServidor: false, // T50 turns it on (Q22)
+    bonosServidor: true, // T50 (Q22): the server's `bonosAtributos` (a cantor's form) count on the sheet, the dice roller and the Bolsa
     equipoInicial: false,
     origenes: false,
     catalogoDePrecios: false,
   },
-  // The three legacy tables and the legacy grouping of the NPC page (see skills.ts): T50 points the three surfaces to
-  // HABILIDADES_COSMERE and deletes them (the NPC page then groups its attributes as the book does)
-  habilidades: HABILIDADES_STORMLIGHT_LEGADO,
-  habilidadesTirador: HABILIDADES_STORMLIGHT_TIRADOR_LEGADO,
-  habilidadesPnj: HABILIDADES_STORMLIGHT_PNJ_LEGADO,
-  columnasPnj: COLUMNAS_STORMLIGHT_PNJ_LEGADO,
+  // The book's skill table, the same one every world reads on the sheet, the dice roller and the NPC page (T50, Q3)
+  habilidades: HABILIDADES_COSMERE,
   habilidadesInvestidas: [],
   ascendencias: [
     { id: 'Humano', label: 'Humano', tone: tone.cuarzo, icono: iconoHumano, puntosAtributoBase: 12 },

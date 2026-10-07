@@ -26,8 +26,7 @@ import { c, eyebrow, font, fs, pill, radius, shadow, tint, tone, z, type Tone } 
 
 const DAMAGE_DICE = [4, 6, 8, 10, 12, 20]
 
-// Weapon skills of the Combate tab. They are looked up by FIELD in the skill table of the world (T43) because their label changes
-// from one world to another («Armas ligeras» / «Armamento ligero»)
+// Weapon skills of the Combate tab. They are looked up by FIELD in the skill table of the world, not by label
 const ARMAS: SkillField[] = ['armasLigeras', 'armasPesadas', 'agilidad']
 
 // Mapa código de atributo (guardado en habilidades personalizadas) → campo del Character
@@ -42,7 +41,7 @@ const ATTR_CODE_TO_FIELD: Record<string, AttrField> = {
 
 /** What the roller reads from the world of the campaign: its `WorldConfig`, never a world id (P4) */
 interface RollerWorld {
-  /** Skill table of the roller: `habilidadesTirador ?? habilidades` (Stormlight keeps its legacy table until T50) */
+  /** Skill table of the world (`WorldConfig.habilidades`): the book's, the same one the sheet and the NPC page read */
   habilidades: HabilidadDef[]
   /** Labels of that table, in its order: what the skill selectors list */
   skills: string[]
@@ -59,7 +58,7 @@ interface RollerWorld {
 function useRollerWorld(): RollerWorld {
   const cfg = useWorldConfig()
   return useMemo(() => {
-    const habilidades = cfg.habilidadesTirador ?? cfg.habilidades
+    const habilidades = cfg.habilidades
     return {
       habilidades,
       skills: habilidades.map((h) => h.label),
@@ -80,7 +79,7 @@ const formatDado = (caras: number) => (caras > 1 ? `dado d${caras}` : 'sin dado'
 /**
  * Devuelve el modificador del personaje para la habilidad dada: habilidad + atributo asociado.
  * `bonosAtributos` (`features.bonosServidor`) suma además el bono de atributo que calcula el servidor (`character.bonosAtributos`:
- * Bendiciones kandra, Tamaño desmedido…) al atributo de la habilidad, estándar o personalizada. `habilidades` = tabla del tirador del mundo.
+ * Bendiciones kandra, Tamaño desmedido, la forma de un cantor…) al atributo de la habilidad, estándar o personalizada. `habilidades` = tabla de habilidades del mundo.
  */
 function getCharMod(char: Character, skillName: string, bonosAtributos: boolean, habilidades: HabilidadDef[]): number | null {
   const bono = (attr: AttrField) => (bonosAtributos ? (char.bonosAtributos?.[attr] ?? 0) : 0)
@@ -104,7 +103,7 @@ function getCharMod(char: Character, skillName: string, bonosAtributos: boolean,
   return null
 }
 
-/** Lista de habilidades del personaje (las del tirador del mundo + personalizadas no vacías) */
+/** Lista de habilidades del personaje (las del mundo + personalizadas no vacías) */
 function getCharSkills(char: Character, skills: string[]): string[] {
   const custom: string[] = []
   for (let i = 1; i <= 6; i++) {
@@ -699,7 +698,7 @@ function DamageTab({ onRoll }: { onRoll: (r: AnyRollResult) => void }) {
 }
 
 // Tab: Recuperación
-/** Voluntad for the recovery die: with `features.bonosServidor` it adds the bonus the server computes (a kandra's Blessing of Stability), as the sheet does */
+/** Voluntad for the recovery die: with `features.bonosServidor` it adds the bonus the server computes (a kandra's Blessing of Stability, a cantor's form), as the sheet does */
 function voluntadRecuperacion(char: Character, bonosAtributos: boolean): number {
   return char.voluntad + (bonosAtributos ? (char.bonosAtributos?.voluntad ?? 0) : 0)
 }

@@ -824,13 +824,14 @@ export function CharacterDetailPage() {
   const formaActiva = isCantor ? getFormaActiva(rawTalentos) : null
   const formaActivaData = formaActiva ? (formasDisponibles.find((fo) => fo.nombre === formaActiva) ?? null) : null
   const formaBonus: FormaBonusMap = formaActivaData?.bonusAtributos ?? {}
-  // Attribute bonus of any origin: from the server when the world says so (Blessings, Tamaño desmedido…, §5.1) and from the cantor form otherwise.
-  // `bonoInk`/`bonoSr` tell them apart on screen: the form keeps its own colour and the «por forma» of today, the server's bonuses are not forms
+  // Attribute bonus of any origin: from the server when the world says so (a cantor's form, Blessings, Tamaño desmedido…, §5.1) and from the cantor form otherwise.
+  // `bonoInk`/`bonoSr` tell them apart on screen: a cantor's bonuses are its form's, which keeps its own colour and the «por forma» of always;
+  // the server's other bonuses (Blessings, Tamaño desmedido…) are not forms
   const fbOf = (k: string) => cfg.features.bonosServidor
     ? (char.bonosAtributos?.[k as AttrField] ?? 0)
     : (formaBonus[k as FormaBonusKey] ?? 0)
-  const bonoInk = cfg.features.bonosServidor ? c.brand : FORMA_TONE.fg
-  const bonoSr = cfg.features.bonosServidor ? ' por bonos' : ' por forma'
+  const bonoInk = isCantor ? FORMA_TONE.fg : c.brand
+  const bonoSr = isCantor ? ' por forma' : ' por bonos'
   // What the server calls those bonuses («Bendición de la Consciencia, Tamaño desmedido»): every bonus line of every breakdown carries the
   // same text (§6.3), so the previews in edit mode name them the way the saved breakdowns do
   const nombreBonos = [char.salud, char.concentracion, char.investidura, char.defensaFisica, char.defensaCognitiva, char.defensaEspiritual]
@@ -1123,7 +1124,7 @@ export function CharacterDetailPage() {
               const inv  = f.investidura  ?? vacio
               const mov  = f.movimiento   ?? vacio
               // Preview line of an attribute bonus: «Forma: X» for a cantor, the server's own name for the bonuses it sends (§6.3)
-              const bonoLabel = (v: number) => cfg.features.bonosServidor ? `${v} (${nombreBonos})` : `${v} (Forma: ${formaActiva})`
+              const bonoLabel = (v: number) => isCantor ? `${v} (Forma: ${formaActiva})` : `${v} (${nombreBonos})`
 
               // Líneas situacionales (reacciones, infusiones…): visibles pero fuera del total.
               const situacional = (s: StatDesglose) => s.situacional.length > 0 ? (

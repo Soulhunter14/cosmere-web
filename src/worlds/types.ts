@@ -97,7 +97,7 @@ export interface WorldConfig {
     mencionSpren: boolean
     pestanaAventura: boolean
     eras: boolean
-    /** The sheet and the dice roller add `character.bonosAtributos` from the server (Mistborn true; Stormlight false until T50 turns it on, §5.1, Q22) */
+    /** The sheet, the dice roller and the Bolsa add `character.bonosAtributos` from the server (the attribute bonus of any origin: a cantor's form, Blessings, talents); true in both worlds since T50 (§5.1, Q22) */
     bonosServidor: boolean
     /** «Equipo inicial» flow by packages from the Bolsa (Mistborn, T47) */
     equipoInicial: boolean
@@ -110,14 +110,8 @@ export interface WorldConfig {
      */
     catalogoDePrecios: boolean
   }
-  /** The 18 standard skills of the character sheet */
+  /** The 18 standard skills: the character sheet, the dice roller and the NPC page all read this table */
   habilidades: HabilidadDef[]
-  /** Only Stormlight until T50 (legacy dice-roller table); the roller reads `habilidadesTirador ?? habilidades` */
-  habilidadesTirador?: HabilidadDef[]
-  /** Only Stormlight until T50 (legacy NPC table); the NPC page reads `habilidadesPnj ?? habilidades` */
-  habilidadesPnj?: HabilidadDef[]
-  /** Only Stormlight until T50 (legacy NPC page grouping, audit point 7: Cognitivo = INT + DIS, Espiritual = VOL + PRE); the NPC page reads `columnasPnj ?? COLUMNAS_COSMERE` */
-  columnasPnj?: AtributosColumna
   /** Investida skills that live in a custom slot by exact name: [] | Alomancia (VOL, attack) / Feruquimia (INT) */
   habilidadesInvestidas: { nombre: string; atributo: AttrField; codigo: string; icono: LucideIcon; ataque: boolean }[]
   /**

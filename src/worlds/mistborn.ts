@@ -40,7 +40,7 @@ export const MISTBORN: WorldConfig = {
     origenes: true,
     catalogoDePrecios: true,
   },
-  // The book's table (T26). No tirador/pnj tables nor `columnasPnj`: Mistborn reads `habilidades` on all three surfaces (the dice roller from T43)
+  // The book's table (T26), read on the sheet, the dice roller (from T43) and the NPC page: the same one Stormlight reads since T50
   habilidades: HABILIDADES_COSMERE,
   // Alomancia rolls with Voluntad and attacks (L.172 / PDF 178); Feruquimia with Intelecto. Icons are [inferido → Q18]
   habilidadesInvestidas: [

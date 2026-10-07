@@ -6,7 +6,7 @@ import { globalNpcsApi } from '../../api/global-npcs'
 import { useCampaignStore, useWorld, useWorldConfig } from '../../store/campaignStore'
 import { getWorld } from '../../worlds'
 import { COLUMNAS_COSMERE } from '../../worlds/skills'
-import type { AtributosColumna, AttrField, HabilidadDef } from '../../worlds/types'
+import type { AttrField, HabilidadDef } from '../../worlds/types'
 import { Button, Card, EmptyState, ErrorMessage, Field, IconButton, Input, Spinner, TabPanel, Tabs, Textarea } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { StatIcons } from '../../lib/gameIcons'
@@ -17,7 +17,7 @@ import type { GlobalNpc } from '../../types'
 type NumKey = { [K in keyof GlobalNpc]-?: GlobalNpc[K] extends number ? K : never }[keyof GlobalNpc]
 type TextKey = 'apariencia' | 'notas'
 
-/** The three columns of the page. The skills of each one and the two attributes that head it (its tiles and its defense) come from the world */
+/** The three columns of the page. The skills of each one come from the table of the world; the two attributes that head it (its tiles and its defense) are the book's */
 const COLUMNAS = [
   { key: 'fisico', label: 'Físico', tone: tone.granate },
   { key: 'cognitivo', label: 'Cognitivo', tone: tone.zafiro },
@@ -28,10 +28,10 @@ const ATTR_CODES: Record<AttrField, string> = {
   fuerza: 'FUE', velocidad: 'VEL', intelecto: 'INT', voluntad: 'VOL', discernimiento: 'DIS', presencia: 'PRE',
 }
 
-/** Cards of the page: `habilidades` decides which skills go in each column, `columnas` which two attributes head it */
-const buildSections = (habilidades: HabilidadDef[], columnas: AtributosColumna) => COLUMNAS.map((col) => ({
+/** Cards of the page: `habilidades` decides which skills go in each column; the two attributes that head it are those of `COLUMNAS_COSMERE` */
+const buildSections = (habilidades: HabilidadDef[]) => COLUMNAS.map((col) => ({
   ...col,
-  attrs: columnas[col.key].map((k): [NumKey, string] => [k, ATTR_CODES[k]]),
+  attrs: COLUMNAS_COSMERE[col.key].map((k): [NumKey, string] => [k, ATTR_CODES[k]]),
   skills: habilidades
     .filter((h) => h.columna === col.key)
     .map((h): [NumKey, string, NumKey, string] => [h.field, h.label, h.atributo, h.codigo]),
@@ -158,8 +158,8 @@ export function GlobalNpcDetailPage() {
 
   const rubi = tone.rubi
   const numberInput: CSSProperties = { textAlign: 'center', ...numeral, fontSize: fs.lg, padding: '6px 8px' }
-  // Until T50 Stormlight reads its own legacy table and grouping; every other world reads the book's (no world id is compared here)
-  const sections = buildSections(cfg.habilidadesPnj ?? cfg.habilidades, cfg.columnasPnj ?? COLUMNAS_COSMERE)
+  // The table of the world, the same one the sheet and the dice roller read (no world id is compared here)
+  const sections = buildSections(cfg.habilidades)
   // Salud and Concentración are Cosmere; the Investidura icon is the world's. A world with metallic arts only shows the Investidura tile of an adversary that has one
   // (or while the director edits it, so it can be given one): most of its adversaries are not Investidos (Q27)
   const resources: { label: string; key: NumKey; tone: Tone; Icon: LucideIcon }[] = [

@@ -33,3 +33,5 @@ de esos chunks eager:
   assets/ui-*.js           419 035 B
   SUMA EAGER             1 456 103 B   (referencia para F4-F7; ningún dato de Bruma en eager)
 Medir con: node -e "const fs=require('fs');const h=fs.readFileSync('dist/index.html','utf8');let t=0;for(const m of h.matchAll(/(?:src|href)=\"\/(assets\/[^\"]+\.js)\"/g))t+=fs.statSync('dist/'+m[1]).size;console.log(t)"
+
+2026-10-07 · cierre de F4, F5 y F6 (b58a0ee): suma de chunks eager 1 509 137 B (index 1 031 587 + talentRules 202 208 + campaignStore 275 342); chunk mayor 1 031 587 B. Delta sobre F3: +53 034 B (F4 +18 713, F5 +22 691, F6 +9 556, F7 adelantadas +2 074). Nueva referencia para F7.

@@ -12,6 +12,8 @@ import {
   Button, Card, ConfirmDialog, ErrorMessage, IconButton, Input, Segmented, SectionTitle, Select, Sheet, Spinner, Stepper, TabPanel, Tabs, Textarea,
 } from '../../components/ui'
 import type { EntornoCaminoMetal, MetalPickerProps, SeleccionCaminoMetal } from '../../components/mistborn'
+// Tiny on purpose (it imports only types): the page loads it eagerly for the vial's optimistic copy and for the visibility of its button (§8, risk 6)
+import { conVialBebido, esPoderDelVial } from '../../components/mistborn/vial'
 import type { Character, PoderPersonaje, RecursosPatch, StatDesglose, StatLinea, UpdateCharacterRequest } from '../../types'
 import type { AttrField, HabilidadDef } from '../../worlds/types'
 import { isAvailable } from '../../worlds'
@@ -86,14 +88,17 @@ const BendicionPicker = lazy(() => import('../../components/mistborn').then((m) 
 const MetalPicker = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.MetalPicker })))
 // The «Artes metálicas» tab (T30): rendered only while that tab is open
 const ArtesMetalicasTab = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.ArtesMetalicasTab })))
+// «Beber vial» (T31): the sheet of the vial, mounted only while it is open
+const BeberVialSheet = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.BeberVialSheet })))
 
 /** A metalborn path chosen in CaminoMetalPicker that waits for its metals (MetalPicker, §7.4 step 4) */
 interface CaminoPendiente { camino: string; caminoInicial: 'heroico' | 'metal'; arte: MetalPickerProps['arte']; modo: MetalPickerProps['modo'] }
 
-/** What the sheet asks of the table state of the world (§5.2): a PATCH …/recursos, or the start of a scene. T31 adds the vial here */
+/** What the sheet asks of the table state of the world (§5.2): a PATCH …/recursos, the start of a scene, or a vial that is drunk (T31) */
 type AccionMesa =
   | { tipo: 'recursos'; cuerpo: RecursosPatch }
   | { tipo: 'inicio-escena'; sorprendido: boolean }
+  | { tipo: 'beber-vial'; metales: string[] }
 
 /**
  * The cached character as the server will leave it after an `AccionMesa`, as far as the sheet can tell without repeating the rules of the
@@ -104,6 +109,7 @@ function conAccionMesa(old: Character, accion: AccionMesa): Character {
     const total = old.investidura?.total ?? 0
     return { ...old, recursos: { ...old.recursos, investiduraActual: accion.sorprendido ? Math.min(1, total) : total } }
   }
+  if (accion.tipo === 'beber-vial') return conVialBebido(old, accion.metales) // the rule of the vial lives in vial.ts, next to its sheet
   const { recursos, poderes } = accion.cuerpo
   return {
     ...old,
@@ -405,9 +411,10 @@ function AvisoAtributos({ t, icon, title, children }: { t: Tone; icon: ReactNode
  * «Investidura actual»: the table state of a world whose characters track it (`WorldConfig.recursos`, §5.2). A counter between 0 and the
  * maximum of the sheet, and the action that starts a scene: the maximum, or 1 if the character is Sorprendido (L.129 / PDF 135).
  * Both save at once. Neither moves while the sheet is being edited (a refetch would wipe what is typed in the form) nor for whoever
- * cannot edit the character. T31 adds «Beber vial» next to «Inicio de escena».
+ * cannot edit the character. «Beber vial» (T31) sits next to «Inicio de escena» for a character with alomantic powers to drink for: it opens
+ * the sheet of the vial, which restores the Investiture too.
  */
-function InvestiduraActual({ label, icon, actual, max, enEdicion, puedeActuar, error, index, onCambiar, onInicioEscena }: {
+function InvestiduraActual({ label, icon, actual, max, enEdicion, puedeActuar, error, errorVial, index, onCambiar, onInicioEscena, onBeberVial }: {
   label: string
   icon: ReactNode
   actual: number
@@ -416,10 +423,14 @@ function InvestiduraActual({ label, icon, actual, max, enEdicion, puedeActuar, e
   /** The owner and the director; for anyone else the counter is read-only and there is no scene action */
   puedeActuar: boolean
   error: boolean
+  /** The save that failed was the vial: the message says so instead of naming the counter */
+  errorVial: boolean
   index: number
   /** One step up or down from the latest value (not from the one rendered), so that taps in quick succession all count */
   onCambiar: (delta: number) => void
   onInicioEscena: (sorprendido: boolean) => void
+  /** Opens the sheet of the vial; absent when the character has no alomantic power a vial acts on (no button) */
+  onBeberVial?: () => void
 }) {
   const [sorprendido, setSorprendido] = useState(false)
   const t = tone.amatista
@@ -459,9 +470,19 @@ function InvestiduraActual({ label, icon, actual, max, enEdicion, puedeActuar, e
           >
             Inicio de escena
           </Button>
+          {onBeberVial && (
+            <Button variant="secondary" disabled={enEdicion} aria-haspopup="dialog" onClick={onBeberVial}>
+              Beber vial
+            </Button>
+          )}
         </div>
       )}
-      {error && <ErrorMessage message={`No se ha podido guardar la ${label.toLowerCase()}. Inténtalo de nuevo.`} style={{ marginTop: 10 }} />}
+      {error && (
+        <ErrorMessage
+          message={errorVial ? 'No se ha podido beber el vial. Inténtalo de nuevo.' : `No se ha podido guardar la ${label.toLowerCase()}. Inténtalo de nuevo.`}
+          style={{ marginTop: 10 }}
+        />
+      )}
     </div>
   )
 }
@@ -592,7 +613,7 @@ export function CharacterDetailPage() {
   const [form, setForm] = useState<Character | null>(null)
   // A link may ask for the «Artes metálicas» tab (`location.state.tab`); if the character has no such tab (`tabActiva`, below) the sheet opens the first one
   const [tab, setTab] = useState<Tab>(() => ((location.state as { tab?: string } | null)?.tab === TAB_ARTES.id ? TAB_ARTES.id : 'caracteristicas'))
-  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'metal' | 'bendicion' | null>(null)
+  const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'metal' | 'bendicion' | 'vial' | null>(null)
   const [enCombate, setEnCombate] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   // Flow «al elegir camino» (§7.4): the path that waits for its metals, and the confirmation of a removal or of a change of path
@@ -751,7 +772,9 @@ export function CharacterDetailPage() {
     mutationFn: ({ accion }: { accion: AccionMesa; previas: [QueryKey, Character | undefined][] }) => {
       const enviar = () => accion.tipo === 'inicio-escena'
         ? charactersApi.inicioEscena(cId, chId, accion.sorprendido)
-        : charactersApi.patchRecursos(cId, chId, accion.cuerpo)
+        : accion.tipo === 'beber-vial'
+          ? charactersApi.beberVial(cId, chId, accion.metales)
+          : charactersApi.patchRecursos(cId, chId, accion.cuerpo)
       const turno = colaMesa.current.then(enviar, enviar) // after the previous one, whether it worked or not
       colaMesa.current = turno.catch(() => undefined)
       return turno
@@ -1247,8 +1270,10 @@ export function CharacterDetailPage() {
                       enEdicion={editing}
                       puedeActuar={canEdit}
                       error={mesaMutation.isError}
+                      errorVial={mesaMutation.variables?.accion.tipo === 'beber-vial'}
                       onCambiar={cambiarInvestidura}
                       onInicioEscena={(sorprendido) => mesa({ tipo: 'inicio-escena', sorprendido })}
+                      onBeberVial={char.poderes.some(esPoderDelVial) ? () => setPicker('vial') : undefined}
                     />
                   )}
                 </div>
@@ -1865,6 +1890,18 @@ export function CharacterDetailPage() {
             value={char.bendiciones}
             isGm={isGm}
             onConfirm={(bendiciones) => { identidadMutation.mutate({ bendiciones }); setPicker(null) }}
+          />
+        </Suspense>
+      )}
+      {/* The vial (T31): the same kind of lazy sheet; the metals it holds go up as `beber-vial` and the page closes it, like the pickers above */}
+      {picker === 'vial' && (
+        <Suspense fallback={<Sheet open onClose={() => setPicker(null)} title="Cargando…" maxWidth={480}><Spinner /></Sheet>}>
+          <BeberVialSheet
+            open
+            onClose={() => setPicker(null)}
+            character={char}
+            isGm={isGm}
+            onBeber={(metales) => { setPicker(null); mesa({ tipo: 'beber-vial', metales }) }}
           />
         </Suspense>
       )}

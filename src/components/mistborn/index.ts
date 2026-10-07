@@ -22,3 +22,8 @@ export { PoderCard } from './PoderCard'
 export type { PoderCardProps } from './PoderCard'
 export { planAnadirPoder, faltaHuecoParaPoder } from './caminoMetalFlujo'
 export type { PlanAnadirPoder } from './caminoMetalFlujo'
+// «Beber vial» (T31): BeberVialSheet is loaded lazily by the character sheet and, later, by the talents page (T37b). `vial.ts` is tiny and the character sheet
+// imports it BY FILE for the optimistic copy of the character; its pure rules are re-exported here for whoever loads the barrel with `await import()`
+export { BeberVialSheet } from './BeberVialSheet'
+export type { BeberVialSheetProps } from './BeberVialSheet'
+export { conVialBebido, esPoderDelVial, quemaElVial } from './vial'

@@ -40,6 +40,8 @@ export interface EscenaGuion {
   tipo: TipoEscena
   /** Heading the scene is listed under («Capítulo 4 · Hacia el valle»); '' = none */
   grupo: string
+  /** Top-level section of the book the scene belongs to (the original book uploaded to the Libro groups its index by it); '' = none */
+  apartado: string
   /** Where it comes from («Caminapiedras L.78-79 / PDF 82-83») */
   fuente: string
   enemigos: EnemigoEscena[]
@@ -72,7 +74,7 @@ const TIPOS: Record<string, TipoEscena> = {
   decision: 'choice', choice: 'choice',
 }
 
-const CLAVES_META = ['tipo', 'grupo', 'fuente', 'enemigos', 'empeno', 'contadores', 'contador', 'imagen', 'imagenes'] as const
+const CLAVES_META = ['tipo', 'grupo', 'apartado', 'fuente', 'enemigos', 'empeno', 'contadores', 'contador', 'imagen', 'imagenes'] as const
 type ClaveMeta = (typeof CLAVES_META)[number]
 const RE_META = /^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)\s*:\s*(.*)$/
 const claveMeta = (linea: string): [ClaveMeta, string] | null => {
@@ -184,7 +186,7 @@ function leerEscenaSinCache(md: string): EscenaGuion {
   i++
 
   const e: EscenaGuion = {
-    titulo, tipo: 'narrative', grupo: '', fuente: '', enemigos: [], empeno: null, contadores: [], imagenes: [], cuerpo: [], secciones: [],
+    titulo, tipo: 'narrative', grupo: '', apartado: '', fuente: '', enemigos: [], empeno: null, contadores: [], imagenes: [], cuerpo: [], secciones: [],
   }
   // Metadata: «clave: valor» lines right under the title
   for (; i < ls.length; i++) {
@@ -193,6 +195,7 @@ function leerEscenaSinCache(md: string): EscenaGuion {
     const [k, v] = m
     if (k === 'tipo') e.tipo = TIPOS[normalizar(v)] ?? e.tipo
     else if (k === 'grupo') e.grupo = v
+    else if (k === 'apartado') e.apartado = v
     else if (k === 'fuente') e.fuente = v
     else if (k === 'enemigos') e.enemigos.push(...enemigosDeMeta(v))
     else if (k === 'empeno') e.empeno = empenoDeMeta(v)

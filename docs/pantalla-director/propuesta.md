@@ -388,8 +388,23 @@ imágenes. Lo jugado manda: al subir la crónica, el siguiente borrador parte de
   pantalla siguen valiendo). PNJ, pruebas y CD, enemigos con el nombre exacto de su ficha, reglas, tablas, mapas, niveles y páginas
   coinciden con el libro; la redacción es propia y los recuadros de lectura citan la página. El mapa 1.3 era una ilustración de la
   PDF 34: ahora es el mapa real (`public/maps/map_p35.webp`).
-- **Libro completo para importar**: `scripts/aventura/parsear_caminapiedras.py` (ver `guion-formato.md`). Salidas en local, fuera
-  de git.
+- **Libro completo para importar**: `scripts/aventura/parsear_libro.py` (antes `parsear_caminapiedras.py`; ver `guion-formato.md`).
+  Salidas en local, fuera de git.
+- **Libro original subido** (8 oct 2026, a petición de Xavi: «en el Libro el original y en la Sesión mi versión adaptada»; el
+  original sustituye al resumen).
+  - API: tabla `BookChapters` (migración aditiva `AddBookChapters`: `Id`, `CampaignId`, `Number` único por campaña, `Title`, `Md`,
+    `UpdatedAt`; se borra con la campaña) y `BookController` en `/campaigns/{id}/book` (GET lista sin texto, GET `{n}`, PUT `{n}`
+    crea o sustituye, DELETE `{n}`), solo el director: 404 a quien no es miembro, 403 a un jugador. 400 con número fuera de 1-99,
+    sin título, vacío, de más de 500 000 caracteres o con texto inválido (un surrogate suelto, que PostgreSQL no guarda).
+  - Script: `parsear_libro.py` con perfiles (`caminapiedras`, `legado`) y la cabecera `capitulo:`/`titulo:`, `apartado:` por escena,
+    `### Pruebas` con las frases del libro, `enemigos:` y mapas desde los datos estructurados (`combates.json`). *El legado*: 9
+    capítulos de 70-95 kB, 350 escenas (26 de ellas, combates que no son un título del libro), 36 combates con enemigos, 21 mapas. `combates.json` sale de `scripts/aventura/exportar_combates.mjs`.
+  - Web: `bookApi`, `useLibroOriginal` y `leerCapituloSubido` (`libro.ts`), `PanelLibroOriginal.tsx` (`GuiaOriginal`,
+    `HojaSubirLibro`, «Quitar el original» con confirmación) y `DetalleEscenaLibro` (`PanelGuion.tsx`: la escena en solo lectura, sin
+    marcar pruebas, con «Preparar encuentro»). `EscenaGuion.apartado` agrupa el índice.
+  - Verificado en DEV: subir los capítulos 1-4 a la campaña 10 (Era 1) desde la hoja; Libro con el original, índice por apartados,
+    «A la sesión» copia la escena literal con sus enemigos y mapa; jugador 403, sin sesión 401; validaciones 400; «Quitar el
+    original» en la campaña 36 vuelve al resumen.
 - **Libro y Sesión** (a propuesta de Xavi). El panel Escena tiene dos fuentes:
   - **Libro**: referencia fija. Sin escena actual ni marcas de jugada o superado (`claveAventura`, `useAlternarMarca` y `FilaMarca`
     se retiran; las marcas `aventura:…` de documentos antiguos se ignoran). Cada escena y cada combate tiene «Añadir a la sesión»

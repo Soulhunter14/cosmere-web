@@ -539,3 +539,26 @@ export interface SaveGmScreenRequest {
   /** The version the client read */
   version: number
 }
+
+// Libro original: the adventure book uploaded by the director, chapter by chapter (BookController, director only). Each chapter is
+// Markdown in the screen's scene format, generated from the PDF by scripts/aventura/parsear_libro.py (`BookChapter*Response`).
+export interface BookChapterSummary {
+  number: number
+  title: string
+  /** Length of the Markdown, in characters */
+  length: number
+  updatedAt: string
+}
+
+export interface BookChapter {
+  number: number
+  title: string
+  md: string
+  updatedAt: string
+}
+
+export interface SaveBookChapterRequest {
+  title: string
+  /** At most 500 000 characters */
+  md: string
+}

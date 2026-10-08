@@ -51,12 +51,13 @@ export function PanelGrupo() {
   // The characters that fight nowhere (with a split party, one already in the other fight stays there)
   const fuera = personajes.filter((ch) => !personajeEnCombate(estado, ch.id))
   const anadir = (lista: Character[]) => {
-    actualizar((b) => { anadirPersonajes(b, asegurarEncuentro(b, 'Encuentro', ultimoDiario), lista, cfg.habilidades, cfg.features.bonosServidor) })
+    actualizar((b) => { anadirPersonajes(b, asegurarEncuentro(b, 'Encuentro', ultimoDiario), lista, cfg.habilidades, cfg.features.bonosServidor, ultimoDiario) })
     irA('encuentro')
   }
 
   return (
     <div style={stack(14)}>
+      <h2 className="sr-only">Grupo</h2>
       {fuera.length > 0 && (
         <Button variant="secondary" icon={<UserPlus size={16} aria-hidden />} onClick={() => anadir(fuera)} style={{ alignSelf: 'flex-start' }}>
           {estado.encuentros.length ? `Añadir ${destinoAnadir(estado)} a los que faltan` : 'Empezar un encuentro con el grupo'}

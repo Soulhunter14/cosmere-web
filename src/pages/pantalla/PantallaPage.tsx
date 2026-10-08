@@ -8,13 +8,14 @@ import {
 import { gmScreenApi } from '../../api/gmScreen'
 import type { DiceRollResponse } from '../../api/diceRolls'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
-import { Button, ErrorMessage, IconButton, Spinner, Tabs, type TabItem } from '../../components/ui'
+import { Button, ConfirmDialog, ErrorMessage, IconButton, Spinner, Tabs, type TabItem } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { CHAPTERS } from '../../data/caminapiedras'
 import { buttonReset, c, fs, radius, titleText, tone, type Tone } from '../../theme'
 import { PantallaProvider } from './PantallaProvider'
 import {
-  PanelesContext, duracion, guardarPreferencia, leerPreferencia, useAhora, usePaneles, usePantalla, type EstadoGuardado, type PanelId,
+  PanelesContext, duracion, esperarGuardado, guardarPreferencia, leerPreferencia, useAhora, usePaneles, usePantalla, type EstadoGuardado,
+  type PanelId,
 } from './contexto'
 import { FASE_INFO, type PantallaEstado } from './estado'
 import { hora } from './exportar'
@@ -56,10 +57,14 @@ export function PantallaPage() {
   const cId = Number(campaignId)
   const isGm = useCampaignStore((s) => s.isGm)
 
-  // gcTime 0: every visit starts from the stored document, never from a cached copy older than the last save
+  // gcTime 0: every visit starts from the stored document, never from a cached copy older than the last save; and it waits
+  // for the save the previous visit sent on its way out («Ver ficha» and back), so it never reads the version before it
   const { data, isError, refetch, isFetching } = useQuery({
     queryKey: ['gm-screen', cId],
-    queryFn: () => gmScreenApi.get(cId),
+    queryFn: async () => {
+      await esperarGuardado(cId)
+      return gmScreenApi.get(cId)
+    },
     enabled: isGm,
     gcTime: 0,
     staleTime: Infinity,
@@ -90,8 +95,9 @@ export function PantallaPage() {
 // ── Layout ───────────────────────────────────────────────────────────────────
 
 function Pantalla() {
-  const { cId, conflicto, resolverConflicto } = usePantalla()
+  const { cId, conflicto, resolverConflicto, rechazo, guardado, reintentarGuardado, soloLectura } = usePantalla()
   const qc = useQueryClient()
+  const [eligiendo, setEligiendo] = useState<'servidor' | 'mia' | null>(null)
   const dos = useDosPaneles()
   const [tabA, setTabA] = useState<PanelId>(() => leerPreferencia('cosmere-pantalla-a', 'escena', esDe(PANEL_A)))
   const [tabB, setTabB] = useState<PanelId>(() => leerPreferencia('cosmere-pantalla-b', 'tiradas', esDe(PANEL_B)))
@@ -122,8 +128,14 @@ function Pantalla() {
         prev && !prev.some((r) => r.id === tirada.id) ? [...prev, tirada].slice(-100) : prev)
       if (!visiblesRef.current) setNuevas((n) => n + 1)
     }
+    // Back from sleep or a Wi-Fi drop the live connection may have missed rolls: read the log again
+    const alVolver = () => { if (document.visibilityState === 'visible') void qc.invalidateQueries({ queryKey: ['dice-rolls', cId] }) }
     window.addEventListener('diceRollReceived', recibir)
-    return () => window.removeEventListener('diceRollReceived', recibir)
+    document.addEventListener('visibilitychange', alVolver)
+    return () => {
+      window.removeEventListener('diceRollReceived', recibir)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
   }, [cId, qc])
 
   const badge = tiradasVisibles ? 0 : nuevas
@@ -149,10 +161,56 @@ function Pantalla() {
             <span style={{ flex: '1 1 260px' }}>
               La pantalla se guardó desde otro dispositivo{conflicto.updatedAt ? ` a las ${hora(conflicto.updatedAt)}` : ''}. Tus últimos cambios aún no están guardados.
             </span>
-            <Button size="sm" variant="secondary" onClick={() => resolverConflicto('servidor')}>Usar la versión guardada</Button>
-            <Button size="sm" onClick={() => resolverConflicto('mia')}>Guardar la mía encima</Button>
+            <Button size="sm" variant="secondary" onClick={() => setEligiendo('servidor')}>Usar la versión guardada</Button>
+            <Button size="sm" onClick={() => setEligiendo('mia')}>Guardar la mía encima</Button>
           </div>
         )}
+        {rechazo && guardado === 'rechazado' && (
+          <div
+            role="alert"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '8px 12px 0', padding: '10px 14px', borderRadius: radius.md,
+              background: tone.rubi.bg, border: `1px solid ${tone.rubi.border}`, color: c.text, fontSize: fs.sm,
+            }}
+          >
+            <TriangleAlert size={18} aria-hidden style={{ color: tone.rubi.fg, flexShrink: 0 }} />
+            <span style={{ flex: '1 1 260px' }}>
+              No se pudo guardar: {rechazo} Tus cambios siguen en esta pantalla; no la cierres hasta que se guarden.
+            </span>
+            <Button size="sm" variant="secondary" icon={<RefreshCw size={15} aria-hidden />} onClick={reintentarGuardado}>Reintentar</Button>
+          </div>
+        )}
+        {soloLectura && (
+          <div
+            role="alert"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '8px 12px 0', padding: '10px 14px', borderRadius: radius.md,
+              background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}`, color: c.text, fontSize: fs.sm,
+            }}
+          >
+            <TriangleAlert size={18} aria-hidden style={{ color: tone.topacio.fg, flexShrink: 0 }} />
+            <span style={{ flex: '1 1 260px' }}>
+              Esta pantalla se guardó con una versión más nueva de la aplicación. Recarga la página para actualizarla; hasta entonces
+              solo se puede consultar y no se guarda nada.
+            </span>
+            <Button size="sm" variant="secondary" icon={<RefreshCw size={15} aria-hidden />} onClick={() => window.location.reload()}>Recargar</Button>
+          </div>
+        )}
+        <ConfirmDialog
+          open={eligiendo !== null}
+          tone={eligiendo === 'mia' ? 'brand' : undefined}
+          icon="warning"
+          title={eligiendo === 'mia' ? '¿Guardar tu versión encima?' : '¿Usar la versión guardada?'}
+          message={eligiendo === 'mia'
+            ? 'Lo que se guardó desde el otro dispositivo se sustituye por lo que tienes en esta pantalla.'
+            : 'Los cambios de esta pantalla que aún no se habían guardado se descartan.'}
+          confirmLabel={eligiendo === 'mia' ? 'Guardar la mía' : 'Usar la guardada'}
+          onConfirm={() => {
+            if (eligiendo) resolverConflicto(eligiendo)
+            setEligiendo(null)
+          }}
+          onCancel={() => setEligiendo(null)}
+        />
         <div
           style={{
             flex: 1, minHeight: 0, display: 'grid', gap: 12, padding: dos ? 12 : 8,
@@ -178,6 +236,8 @@ function Panel({
   prefijo, etiqueta, ids, valor, onCambiar, badge,
 }: { prefijo: string; etiqueta: string; ids: PanelId[]; valor: PanelId; onCambiar: (p: PanelId) => void; badge: number }) {
   const [abiertos, setAbiertos] = useState<PanelId[]>([valor])
+  // A panel opened from elsewhere (a chip of the top bar, «Preparar encuentro») stays mounted too, as one opened by its tab
+  if (!abiertos.includes(valor)) setAbiertos([...abiertos, valor])
   const cambiar = (p: PanelId) => {
     setAbiertos((l) => (l.includes(p) ? l : [...l, p]))
     onCambiar(p)
@@ -239,16 +299,31 @@ function BarraSuperior() {
   const ahora = useAhora()
   const escena = tituloEscenaActual(estado)
   const varios = estado.encuentros.length > 1
+  const activo = estado.encuentros.find((e) => e.id === estado.encuentroActivo) ?? estado.encuentros[0]
   const sesion = estado.sesion
+  const [saliendo, setSaliendo] = useState(false)
+  // Leaving with changes the server has not taken (no connection, refused, in conflict) loses them: ask first. Pending or
+  // in-flight changes are sent on the way out by themselves
+  const sinGuardar = guardado === 'error' || guardado === 'rechazado' || guardado === 'conflicto'
+  const volver = () => navigate(`/campaigns/${cId}/gm`)
 
   return (
     <header
       className="glass"
       style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, padding: '6px 12px', borderBottom: `1px solid ${c.border}`, flexShrink: 0 }}
     >
-      <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} aria-hidden />} onClick={() => navigate(`/campaigns/${cId}/gm`)} style={{ paddingLeft: 6 }}>
+      <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} aria-hidden />} onClick={() => (sinGuardar ? setSaliendo(true) : volver())} style={{ paddingLeft: 6 }}>
         Director
       </Button>
+      <ConfirmDialog
+        open={saliendo}
+        icon="warning"
+        title="¿Salir sin guardar?"
+        message="Hay cambios de la pantalla que el servidor aún no tiene. Si sales ahora, se pierden."
+        confirmLabel="Salir sin guardar"
+        onConfirm={() => { setSaliendo(false); volver() }}
+        onCancel={() => setSaliendo(false)}
+      />
       <CosmereIcon name={cfg.emblema} size={26} style={{ color: c.goldOrnament }} />
       <div style={{ minWidth: 0, flexShrink: 1 }} className="hide-mobile">
         <h1 style={{ ...titleText, fontSize: fs.md, color: c.text, whiteSpace: 'nowrap' }}>Pantalla del director</h1>
@@ -259,20 +334,25 @@ function BarraSuperior() {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', padding: '2px 0' }}>
         {escena && <Chip icono={BookOpen} t={tone.gold} onClick={() => irA('escena')} etiqueta={`Escena actual: ${escena}`}>{escena}</Chip>}
         {/* One chip per open fight: it brings that one on screen */}
-        {estado.encuentros.map((enc) => (
-          <Chip
-            key={enc.id}
-            icono={Swords}
-            t={tone.rubi}
-            onClick={() => {
-              if (varios) actualizar((b) => { b.encuentroActivo = enc.id })
-              irA('encuentro')
-            }}
-            etiqueta={`${varios ? `«${enc.titulo}»` : 'Encuentro'}: ronda ${enc.ronda}, ${FASE_INFO[enc.fase].label}`}
-          >
-            {varios ? `${enc.titulo} · R${enc.ronda}` : `Ronda ${enc.ronda}`} · {FASE_INFO[enc.fase].label}
-          </Chip>
-        ))}
+        {estado.encuentros.map((enc) => {
+          const texto = `${varios ? `${enc.titulo} · R${enc.ronda}` : `Ronda ${enc.ronda}`} · ${FASE_INFO[enc.fase].label}`
+          return (
+            <Chip
+              key={enc.id}
+              icono={Swords}
+              t={tone.rubi}
+              actual={varios && enc === activo}
+              onClick={() => {
+                // Which fight is on screen is saved with the document: only when it really changes
+                if (enc !== activo) actualizar((b) => { b.encuentroActivo = enc.id })
+                irA('encuentro')
+              }}
+              etiqueta={`${texto} (${varios ? 'combate' : 'encuentro'} en curso)`}
+            >
+              {texto}
+            </Chip>
+          )
+        })}
         {sesion && (
           <Chip icono={Timer} t={tone.cuarzo} onClick={() => irA('bitacora')} etiqueta={`Sesión ${sesion.numero ?? ''}: ${duracion(sesion.iniciadaEn, ahora)}`}>
             Sesión {sesion.numero ?? '¿?'} · {duracion(sesion.iniciadaEn, ahora)}
@@ -287,18 +367,21 @@ function BarraSuperior() {
   )
 }
 
-function Chip({ icono: Icon, t, onClick, etiqueta, children }: { icono: LucideIcon; t: Tone; onClick: () => void; etiqueta: string; children: ReactNode }) {
+function Chip({
+  icono: Icon, t, onClick, etiqueta, actual = false, children,
+}: { icono: LucideIcon; t: Tone; onClick: () => void; etiqueta: string; actual?: boolean; children: ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={etiqueta}
+      aria-current={actual || undefined}
       title={etiqueta}
       className="ui-btn"
       style={{
         ...buttonReset, display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, maxWidth: 260, minHeight: 34, padding: '0 12px',
-        borderRadius: radius.full, background: t.bg, border: `1px solid ${t.border}`, color: t.fg, fontSize: fs.sm, fontWeight: 650,
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        borderRadius: radius.full, background: t.bg, border: `1px solid ${actual ? t.fg : t.border}`, color: t.fg, fontSize: fs.sm, fontWeight: 650,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', boxShadow: actual ? `inset 0 -2px 0 ${t.fg}` : undefined,
       }}
     >
       <Icon size={14} aria-hidden style={{ flexShrink: 0 }} />
@@ -312,6 +395,7 @@ const GUARDADO: Record<EstadoGuardado, { texto: string; t: Tone; icon: LucideIco
   pendiente: { texto: 'Guardando…', t: tone.cuarzo, icon: LoaderCircle, gira: true },
   guardando: { texto: 'Guardando…', t: tone.cuarzo, icon: LoaderCircle, gira: true },
   error: { texto: 'Sin conexión: reintentando', t: tone.topacio, icon: CloudOff },
+  rechazado: { texto: 'Sin guardar: el servidor lo rechaza', t: tone.rubi, icon: TriangleAlert },
   conflicto: { texto: 'Conflicto', t: tone.rubi, icon: TriangleAlert },
 }
 
@@ -395,6 +479,11 @@ function BotonPantallaCompleta() {
   const doc = document as DocWebkit
   const soportado = !!(document.fullscreenEnabled || doc.webkitFullscreenEnabled)
   const activo = useSyncExternalStore(suscribirCompleta, enCompleta, () => false)
+  // Fullscreen and the landscape lock belong to this screen: leaving it gives the rest of the app its normal window back
+  useEffect(() => () => {
+    (screen.orientation as Orientacion | undefined)?.unlock?.()
+    if (enCompleta()) void (document.exitFullscreen ? document.exitFullscreen() : (document as DocWebkit).webkitExitFullscreen?.())?.catch(() => {})
+  }, [])
   if (!soportado) return null
 
   const alternar = async () => {

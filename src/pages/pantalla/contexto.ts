@@ -2,8 +2,8 @@ import { createContext, useContext, useSyncExternalStore } from 'react'
 import type { GmScreen } from '../../types'
 import { anotar, marcar, type PantallaEstado, type TipoEvento } from './estado'
 
-/** Saving state shown in the top bar */
-export type EstadoGuardado = 'guardado' | 'pendiente' | 'guardando' | 'error' | 'conflicto'
+/** Saving state shown in the top bar: `error` is a network failure (retried), `rechazado` a refusal of the server (not retried) */
+export type EstadoGuardado = 'guardado' | 'pendiente' | 'guardando' | 'error' | 'rechazado' | 'conflicto'
 
 export interface PantallaCtx {
   cId: number
@@ -18,9 +18,22 @@ export interface PantallaCtx {
   /** Another device saved first: the stored document, until the director picks one */
   conflicto: GmScreen | null
   resolverConflicto: (usar: 'servidor' | 'mia') => void
+  /** Why the server refused the last save (too large, invalid text, no longer the GM…), until a save goes through */
+  rechazo: string | null
+  /** The stored document comes from a newer release of the app: shown, never changed or saved, until the page reloads */
+  soloLectura: boolean
+  /** Sends the pending changes now (after a refusal) */
+  reintentarGuardado: () => void
 }
 
 export const PantallaContext = createContext<PantallaCtx | null>(null)
+
+/**
+ * Saves still running per campaign, also after the screen was left: a new visit waits for them before reading the stored
+ * document, so it never starts from the version before the last save (which would end in a false conflict).
+ */
+export const guardadosEnCurso = new Map<number, Promise<unknown>>()
+export const esperarGuardado = (cId: number): Promise<unknown> => guardadosEnCurso.get(cId)?.catch(() => {}) ?? Promise.resolve()
 
 export function usePantalla(): PantallaCtx {
   const ctx = useContext(PantallaContext)
@@ -59,6 +72,8 @@ let reloj: number | undefined
 function suscribirReloj(cb: () => void) {
   oyentes.add(cb)
   if (reloj === undefined) {
+    // Back on the screen after a while: the time is the current one, not the one of the last tick
+    ahora = Date.now()
     reloj = window.setInterval(() => {
       ahora = Date.now()
       oyentes.forEach((o) => o())

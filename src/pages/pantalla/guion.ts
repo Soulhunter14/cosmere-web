@@ -8,13 +8,13 @@
 import { foldText as normalizar } from '../../lib/catalogo'
 import type { AdventureChapter, Combat, Scene, SceneTable } from '../../data/libros/tipos'
 import {
-  claveContador, claveResultado, type EnemigoEscena, type EscenaArchivada, type EscenaPropia, type ImagenEscena, type PantallaEstado,
-  type ProgresoEmpeno, type TipoEscena,
+  CLAVES_EFECTO, claveContador, claveResultado, prefijoDecision, type ClaveEfecto, type Efecto, type EnemigoEscena, type EscenaArchivada,
+  type EscenaPropia, type ImagenEscena, type PantallaEstado, type ProgresoEmpeno, type TipoEscena,
 } from './estado'
 import { cantidadDe, enemigosDeTexto } from './adversarios'
 
 /** Sections the screen gives a behaviour to; any other `###` section is shown as written */
-export type ClaseSeccion = 'pruebas' | 'pnj' | 'pj' | 'caminos' | 'reglas' | 'avances' | 'otra'
+export type ClaseSeccion = 'pruebas' | 'pnj' | 'pj' | 'caminos' | 'decision' | 'reglas' | 'avances' | 'otra'
 
 export type Bloque =
   | { tipo: 'parrafo'; texto: string }
@@ -48,9 +48,34 @@ export interface EscenaGuion {
   empeno: Empeno | null
   contadores: string[]
   imagenes: ImagenEscena[]
+  /** Who makes the decisions of the scene (`decide:`): «todos», a legacy («convicto») or a character's name; '' = all of them */
+  decide: string
   /** Text before the first `###` section */
   cuerpo: Bloque[]
   secciones: Seccion[]
+}
+
+/** An option of a decision: what it says and what it gives («**Atributo** +1 Fuerza · **Camino** Guerrero · **Metal** Peltre») */
+export interface OpcionDecision {
+  texto: string
+  efectos: Efecto[]
+}
+
+/**
+ * A `### Decisión: <question>` section: the options the players choose from (one bullet each, with their effects), who chooses
+ * and the test that may come with the choice. The screen marks what each character picked (`PantallaEstado.decisiones`).
+ */
+export interface Decision {
+  pregunta: string
+  /** Who picks (`decide:` of the section, or of the scene): «todos», a legacy or a character's name; '' = all of them */
+  decide: string
+  /** Test after the choice (`prueba: CD 10` or `prueba: Atletismo CD 12`); no skill = the skill of the chosen option */
+  prueba: { habilidad: string; cd: number } | null
+  /** What a passed test gives (`éxito:` «+1 al atributo de la habilidad») */
+  exito: string
+  opciones: OpcionDecision[]
+  /** Paragraphs and read-aloud boxes of the section that are not its metadata */
+  notas: Bloque[]
 }
 
 /** A test of a «Pruebas» item: «**Supervivencia CD 14**: guiar al grupo…» or «**Persuasión contra la Defensa espiritual**: …» */
@@ -74,7 +99,7 @@ const TIPOS: Record<string, TipoEscena> = {
   decision: 'choice', choice: 'choice',
 }
 
-const CLAVES_META = ['tipo', 'grupo', 'apartado', 'fuente', 'enemigos', 'empeno', 'contadores', 'contador', 'imagen', 'imagenes'] as const
+const CLAVES_META = ['tipo', 'grupo', 'apartado', 'fuente', 'enemigos', 'empeno', 'contadores', 'contador', 'imagen', 'imagenes', 'decide'] as const
 type ClaveMeta = (typeof CLAVES_META)[number]
 const RE_META = /^([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)\s*:\s*(.*)$/
 const claveMeta = (linea: string): [ClaveMeta, string] | null => {
@@ -95,6 +120,8 @@ function claseDe(titulo: string): ClaseSeccion {
   if (/^pruebas?\b/.test(t)) return 'pruebas'
   if (/^(pnj|personajes no jugadores|quien aparece)/.test(t)) return 'pnj'
   if (/^(para los pj|ganchos|los pj)/.test(t)) return 'pj'
+  // «Decisión: …» (singular) is a choice the screen records; «Decisiones» (plural) stays the older name of «Caminos»
+  if (/^decision\b/.test(t)) return 'decision'
   if (/^(caminos|decisiones|si los pj)/.test(t)) return 'caminos'
   if (/^(reglas|efectos del campo)/.test(t)) return 'reglas'
   if (/^avances?\b/.test(t)) return 'avances'
@@ -186,7 +213,7 @@ function leerEscenaSinCache(md: string): EscenaGuion {
   i++
 
   const e: EscenaGuion = {
-    titulo, tipo: 'narrative', grupo: '', apartado: '', fuente: '', enemigos: [], empeno: null, contadores: [], imagenes: [], cuerpo: [], secciones: [],
+    titulo, tipo: 'narrative', grupo: '', apartado: '', fuente: '', enemigos: [], empeno: null, contadores: [], imagenes: [], decide: '', cuerpo: [], secciones: [],
   }
   // Metadata: «clave: valor» lines right under the title
   for (; i < ls.length; i++) {
@@ -200,6 +227,7 @@ function leerEscenaSinCache(md: string): EscenaGuion {
     else if (k === 'enemigos') e.enemigos.push(...enemigosDeMeta(v))
     else if (k === 'empeno') e.empeno = empenoDeMeta(v)
     else if (k === 'contadores' || k === 'contador') e.contadores.push(...v.split(/[,;]/).map((s) => s.trim()).filter(Boolean))
+    else if (k === 'decide') e.decide = v
     else {
       const img = imagenDeMeta(v)
       if (img) e.imagenes.push(img)
@@ -236,6 +264,77 @@ export function leerPrueba(item: string): Prueba {
   return { habilidad: '', cd: null, contra: '', texto: limpio }
 }
 
+// ── Decisions ────────────────────────────────────────────────────────────────
+
+const RE_EFECTO = new RegExp(`\\*\\*\\s*(${CLAVES_EFECTO.join('|')})\\s*\\*\\*`, 'gi')
+
+/** An option of a decision: the text before its first «**Clave**», and each effect up to the next one (« · » separates them) */
+export function leerOpcion(item: string): OpcionDecision {
+  const marcas = [...item.matchAll(RE_EFECTO)]
+  if (marcas.length === 0) return { texto: item.trim(), efectos: [] }
+  const efectos = marcas
+    .map((m, i): Efecto => {
+      const desde = (m.index ?? 0) + m[0].length
+      const hasta = marcas[i + 1]?.index ?? item.length
+      return { clave: normalizar(m[1]) as ClaveEfecto, valor: item.slice(desde, hasta).replace(/^[\s:]+|[\s·]+$/g, '').trim() }
+    })
+    .filter((x) => x.valor)
+  const texto = item.slice(0, marcas[0].index ?? 0).replace(/[\s·]+$/, '').trim()
+  return { texto: texto || efectos.map((x) => x.valor).join(' · '), efectos }
+}
+
+const RE_META_DECISION = /(prueba|[eé]xito|decide)\s*:\s*/gi
+
+/** A `### Decisión: …` section: its question (the heading), its metadata lines, its options and any other text */
+export function leerDecision(s: Seccion, decideEscena = ''): Decision {
+  const pregunta = s.titulo.replace(/^decisi[oó]n\b\s*[:·.—–-]?\s*/i, '').trim() || 'Decisión'
+  const d: Decision = { pregunta, decide: decideEscena, prueba: null, exito: '', opciones: [], notas: [] }
+  for (const b of s.bloques) {
+    if (b.tipo === 'lista') {
+      d.opciones.push(...b.items.map(leerOpcion))
+      continue
+    }
+    const t = b.tipo === 'parrafo' ? b.texto.trim() : ''
+    if (!/^(prueba|[eé]xito|decide)\s*:/i.test(t)) {
+      d.notas.push(b)
+      continue
+    }
+    // Several «clave: valor» of one paragraph («prueba: CD 10 · éxito: +1 al atributo de la habilidad»)
+    const marcas = [...t.matchAll(RE_META_DECISION)]
+    marcas.forEach((m, i) => {
+      const valor = t.slice((m.index ?? 0) + m[0].length, marcas[i + 1]?.index ?? t.length).replace(/[\s·]+$/, '').trim()
+      const k = normalizar(m[1])
+      if (k === 'prueba') {
+        const p = /^(.*?)\s*CD\s*(\d{1,2})\b/i.exec(valor)
+        if (p) d.prueba = { habilidad: p[1].replace(/[\s:·]+$/, '').trim(), cd: Number(p[2]) }
+      } else if (k === 'exito') d.exito = valor
+      else d.decide = valor
+    })
+  }
+  return d
+}
+
+const RE_CANTIDAD = /([+-]\d+)\s+(.+?)(?=\s*(?:,|\by\b|\be\b)\s*[+-]\d|$)/g
+
+/** «+1 Medicina y +1 Disciplina» → [{ 1, Medicina }, { 1, Disciplina }] (attributes and skills of an option) */
+export const cantidadesDe = (valor: string): { cantidad: number; nombre: string }[] =>
+  [...valor.matchAll(RE_CANTIDAD)]
+    .map((m) => ({ cantidad: Number(m[1]), nombre: m[2].replace(/[\s.·;,]+$/, '').trim() }))
+    .filter((x) => x.nombre && Number.isFinite(x.cantidad))
+
+/** «Enviado y Líder» → [Enviado, Líder] (paths and metals of an option) */
+export const nombresDe = (valor: string): string[] =>
+  valor.split(/\s*(?:,|\by\b|\be\b)\s*/).map((s) => s.replace(/[\s.·;]+$/, '').trim()).filter(Boolean)
+
+/** The test that comes with an option: the decision's own skill or the first skill the option gives («Atletismo CD 10»); '' = none */
+export function pruebaDeOpcion(d: Decision, op: OpcionDecision): string {
+  if (!d.prueba) return ''
+  const habilidad = d.prueba.habilidad
+    || op.efectos.filter((x) => x.clave === 'habilidad').flatMap((x) => cantidadesDe(x.valor))[0]?.nombre
+    || 'Prueba'
+  return `${habilidad} CD ${d.prueba.cd}`
+}
+
 // ── What the table noted on a scene, as text (log, prompts, archived scenes) ──
 
 /** «Supervivencia CD 14» */
@@ -248,6 +347,12 @@ export const resumen = (texto: string, max = 90) => {
   return frase.length > max ? `${frase.slice(0, max - 1).trimEnd()}…` : frase
 }
 
+/** A short text kept whole (an option, a question), without bold: it is only cut when it is longer than `max` */
+export const acortar = (texto: string, max = 90) => {
+  const limpio = texto.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim()
+  return limpio.length > max ? `${limpio.slice(0, max - 1).trimEnd()}…` : limpio
+}
+
 export type EstadoEmpeno = 'en curso' | 'superado' | 'fracasado'
 /** «6 éxitos, 1 fallo» */
 export const cuentaEmpeno = (p: ProgresoEmpeno) => `${p.exitos} éxito${p.exitos === 1 ? '' : 's'}, ${p.fallos} fallo${p.fallos === 1 ? '' : 's'}`
@@ -255,7 +360,7 @@ export const cuentaEmpeno = (p: ProgresoEmpeno) => `${p.exitos} éxito${p.exitos
 export const estadoEmpeno = (p: ProgresoEmpeno, objetivo: Empeno): EstadoEmpeno =>
   p.exitos >= objetivo.exitos ? 'superado' : p.fallos >= objetivo.fallos ? 'fracasado' : 'en curso'
 
-/** What the table noted on a scene of the session: tests passed or failed, the endeavour and the counters */
+/** What the table noted on a scene of the session: tests passed or failed, what each character decided, the endeavour and the counters */
 export function detallesEscena(b: PantallaEstado, esc: EscenaPropia): string[] {
   const e = leerEscena(esc.md)
   const detalles: string[] = []
@@ -266,6 +371,15 @@ export function detallesEscena(b: PantallaEstado, esc: EscenaPropia): string[] {
         const p = leerPrueba(item)
         detalles.push(`${etiquetaPrueba(p)} ${r === 'exito' ? 'superada' : 'fallada'} (${resumen(p.texto, 60)})`)
       }
+    }
+  }
+  for (const s of e.secciones.filter((x) => x.clase === 'decision')) {
+    const d = leerDecision(s, e.decide)
+    const prefijo = prefijoDecision(e.grupo, e.titulo, d.pregunta)
+    for (const [k, el] of Object.entries(b.decisiones)) {
+      if (!k.startsWith(prefijo)) continue
+      const prueba = el.prueba && el.resultado ? ` (${el.prueba} ${el.resultado === 'exito' ? 'superada' : 'fallada'})` : ''
+      detalles.push(`${el.personaje}, ${acortar(d.pregunta, 70)}: ${acortar(el.opcion, 90)}${prueba}`)
     }
   }
   const prog = b.empenos[esc.id]
@@ -456,6 +570,7 @@ export const FORMATO_GUION = `Formato del guion (Markdown):
   - \`enemigos:\` 2 Anguila aérea mayor, 2 Anguila aérea  (nombres del catálogo de adversarios; prepara el encuentro)
   - \`empeño:\` 6 éxitos antes de 4 fallos
   - \`contadores:\` Daño del barco, Días en Karanak
+  - \`decide:\` quién toma las decisiones de la escena: todos (por defecto), un legado (convicto) o el nombre de un PJ
 - Cuerpo de la escena: párrafos para el director; las líneas que empiezan por \`> \` son el texto para leer en voz alta.
 - Secciones \`### …\` con viñetas \`- \`. La pantalla da función a estas:
   - \`### Pruebas\`: \`- **Habilidad CD 14**: para qué sirve. Éxito: … Fallo: …\` o, si es enfrentada,
@@ -463,6 +578,11 @@ export const FORMATO_GUION = `Formato del guion (Markdown):
   - \`### PNJ\`: \`- **Nombre** (pronombre · ficha: Adversario del catálogo): cómo interpretarlo.\` (la ficha permite añadirlo al encuentro)
   - \`### Para los PJ\`: \`- **Nombre del PJ**: su gancho en esta escena.\`
   - \`### Caminos\`: \`- **Si …**: qué ocurre.\`
+  - \`### Decisión: ¿La pregunta?\`: una decisión que la pantalla guarda por personaje. Una viñeta por opción, con lo que da:
+    \`- Lo que hace. **Atributo** +1 Fuerza · **Habilidad** +2 Atletismo · **Pericia** … · **Meta** … · **Objeto** … · **Camino** Guerrero · **Metal** Peltre · **Eco** lo que la historia recordará\`
+    (todas las claves son opcionales; «**Habilidad** +1 Medicina y +1 Disciplina» reparte). Antes de las viñetas, líneas opcionales:
+    \`decide:\` (como el de la escena), \`prueba: CD 10\` (con la habilidad de la opción elegida) o \`prueba: Atletismo CD 12\`, y
+    \`éxito: +1 al atributo de la habilidad\`.
   - \`### Reglas del combate\`: efectos del campo de batalla (se ven en el encuentro).
   - Cualquier otra sección (\`### Tabla de oportunidades\`, \`### Lo que saben\`…) se muestra tal cual.
   - \`### Avances\`: avances recomendados (\`- Los PJ suben a nivel 4\`, un hito de una meta, un Ideal…). La pantalla solo los

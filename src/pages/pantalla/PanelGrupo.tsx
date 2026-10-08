@@ -16,6 +16,7 @@ import { habilidadesDe } from './adversarios'
 import { anadirPersonajes, asegurarEncuentro, destinoAnadir } from './encuentro'
 import { personajeEnCombate } from './estado'
 import { BarraRecurso } from './piezas'
+import { RegistroDecisiones } from './DecisionGuion'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -45,7 +46,12 @@ export function PanelGrupo() {
   if (isLoading) return <Spinner label="Cargando personajes…" />
   if (isError) return <ErrorMessage message="No se pudieron cargar los personajes." />
   if (personajes.length === 0) {
-    return <EmptyState icon={<Users size={22} aria-hidden />} title="Sin personajes" description="Cuando los jugadores creen sus personajes, aparecerán aquí." />
+    return (
+      <div style={stack(14)}>
+        <EmptyState icon={<Users size={22} aria-hidden />} title="Sin personajes" description="Cuando los jugadores creen sus personajes, aparecerán aquí." />
+        <RegistroDecisiones personajes={personajes} />
+      </div>
+    )
   }
 
   // The characters that fight nowhere (with a split party, one already in the other fight stays there)
@@ -63,6 +69,7 @@ export function PanelGrupo() {
           {estado.encuentros.length ? `Añadir ${destinoAnadir(estado)} a los que faltan` : 'Empezar un encuentro con el grupo'}
         </Button>
       )}
+      <RegistroDecisiones personajes={personajes} />
       <ul style={{ ...listReset, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 12 }}>
         {personajes.map((ch) => (
           <li key={ch.id}>

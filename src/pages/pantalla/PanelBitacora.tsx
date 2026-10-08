@@ -1,13 +1,14 @@
 import { useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Copy, Download, NotebookPen, Pencil, Play, Square, Trash2 } from 'lucide-react'
+import { Check, ClipboardCopy, Copy, Download, NotebookPen, Pencil, Play, Square, Trash2 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, Sheet, Stepper, Textarea } from '../../components/ui'
-import { c, eyebrow, font, fs, numeral, pill, radius, shadow } from '../../theme'
+import { c, eyebrow, font, fs, numeral, pill, radius, shadow, tone } from '../../theme'
 import { duracion, useAhora, usePantalla } from './contexto'
-import { anotar, nuevaSesion, numeroSiguiente, terminarSesion, type EventoBitacora, type SesionMesa } from './estado'
+import { anotar, escenasJugadas, nuevaSesion, numeroSiguiente, terminarSesion, type EscenaArchivada, type EventoBitacora, type SesionMesa } from './estado'
 import { copiarTexto, descargarTexto, hora, fecha, nombreArchivoSesion, notasMarkdown, promptCronica, tituloSesion } from './exportar'
+import { archivarEscena, escribirGuion } from './guion'
 import { nombreBase } from './encuentro'
 import { ETIQUETAS_APUNTE, EVENTO_META } from './meta'
 import { Tesela } from './piezas'
@@ -38,6 +39,8 @@ export function PanelBitacora() {
   const sesion = estado.sesion
   const sugerido = numeroSiguiente(estado, ultimoDiario)
   const numero = numeroElegido ?? sugerido
+  const jugadas = escenasJugadas(estado).length
+  const pendientes = estado.escenasPropias.length - jugadas
 
   const empezar = () => {
     actualizar((b) => { b.sesion = nuevaSesion(numero, tituloNuevo.trim()) })
@@ -50,6 +53,13 @@ export function PanelBitacora() {
     if (!t) return
     actualizar((b) => anotar(b, { tipo: 'apunte', etiqueta, texto: t }, ultimoDiario))
     setTexto('')
+  }
+
+  /** The archived scenes of a closed session, as a script that can be imported again */
+  const copiarEscenas = async (s: SesionMesa) => {
+    const conTexto = s.escenas.filter((e) => e.md)
+    const ok = await copiarTexto(escribirGuion(tituloSesion(s), conTexto))
+    setAviso(ok ? `Escenas de la ${tituloSesion(s)} copiadas en Markdown: se pueden volver a importar en Sesión.` : 'No se pudieron copiar las escenas.')
   }
 
   const exportar = async (s: SesionMesa, como: 'prompt' | 'md') => {
@@ -93,6 +103,8 @@ export function PanelBitacora() {
             <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, color: c.text }}>Sesión de juego</h2>
             <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2 }}>
               Agrupa los apuntes y eventos de la partida de hoy. El número es el de la crónica del diario.
+              {estado.escenasPropias.length > 0 &&
+                ` Empieza con ${estado.escenasPropias.length === 1 ? 'la escena preparada' : `las ${estado.escenasPropias.length} escenas preparadas`} en Sesión.`}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
@@ -168,14 +180,22 @@ export function PanelBitacora() {
                 <Disclosure
                   headingLevel={3}
                   title={tituloSesion(s)}
-                  summary={`${fecha(s.iniciadaEn)} · ${s.eventos.length} anotacion${s.eventos.length === 1 ? '' : 'es'}`}
+                  summary={[
+                    fecha(s.iniciadaEn),
+                    `${s.eventos.length} anotacion${s.eventos.length === 1 ? '' : 'es'}`,
+                    ...(s.escenas.length ? [`${s.escenas.length} escena${s.escenas.length === 1 ? '' : 's'} jugada${s.escenas.length === 1 ? '' : 's'}`] : []),
+                  ].join(' · ')}
                 >
                   <div style={stack(12)}>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Button size="sm" variant="secondary" icon={<Copy size={15} aria-hidden />} onClick={() => exportar(s, 'prompt')}>Copiar prompt de crónica</Button>
                       <Button size="sm" variant="secondary" icon={<Download size={15} aria-hidden />} onClick={() => exportar(s, 'md')}>Descargar notas</Button>
+                      {s.escenas.some((e) => e.md) && (
+                        <Button size="sm" variant="ghost" icon={<ClipboardCopy size={15} aria-hidden />} onClick={() => copiarEscenas(s)}>Copiar escenas</Button>
+                      )}
                       <Button size="sm" variant="danger" icon={<Trash2 size={15} aria-hidden />} onClick={() => setBorrandoSesion(s)} style={{ marginLeft: 'auto' }}>Eliminar</Button>
                     </div>
+                    {s.escenas.length > 0 && <EscenasArchivadas escenas={s.escenas} />}
                     {s.eventos.length > 0 && <ListaEventos eventos={s.eventos} />}
                   </div>
                 </Disclosure>
@@ -191,9 +211,13 @@ export function PanelBitacora() {
         tone="brand"
         icon="warning"
         title="¿Terminar la sesión?"
-        message="Se guarda en «Sesiones anteriores» con sus anotaciones; desde allí puedes copiar el prompt de la crónica."
+        message={
+          'Se guarda en «Sesiones anteriores» con sus anotaciones; desde allí puedes copiar el prompt de la crónica. ' +
+          (jugadas ? `Se lleva ${jugadas === 1 ? 'la escena jugada' : `las ${jugadas} escenas jugadas`}` : 'No tiene escenas jugadas') +
+          (pendientes ? `; ${pendientes === 1 ? 'la que queda sin jugar pasa' : `las ${pendientes} sin jugar pasan`} a la siguiente sesión.` : '.')
+        }
         confirmLabel="Terminar sesión"
-        onConfirm={() => { actualizar((b) => terminarSesion(b)); setTerminando(false); setAviso(null) }}
+        onConfirm={() => { actualizar((b) => terminarSesion(b, (esc) => archivarEscena(b, esc))); setTerminando(false); setAviso(null) }}
         onCancel={() => setTerminando(false)}
       />
       <ConfirmDialog
@@ -210,7 +234,7 @@ export function PanelBitacora() {
       <ConfirmDialog
         open={!!borrandoSesion}
         title={`¿Eliminar ${borrandoSesion ? tituloSesion(borrandoSesion) : 'la sesión'}?`}
-        message="Se borran sus anotaciones de la pantalla. La crónica del diario, si existe, no cambia."
+        message="Se borran de la pantalla sus anotaciones y las escenas que se llevó. La crónica del diario, si existe, no cambia."
         onConfirm={() => {
           const id = borrandoSesion?.id
           actualizar((b) => { b.historial = b.historial.filter((s) => s.id !== id) })
@@ -219,6 +243,28 @@ export function PanelBitacora() {
         onCancel={() => setBorrandoSesion(null)}
       />
     </div>
+  )
+}
+
+/** The scenes a closed session took with it (read only): title, group and what the table noted on each */
+function EscenasArchivadas({ escenas }: { escenas: EscenaArchivada[] }) {
+  return (
+    <ol aria-label="Escenas jugadas" style={{ ...listReset, ...stack(6) }}>
+      {escenas.map((e) => (
+        <li key={e.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: radius.md, background: c.s1, border: `1px solid ${c.border}` }}>
+          <Tesela t={tone.esmeralda} tam={30}><Check size={15} /></Tesela>
+          <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+            {e.grupo && <p style={{ ...eyebrow, fontSize: fs.xs }}>{e.grupo}</p>}
+            <p style={{ fontSize: fs.sm + 1, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{e.titulo}</p>
+            {e.detalles.length > 0 && (
+              <ul style={{ ...listReset, marginTop: 4, ...stack(2) }}>
+                {e.detalles.map((d, i) => <li key={i} style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{d}</li>)}
+              </ul>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
   )
 }
 

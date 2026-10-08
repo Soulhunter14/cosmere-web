@@ -398,6 +398,20 @@ imágenes. Lo jugado manda: al subir la crónica, el siguiente borrador parte de
   - **Sesión**: el esqueleto preparado y todo el progreso. «Nueva escena» (`HojaEscenaRapida`) crea una escena en la mesa con
     título, tipo, lectura y qué pasa. Importar deja elegir escenas con casillas.
   - Lo añadido entra tras la escena actual de la sesión, o al final (`posicionTras`).
+- **Cada sesión tiene sus escenas** (a propuesta de Xavi; las no jugadas pasan a la siguiente, por decisión suya).
+  - `escenasPropias` son las escenas de la sesión abierta o, sin ninguna, de la próxima (se preparan sin abrir sesión: solo jugar
+    llama a `anotar`, que abre una; la escena rápida sin sesión no pasa a ser la actual ni anota).
+  - `terminarSesion(b, archivar)` mueve las jugadas a `SesionMesa.escenas` (`EscenaArchivada`: id, grupo, título, Markdown y
+    `detalles`, el texto de lo anotado, escrito por `archivarEscena` / `detallesEscena` de `guion.ts`), las quita con su estado
+    (`quitarEscena`) y deja las demás. Solo las 3 últimas sesiones cerradas conservan el Markdown (`MAX_SESIONES_CON_ESCENAS`).
+  - El documento sigue en la versión 3 (no se ha desplegado; el campo nuevo es opcional y `normalizarEstado` lo lee).
+  - Bitácora: la confirmación cuenta las que se van y las que pasan; el historial muestra las escenas jugadas y «Copiar escenas».
+    «Prompt de la siguiente sesión» lee las de la última sesión cerrada si no hay ninguna abierta.
+- **Encontrar el libro** (Xavi no lo veía en una campaña de Mistborn, que no tiene Libro): «Del libro» en la barra y en el estado
+  vacío de Sesión (`onLibro`, solo con `pestanaAventura`); «A la sesión» pasa de la cabecera de la escena a la fila fija del índice
+  (`NavegadorEscenas.accion`, `BotonAnadirASesion compacto`: el título del botón dice dónde entró). En el móvil la fila muestra solo
+  iconos y el número del índice, para dejar sitio al título. Pendiente, a petición de Xavi: el Libro de Nacidos de la Bruma (*El
+  legado*), con las aventuras por mundo y era en la configuración del mundo.
 - **Índice en hoja** (`NavegadorEscenas`, en `piezas.tsx`, para las dos fuentes): fila fija con «Índice», ◀, título y ▶; la hoja
   agrupa por `grupo` (sesión) o por `section` (libro, nuevo campo de `Scene`) y tiene «Ir a la escena actual». Sustituye a la nube
   de 25 botones.
@@ -421,6 +435,10 @@ imágenes. Lo jugado manda: al subir la crónica, el siguiente borrador parte de
   - Libro → Sesión: una escena del capítulo 4 sin escena actual entra al final; un combate del libro entra con mapa, enemigos y
     reglas; «Nueva escena» con «Karanak» como actual entra justo detrás y pasa a ser la actual; importar con una casilla
     desmarcada importa 2 de 3. Las escenas del libro dan 105 pruebas con CD en los cuatro capítulos.
+  - Sesiones (campaña desechable 37): sin sesión, importar 3, crear una rápida y añadir una del libro no abren sesión; «Empezar
+    sesión» anuncia las 5 preparadas; jugar «Uno» (prueba superada) y pasar a «Dos»; «Terminar sesión» archiva «Uno» con «Percepción
+    CD 12 superada», deja 4 con «Dos» como actual y limpia marcas y resultados; el prompt lleva «[jugada] Uno» y las pendientes.
+    Con 5 sesiones, solo las 3 últimas guardan el Markdown.
   - `npx tsc -b`, `npm run lint` y `npm run build` limpios; ninguna comparación de ids de mundo. La pantalla sigue siendo un
     *chunk* propio.
 - **Al desplegar.** No hay migraciones. Una web anterior abre un documento de versión 3 en solo lectura, con el aviso «Esta pantalla

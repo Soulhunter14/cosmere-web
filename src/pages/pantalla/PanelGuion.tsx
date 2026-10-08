@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowDown, ArrowUp, BookMarked, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Plus,
+  ArrowDown, ArrowUp, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Plus,
   ScrollText, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
@@ -14,13 +14,13 @@ import type { Character } from '../../types'
 import type { WorldConfig } from '../../worlds/types'
 import { useCatalogo, usePaneles, usePantalla } from './contexto'
 import {
-  MAX_ENCUENTROS, anotar, claveContador, claveEscenaPropia, claveResultado, encuentroEnPantalla, marcar, nuevoId, quitarEscena,
-  type EscenaPropia, type PantallaEstado, type ProgresoEmpeno, type ResultadoPrueba,
+  MAX_ENCUENTROS, anotar, claveContador, claveEscenaPropia, claveResultado, encuentroEnPantalla, marcar, nuevoId, numeroSiguiente,
+  quitarEscena, type EscenaPropia, type PantallaEstado, type ProgresoEmpeno, type ResultadoPrueba,
 } from './estado'
 import {
-  FORMATO_GUION, PLANTILLA_ESCENA, dividirGuion, escribirGuion, fusionarGuion, leerEscena, leerPrueba, mdEscenaRapida, posicionTras,
-  tituloDe, yaEnSesion,
-  type Bloque, type ClaseSeccion, type Empeno, type EscenaGuion, type ModoImportar, type Prueba, type Seccion,
+  FORMATO_GUION, PLANTILLA_ESCENA, cuentaEmpeno, detallesEscena, dividirGuion, escribirGuion, estadoEmpeno, etiquetaPrueba, fusionarGuion,
+  leerEscena, leerPrueba, mdEscenaRapida, posicionTras, resumen, tituloDe, yaEnSesion,
+  type Bloque, type ClaseSeccion, type Empeno, type EscenaGuion, type ModoImportar, type Seccion,
 } from './guion'
 import { buscarAdversario, eraNumero } from './adversarios'
 import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, destinoAnadir } from './encuentro'
@@ -50,23 +50,6 @@ const nombreDeItem = (item: string) => /\*\*([^*]+)\*\*/.exec(item)?.[1].trim() 
 /** The catalog stat block an NPC item points to: «(él · ficha: Bandido)», or its own name («**Kaiana**») */
 const fichaDeItem = (item: string) => /ficha:\s*([^)·;,]+)/i.exec(item)?.[1].trim() ?? nombreDeItem(item)
 
-/** «Supervivencia CD 14» */
-const etiquetaPrueba = (p: Prueba) => `${p.habilidad || 'Prueba'}${p.cd !== null ? ` CD ${p.cd}` : p.contra ? ` contra ${p.contra}` : ''}`
-
-/** First sentence of a text (without its full stop), short enough for a log line */
-const resumen = (texto: string, max = 90) => {
-  const limpio = texto.replace(/\*\*/g, '').trim()
-  const frase = (/^[^.]*/.exec(limpio)?.[0] ?? limpio).trim()
-  return frase.length > max ? `${frase.slice(0, max - 1).trimEnd()}…` : frase
-}
-
-type EstadoEmpeno = 'en curso' | 'superado' | 'fracasado'
-/** «6 éxitos, 1 fallo» */
-const cuentaEmpeno = (p: ProgresoEmpeno) => `${p.exitos} éxito${p.exitos === 1 ? '' : 's'}, ${p.fallos} fallo${p.fallos === 1 ? '' : 's'}`
-
-const estadoEmpeno = (p: ProgresoEmpeno, objetivo: Empeno): EstadoEmpeno =>
-  p.exitos >= objetivo.exitos ? 'superado' : p.fallos >= objetivo.fallos ? 'fracasado' : 'en curso'
-
 // ── Panel ────────────────────────────────────────────────────────────────────
 
 /**
@@ -76,8 +59,15 @@ const estadoEmpeno = (p: ProgresoEmpeno, objetivo: Empeno): EstadoEmpeno =>
  * fights, and goes on to the next scene. Scripts are imported (drafted with AI) and the prompt for the next one is exported.
  */
 export function PanelGuion({
-  seleccion, onElegir, escala, onEscala,
-}: { seleccion: string | null; onElegir: (id: string) => void; escala: number; onEscala: (v: number) => void }) {
+  seleccion, onElegir, escala, onEscala, onLibro,
+}: {
+  seleccion: string | null
+  onElegir: (id: string) => void
+  escala: number
+  onEscala: (v: number) => void
+  /** Opens the book to add scenes from it; absent when the world has no book */
+  onLibro?: () => void
+}) {
   const { estado } = usePantalla()
   /** An existing scene, or 'markdown' for a new one written as Markdown */
   const [editando, setEditando] = useState<EscenaPropia | 'markdown' | null>(null)
@@ -90,16 +80,21 @@ export function PanelGuion({
 
   return (
     <div style={stack(16)}>
-      <BarraGuion onNueva={() => setRapida(true)} onImportar={() => setImportando(true)} />
+      <BarraGuion onNueva={() => setRapida(true)} onImportar={() => setImportando(true)} onLibro={onLibro} />
 
       {lista.length === 0 ? (
         <EmptyState
           icon={<ScrollText size={22} aria-hidden />}
-          title="Aún no hay sesión preparada"
-          description="Importa el borrador de la próxima sesión (un .md hecho con IA desde el libro y vuestra historia), añade escenas desde «Libro» o crea una en el momento. Cada escena reúne lo que lees en voz alta, las pruebas, los PNJ, las imágenes y los enemigos."
+          title={estado.sesion ? 'Esta sesión no tiene escenas' : 'La próxima sesión no tiene escenas'}
+          description={
+            'Importa el borrador de la sesión (un .md hecho con IA desde el libro y vuestra historia), añade escenas desde «Libro» o crea una ' +
+            'en el momento.' +
+            (estado.historial[0]?.escenas.length ? ' Las escenas jugadas en las sesiones anteriores están en Bitácora.' : '')
+          }
           action={
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
               <Button icon={<Upload size={16} aria-hidden />} onClick={() => setImportando(true)}>Importar</Button>
+              {onLibro && <Button variant="secondary" icon={<BookOpen size={16} aria-hidden />} onClick={onLibro}>Del libro</Button>}
               <Button variant="secondary" icon={<Plus size={16} aria-hidden />} onClick={() => setRapida(true)}>Nueva escena</Button>
             </div>
           }
@@ -170,38 +165,30 @@ function describirPj(p: Character, cfg: WorldConfig, heroicos: HeroicPath[]): st
   ].filter(Boolean).join('. ')
 }
 
-/** How each scene went (played, tests, endeavour, ticked items, counters), for the prompt of the next draft */
-function escenasJugadas(estado: PantallaEstado): EscenaJugada[] {
-  return estado.escenasPropias.map((esc) => {
-    const e = leerEscena(esc.md)
-    const actual = estado.escenaActual?.origen === 'propia' && estado.escenaActual.escenaId === esc.id
-    const detalles: string[] = []
-    for (const s of e.secciones.filter((x) => x.clase === 'pruebas')) {
-      for (const item of s.bloques.flatMap((b) => (b.tipo === 'lista' ? b.items : []))) {
-        const r = estado.resultados[claveResultado(esc.id, item)]
-        if (r) {
-          const p = leerPrueba(item)
-          detalles.push(`${etiquetaPrueba(p)} ${r === 'exito' ? 'superada' : 'fallada'} (${resumen(p.texto, 60)})`)
-        }
+/**
+ * How the scenes went (played, tests, endeavour, counters), for the prompt of the next draft: those of the session; with none
+ * open, first the ones the last closed session took with it
+ */
+function escenasParaPrompt(estado: PantallaEstado): EscenaJugada[] {
+  const ref = estado.escenaActual
+  const archivadas = estado.sesion ? [] : (estado.historial[0]?.escenas ?? [])
+  return [
+    ...archivadas.map((e): EscenaJugada => ({ grupo: e.grupo, titulo: e.titulo, estado: 'jugada', detalles: e.detalles })),
+    ...estado.escenasPropias.map((esc): EscenaJugada => {
+      const e = leerEscena(esc.md)
+      const actual = ref?.origen === 'propia' && ref.escenaId === esc.id
+      return {
+        grupo: e.grupo,
+        titulo: e.titulo,
+        estado: actual ? 'actual' : estado.marcas[claveEscenaPropia(esc.id)] ? 'jugada' : 'pendiente',
+        detalles: detallesEscena(estado, esc),
       }
-    }
-    const prog = estado.empenos[esc.id]
-    if (e.empeno && prog) detalles.push(`Empeño ${estadoEmpeno(prog, e.empeno)} (${cuentaEmpeno(prog)})`)
-    for (const n of e.contadores) {
-      const v = estado.contadores[claveContador(esc.id, n)]
-      if (v) detalles.push(`${n}: ${v}`)
-    }
-    return {
-      grupo: e.grupo,
-      titulo: e.titulo,
-      estado: actual ? 'actual' : estado.marcas[claveEscenaPropia(esc.id)] ? 'jugada' : 'pendiente',
-      detalles,
-    }
-  })
+    }),
+  ]
 }
 
-function BarraGuion({ onNueva, onImportar }: { onNueva: () => void; onImportar: () => void }) {
-  const { cId, estado } = usePantalla()
+function BarraGuion({ onNueva, onImportar, onLibro }: { onNueva: () => void; onImportar: () => void; onLibro?: () => void }) {
+  const { cId, estado, ultimoDiario } = usePantalla()
   const cfg = useWorldConfig()
   const campana = useCampaignStore((s) => s.currentCampaign)
   const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId) })
@@ -212,6 +199,10 @@ function BarraGuion({ onNueva, onImportar }: { onNueva: () => void; onImportar: 
   const jugadas = lista.filter((e) => estado.marcas[claveEscenaPropia(e.id)]).length
   const titulo = estado.guionTitulo || 'Sesión preparada'
   const archivo = `${(estado.guionTitulo || 'Sesión').replace(/[\\/:*?"<>|]/g, '')}.md`
+  /** The scenes belong to the open session, or to the next one while none is open */
+  const deQueSesion = estado.sesion
+    ? `Sesión ${estado.sesion.numero ?? '¿?'} · en curso`
+    : `Sesión ${numeroSiguiente(estado, ultimoDiario)} · sin empezar`
 
   const copiarGuion = async () => {
     const ok = await copiarTexto(escribirGuion(estado.guionTitulo, lista))
@@ -226,7 +217,7 @@ function BarraGuion({ onNueva, onImportar }: { onNueva: () => void; onImportar: 
       pjs: personajes.map((p) => describirPj(p, cfg, datosMundo?.caminosHeroicos ?? [])),
       cronica: ultima ? { numero: ultima.number, titulo: ultima.title, texto: ultima.body } : null,
       guionTitulo: estado.guionTitulo,
-      escenas: escenasJugadas(estado),
+      escenas: escenasParaPrompt(estado),
       notas: estado.sesion?.eventos ?? estado.historial[0]?.eventos ?? [],
       formato: FORMATO_GUION,
     })
@@ -240,7 +231,7 @@ function BarraGuion({ onNueva, onImportar }: { onNueva: () => void; onImportar: 
     <header style={{ ...stack(10), paddingBottom: 12, borderBottom: '1px solid var(--gold-rule)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-          <p style={{ ...eyebrow, color: tone.gold.fg }}>Sesión</p>
+          <p style={{ ...eyebrow, color: tone.gold.fg }}>{deQueSesion}</p>
           <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, lineHeight: 1.2, color: c.text }}>{titulo}</h2>
           {lista.length > 0 && (
             <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2 }}>
@@ -250,6 +241,7 @@ function BarraGuion({ onNueva, onImportar }: { onNueva: () => void; onImportar: 
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button size="sm" variant="secondary" icon={<Upload size={15} aria-hidden />} onClick={onImportar}>Importar</Button>
+          {onLibro && <Button size="sm" variant="secondary" icon={<BookOpen size={15} aria-hidden />} onClick={onLibro}>Del libro</Button>}
           <Button size="sm" variant="secondary" icon={<Plus size={15} aria-hidden />} onClick={onNueva}>Nueva escena</Button>
         </div>
       </div>
@@ -935,7 +927,7 @@ const actualDeSesion = (b: PantallaEstado) => (b.escenaActual?.origen === 'propi
  * «Añadir a la sesión» on a scene or combat of the book: a copy of it goes into the session after the current scene. The book stays
  * as it is (a static reference); the copy can be edited and is played from the session.
  */
-export function BotonAnadirASesion({ md }: { md: string }) {
+export function BotonAnadirASesion({ md, compacto = false }: { md: string; compacto?: boolean }) {
   const { estado, actualizar } = usePantalla()
   const [aviso, setAviso] = useState<string | null>(null)
   const yaEsta = yaEnSesion(estado.escenasPropias, md)
@@ -946,6 +938,27 @@ export function BotonAnadirASesion({ md }: { md: string }) {
       b.escenasPropias.splice(posicionTras(b.escenasPropias, actualDeSesion(b)), 0, { id: nuevoId(), md })
     })
     setAviso(titulo ? `Añadida a la sesión tras «${titulo}».` : 'Añadida al final de la sesión.')
+  }
+  if (compacto) {
+    // In the fixed row of the index: a short label (only the icon on a phone); where it went is told by the tooltip and the status
+    const etiqueta = yaEsta ? 'Ya está en la sesión' : 'Añadir a la sesión'
+    return (
+      <>
+        <Button
+          size="sm"
+          variant={yaEsta ? 'ghost' : 'gold'}
+          icon={yaEsta ? <Check size={15} aria-hidden /> : <ListPlus size={15} aria-hidden />}
+          disabled={yaEsta}
+          onClick={anadir}
+          aria-label={etiqueta}
+          title={aviso ?? etiqueta}
+          style={{ flexShrink: 0 }}
+        >
+          <span className="hide-mobile">{yaEsta ? 'En la sesión' : 'A la sesión'}</span>
+        </Button>
+        <span role="status" className="sr-only">{aviso}</span>
+      </>
+    )
   }
   return (
     <>
@@ -958,8 +971,9 @@ export function BotonAnadirASesion({ md }: { md: string }) {
 }
 
 /**
- * A scene created in the middle of the game: title, type, what to read aloud and what happens. It goes after the current scene and
- * becomes the current one (the log notes it); it can be completed later in Markdown.
+ * A scene created on the spot: title, type, what to read aloud and what happens. It goes after the current scene. During a
+ * session it becomes the current one (the log notes it); with none open it is only prepared for the next one (no session is
+ * opened). It can be completed later in Markdown.
  */
 function HojaEscenaRapida({ onClose, onCreada, onMarkdown }: { onClose: () => void; onCreada: (id: string) => void; onMarkdown: () => void }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
@@ -968,6 +982,7 @@ function HojaEscenaRapida({ onClose, onCreada, onMarkdown }: { onClose: () => vo
   const [leer, setLeer] = useState('')
   const [texto, setTexto] = useState('')
   const tras = actualDeSesion(estado)
+  const enJuego = !!estado.sesion
   // A new scene takes the group of the one it follows
   const grupo = tras ? leerEscena(estado.escenasPropias.find((e) => e.id === tras)?.md ?? '').grupo : ''
   const crear = () => {
@@ -975,23 +990,27 @@ function HojaEscenaRapida({ onClose, onCreada, onMarkdown }: { onClose: () => vo
     const md = mdEscenaRapida({ titulo, tipo, grupo, leer, texto })
     actualizar((b) => {
       b.escenasPropias.splice(posicionTras(b.escenasPropias, actualDeSesion(b)), 0, { id, md })
+      if (!b.sesion) return
       b.escenaActual = { origen: 'propia', capituloId: null, escenaId: id }
       anotar(b, { tipo: 'escena', etiqueta: 'Escena', texto: `${titulo.trim()} (añadida en la mesa)` }, ultimoDiario)
     })
     onCreada(id)
     onClose()
   }
+  const descripcion = enJuego
+    ? `${tras ? 'Entra tras la escena actual' : 'Entra al final de la sesión'} y pasa a ser la actual.`
+    : `${tras ? 'Entra tras la escena actual' : 'Entra al final'}, preparada para la próxima sesión.`
   return (
     <Sheet
       open
       onClose={onClose}
       title="Nueva escena"
-      description={tras ? 'Entra tras la escena actual y pasa a ser la actual.' : 'Entra al final de la sesión y pasa a ser la actual.'}
+      description={descripcion}
       maxWidth={680}
       footer={
         <>
           <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
-          <Button size="lg" style={{ flex: 2 }} disabled={!titulo.trim()} onClick={crear}>Crear y jugar</Button>
+          <Button size="lg" style={{ flex: 2 }} disabled={!titulo.trim()} onClick={crear}>{enJuego ? 'Crear y jugar' : 'Crear'}</Button>
         </>
       }
     >

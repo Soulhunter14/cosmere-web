@@ -7,7 +7,10 @@
  */
 import { foldText as normalizar } from '../../lib/catalogo'
 import type { AdventureChapter, Combat, Scene, SceneTable } from '../../data/caminapiedras'
-import type { EnemigoEscena, EscenaPropia, ImagenEscena, TipoEscena } from './estado'
+import {
+  claveContador, claveResultado, type EnemigoEscena, type EscenaArchivada, type EscenaPropia, type ImagenEscena, type PantallaEstado,
+  type ProgresoEmpeno, type TipoEscena,
+} from './estado'
 import { cantidadDe, enemigosDeTexto } from './adversarios'
 
 /** Sections the screen gives a behaviour to; any other `###` section is shown as written */
@@ -228,6 +231,53 @@ export function leerPrueba(item: string): Prueba {
   const contra = /^(.{2,60}?)\s+contra\s+(?:la\s+|el\s+)?([^:—–]{3,60}?)\s*[:—–]\s*(.*)$/i.exec(limpio)
   if (contra) return { habilidad: contra[1].trim(), cd: null, contra: contra[2].trim(), texto: contra[3].trim() }
   return { habilidad: '', cd: null, contra: '', texto: limpio }
+}
+
+// ── What the table noted on a scene, as text (log, prompts, archived scenes) ──
+
+/** «Supervivencia CD 14» */
+export const etiquetaPrueba = (p: Prueba) => `${p.habilidad || 'Prueba'}${p.cd !== null ? ` CD ${p.cd}` : p.contra ? ` contra ${p.contra}` : ''}`
+
+/** First sentence of a text (without its full stop), short enough for a log line */
+export const resumen = (texto: string, max = 90) => {
+  const limpio = texto.replace(/\*\*/g, '').trim()
+  const frase = (/^[^.]*/.exec(limpio)?.[0] ?? limpio).trim()
+  return frase.length > max ? `${frase.slice(0, max - 1).trimEnd()}…` : frase
+}
+
+export type EstadoEmpeno = 'en curso' | 'superado' | 'fracasado'
+/** «6 éxitos, 1 fallo» */
+export const cuentaEmpeno = (p: ProgresoEmpeno) => `${p.exitos} éxito${p.exitos === 1 ? '' : 's'}, ${p.fallos} fallo${p.fallos === 1 ? '' : 's'}`
+
+export const estadoEmpeno = (p: ProgresoEmpeno, objetivo: Empeno): EstadoEmpeno =>
+  p.exitos >= objetivo.exitos ? 'superado' : p.fallos >= objetivo.fallos ? 'fracasado' : 'en curso'
+
+/** What the table noted on a scene of the session: tests passed or failed, the endeavour and the counters */
+export function detallesEscena(b: PantallaEstado, esc: EscenaPropia): string[] {
+  const e = leerEscena(esc.md)
+  const detalles: string[] = []
+  for (const s of e.secciones.filter((x) => x.clase === 'pruebas')) {
+    for (const item of s.bloques.flatMap((x) => (x.tipo === 'lista' ? x.items : []))) {
+      const r = b.resultados[claveResultado(esc.id, item)]
+      if (r) {
+        const p = leerPrueba(item)
+        detalles.push(`${etiquetaPrueba(p)} ${r === 'exito' ? 'superada' : 'fallada'} (${resumen(p.texto, 60)})`)
+      }
+    }
+  }
+  const prog = b.empenos[esc.id]
+  if (e.empeno && prog) detalles.push(`Empeño ${estadoEmpeno(prog, e.empeno)} (${cuentaEmpeno(prog)})`)
+  for (const n of e.contadores) {
+    const v = b.contadores[claveContador(esc.id, n)]
+    if (v) detalles.push(`${n}: ${v}`)
+  }
+  return detalles
+}
+
+/** A played scene as it goes with its session when the session closes (`terminarSesion`) */
+export function archivarEscena(b: PantallaEstado, esc: EscenaPropia): EscenaArchivada {
+  const e = leerEscena(esc.md)
+  return { id: esc.id, grupo: e.grupo, titulo: e.titulo, md: esc.md, detalles: detallesEscena(b, esc) }
 }
 
 

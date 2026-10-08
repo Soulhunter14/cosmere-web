@@ -383,7 +383,7 @@ export interface EntradaIndice {
  * current marks and big rows. After moving, the pane scrolls to the element `ancla` (the scene card).
  */
 export function NavegadorEscenas({
-  escenas, seleccion, onElegir, ancla, titulo, progreso = true,
+  escenas, seleccion, onElegir, ancla, titulo, progreso = true, accion,
 }: {
   escenas: EntradaIndice[]
   seleccion: string | null
@@ -393,6 +393,8 @@ export function NavegadorEscenas({
   titulo: string
   /** false for the book (a static reference): no played count or marks */
   progreso?: boolean
+  /** An action on the scene on screen, always at hand in the fixed row («Añadir a la sesión» in the book) */
+  accion?: ReactNode
 }) {
   const [abierto, setAbierto] = useState(false)
   if (escenas.length === 0) return null
@@ -425,8 +427,18 @@ export function NavegadorEscenas({
           display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${c.border}`,
         }}
       >
-        <Button size="sm" variant="secondary" icon={<ListTree size={15} aria-hidden />} onClick={() => setAbierto(true)} aria-haspopup="dialog">
-          Índice <span style={{ fontVariantNumeric: 'tabular-nums', color: c.subtle, fontWeight: 600 }}>{progreso ? `${jugadas}/${escenas.length}` : escenas.length}</span>
+        {/* On a phone only the icon and the count, to leave room for the title */}
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={<ListTree size={15} aria-hidden />}
+          onClick={() => setAbierto(true)}
+          aria-haspopup="dialog"
+          aria-label={`Índice de escenas (${progreso ? `${jugadas} de ${escenas.length} jugadas` : escenas.length})`}
+          style={{ flexShrink: 0 }}
+        >
+          <span className="hide-mobile">Índice</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: c.subtle, fontWeight: 600 }}>{progreso ? `${jugadas}/${escenas.length}` : escenas.length}</span>
         </Button>
         <IconButton label="Escena anterior" size={40} variant="surface" disabled={i <= 0} onClick={() => ir(escenas[i - 1].id)}>
           <ChevronLeft size={18} aria-hidden />
@@ -441,6 +453,7 @@ export function NavegadorEscenas({
         <IconButton label="Escena siguiente" size={40} variant="surface" disabled={i >= escenas.length - 1} onClick={() => ir(escenas[i + 1].id)}>
           <ChevronRight size={18} aria-hidden />
         </IconButton>
+        {accion}
       </nav>
 
       <Sheet open={abierto} onClose={() => setAbierto(false)} title={titulo} description={progreso ? `${jugadas} de ${escenas.length} escenas jugadas` : `${escenas.length} escenas`} maxWidth={600}>

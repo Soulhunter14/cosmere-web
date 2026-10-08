@@ -111,7 +111,13 @@ export function PanelEscena() {
       {fuente === 'aventura' ? (
         <GuiaAventura pref={pref} setPref={setPref} />
       ) : (
-        <PanelGuion seleccion={pref.propiaId} onElegir={(id) => setPref({ propiaId: id })} escala={pref.escala} onEscala={(v) => setPref({ escala: v })} />
+        <PanelGuion
+          seleccion={pref.propiaId}
+          onElegir={(id) => setPref({ propiaId: id })}
+          escala={pref.escala}
+          onEscala={(v) => setPref({ escala: v })}
+          onLibro={conAventura ? () => setPref({ fuente: 'aventura', vista: 'escenas' }) : undefined}
+        />
       )}
     </div>
   )
@@ -162,6 +168,7 @@ function GuiaAventura({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partia
             escenas={cap.scenes.map((s) => ({ id: s.id, titulo: s.title, tipo: s.type, grupo: s.section ?? '', jugada: false, actual: false }))}
             seleccion={escena.id}
             onElegir={(id) => setPref({ escenaId: id })}
+            accion={<BotonAnadirASesion md={mdDesdeEscenaLibro(cap, escena)} compacto />}
           />
           <DetalleEscenaAventura cap={cap} escena={escena} escala={pref.escala} onEscala={(v) => setPref({ escala: v })} />
         </>
@@ -174,9 +181,11 @@ function GuiaAventura({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partia
   )
 }
 
-/** A scene of the book: to read and consult; «Añadir a la sesión» copies it into the session, where it is played */
+/**
+ * A scene of the book: to read and consult. «Añadir a la sesión» (in the fixed row of the index, always at hand) copies it into the
+ * session, where it is played
+ */
 function DetalleEscenaAventura({ cap, escena, escala, onEscala }: { cap: AdventureChapter; escena: Scene; escala: number; onEscala: (v: number) => void }) {
-
   return (
     <article id="escena-aventura" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: 76 }}>
       <CabeceraEscena
@@ -185,7 +194,6 @@ function DetalleEscenaAventura({ cap, escena, escala, onEscala }: { cap: Adventu
         kicker={`Capítulo ${cap.number}${escena.section && escena.section !== escena.title ? ` · ${escena.section}` : ''}`}
         escala={escala}
         onEscala={onEscala}
-        acciones={<BotonAnadirASesion md={mdDesdeEscenaLibro(cap, escena)} />}
       />
       {escena.readAloud && <LeerEnVozAlta texto={escena.readAloud} escala={escala} />}
       {escena.content.length > 0 && <Parrafos textos={escena.content} escala={escala} />}

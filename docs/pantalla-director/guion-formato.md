@@ -10,13 +10,30 @@ El panel Escena de la pantalla del director tiene dos fuentes:
 La sesión no se escribe entera en la app: se prepara fuera, normalmente con IA a partir del libro y de lo jugado, y se importa como
 Markdown. En la mesa se completa de dos formas:
 
-- **Desde el libro.** Cada escena y cada combate del libro tiene **Añadir a la sesión**, que la copia a la sesión en este formato
-  (lectura en voz alta, texto, pruebas con su CD, caminos, consejos y tablas; en los combates, el mapa, los enemigos, las reglas y
-  las recompensas). Si ya hay una escena con ese título, el botón dice «En la sesión».
+- **Desde el libro.** «Del libro» (en la barra de Sesión) abre el Libro. Cada escena tiene **A la sesión** en la fila fija del
+  índice, siempre a mano mientras se lee (solo el icono en el móvil), y cada combate, **Añadir a la sesión** junto a «Preparar
+  encuentro». La copia va en este formato (lectura en voz alta, texto, pruebas con su CD, caminos, consejos y tablas; en los
+  combates, el mapa, los enemigos, las reglas y las recompensas). Si ya hay una escena con ese título, el botón dice «En la sesión».
+  El Libro solo existe en los mundos con una aventura en la app (`features.pestanaAventura`: hoy, *Caminapiedras* en Archivo de
+  las Tormentas); en Nacidos de la Bruma no se muestran ni el Libro ni «Del libro».
 - **In situ.** **Nueva escena** pide título, tipo, texto para leer en voz alta y qué pasa; hereda el grupo de la escena actual y
   pasa a ser la actual. «Escribirla completa en Markdown» abre el editor con todo el formato.
 
 Las escenas añadidas (del libro, in situ o importadas) entran **tras la escena actual**, o al final si no hay ninguna.
+
+## Cada sesión tiene sus escenas
+
+- Las escenas de Sesión son las de la **sesión en curso** (Bitácora → «Empezar sesión») o, si no hay ninguna abierta, las de la
+  **próxima sesión**, que se prepara de antemano. Importar, añadir del libro, crear, editar, ordenar o borrar escenas no abre una
+  sesión; la abre «Empezar sesión» o *jugar* (escena actual, jugada, una prueba, un empeño). La cabecera dice «Sesión 4 · en curso»
+  o «Sesión 4 · sin empezar».
+- **Terminar sesión** se lleva las escenas **jugadas**, con lo anotado en cada una (pruebas superadas o falladas, empeño y
+  contadores). Las **no jugadas pasan a la siguiente sesión** con su estado; la sesión nueva solo empieza vacía si se jugó todo. La
+  confirmación dice cuántas se van y cuántas pasan.
+- En Bitácora → «Sesiones anteriores», cada sesión muestra sus escenas jugadas (solo lectura) y «Copiar escenas» las devuelve en
+  este formato, para reimportarlas si hace falta. Para no pasar del límite del documento (1 MB), solo las **3 últimas** sesiones
+  cerradas guardan el Markdown de sus escenas; las anteriores, el título y lo anotado.
+- «Prompt de la siguiente sesión» lleva lo jugado en la última sesión cerrada (con sus resultados) y las escenas pendientes.
 
 Los avances de los personajes (nivel, metas, Ideales) solo se **recomiendan**: se aplican en la ficha de cada personaje, nunca
 desde la pantalla.

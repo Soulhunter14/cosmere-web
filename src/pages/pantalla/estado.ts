@@ -10,6 +10,8 @@ import { foldText } from '../../lib/catalogo'
 export const VERSION_ESTADO = 3
 /** Closed sessions kept in the document (the oldest ones are dropped) */
 const MAX_HISTORIAL = 30
+/** Closed sessions that keep the Markdown of their scenes; older ones keep only the titles and what the table noted (1 MB cap) */
+const MAX_SESIONES_CON_ESCENAS = 3
 const MAX_TIRADAS_PRIVADAS = 60
 const MAX_CAMBIOS = 150
 /** Quick taps on the same resource of the same combatant join one line of the record */
@@ -136,6 +138,17 @@ export interface EventoBitacora {
   texto: string
 }
 
+/** A scene played in a closed session: it went with the session, with what the table noted on it already written as text */
+export interface EscenaArchivada {
+  id: string
+  grupo: string
+  titulo: string
+  /** Markdown of the scene, kept only in the last closed sessions ('' in older ones) */
+  md: string
+  /** «Supervivencia CD 14 superada (…)», «Empeño superado (6 éxitos, 2 fallos)», «Daño del barco: 3» */
+  detalles: string[]
+}
+
 /** A table session of the log: number of the diary session it will become, and its events */
 export interface SesionMesa {
   id: string
@@ -144,6 +157,8 @@ export interface SesionMesa {
   iniciadaEn: string
   terminadaEn: string | null
   eventos: EventoBitacora[]
+  /** Scenes played in it, archived when it closed (empty while it is open: its scenes are `escenasPropias`) */
+  escenas: EscenaArchivada[]
 }
 
 export interface TiradaPrivada {
@@ -184,7 +199,10 @@ export interface PantallaEstado {
   version: typeof VERSION_ESTADO
   /** Where the story is: shown in the top bar */
   escenaActual: EscenaRef | null
-  /** The script («Guion»), in order */
+  /**
+   * Scenes of the session («Sesión»), in order: those of the open session, or of the next one while none is open (prepared
+   * beforehand). Closing a session takes the played ones with it (`terminarSesion`); the others stay for the next session.
+   */
   escenasPropias: EscenaPropia[]
   guionTitulo: string
   /** Table state of the script, by scene: endeavours (by scene id), counters and test results (`claveContador`, `claveResultado`) */
@@ -367,6 +385,17 @@ const evento = (v: unknown): EventoBitacora | null =>
     ? { id: idDe(v.id), en: texto(v.en, ahoraIso()), tipo: una(v.tipo, TIPOS_EVENTO, 'apunte'), etiqueta: texto(v.etiqueta), texto: texto(v.texto) }
     : null
 
+const escenaArchivada = (v: unknown): EscenaArchivada | null =>
+  esObj(v) && texto(v.titulo)
+    ? {
+        id: idDe(v.id),
+        grupo: texto(v.grupo),
+        titulo: texto(v.titulo),
+        md: texto(v.md),
+        detalles: lista(v.detalles, (d) => (typeof d === 'string' && d ? d : null)),
+      }
+    : null
+
 const sesion = (v: unknown): SesionMesa | null =>
   esObj(v)
     ? {
@@ -376,6 +405,7 @@ const sesion = (v: unknown): SesionMesa | null =>
         iniciadaEn: texto(v.iniciadaEn, ahoraIso()),
         terminadaEn: typeof v.terminadaEn === 'string' ? v.terminadaEn : null,
         eventos: lista(v.eventos, evento),
+        escenas: lista(v.escenas, escenaArchivada),
       }
     : null
 
@@ -478,8 +508,11 @@ export function marcar(b: PantallaEstado, clave: string, valor: boolean) {
 // ── Log (bitácora) ───────────────────────────────────────────────────────────
 
 export function nuevaSesion(numero: number | null, titulo = ''): SesionMesa {
-  return { id: nuevoId(), numero, titulo, iniciadaEn: ahoraIso(), terminadaEn: null, eventos: [] }
+  return { id: nuevoId(), numero, titulo, iniciadaEn: ahoraIso(), terminadaEn: null, eventos: [], escenas: [] }
 }
+
+/** Scenes of the session marked as played: the ones that go with it when it closes */
+export const escenasJugadas = (b: PantallaEstado) => b.escenasPropias.filter((e) => !!b.marcas[claveEscenaPropia(e.id)])
 
 /** Number the next session gets: one more than the highest of the diary and the closed sessions */
 export function numeroSiguiente(b: PantallaEstado, ultimoDiario: number | null): number {
@@ -497,10 +530,19 @@ export function anotar(b: PantallaEstado, ev: { tipo: TipoEvento; texto: string;
   if (b.sesion.eventos.length > MAX_EVENTOS) b.sesion.eventos.splice(0, b.sesion.eventos.length - MAX_EVENTOS)
 }
 
-export function terminarSesion(b: PantallaEstado) {
+/**
+ * Closes the open session. The scenes played in it go with it (`archivar` writes what the table noted on each one); the others
+ * stay, with their state, for the next session. Only the last closed sessions keep the Markdown of their scenes.
+ */
+export function terminarSesion(b: PantallaEstado, archivar: (esc: EscenaPropia) => EscenaArchivada) {
   if (!b.sesion) return
-  b.historial.unshift({ ...b.sesion, terminadaEn: ahoraIso() })
+  const jugadas = escenasJugadas(b)
+  const escenas = [...b.sesion.escenas, ...jugadas.map(archivar)]
+  for (const e of jugadas) quitarEscena(b, e.id)
+  if (b.escenasPropias.length === 0) b.guionTitulo = ''
+  b.historial.unshift({ ...b.sesion, escenas, terminadaEn: ahoraIso() })
   b.historial.splice(MAX_HISTORIAL)
+  for (const s of b.historial.slice(MAX_SESIONES_CON_ESCENAS)) for (const e of s.escenas) e.md = ''
   b.sesion = null
 }
 

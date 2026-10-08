@@ -15,6 +15,8 @@ export interface SceneBranch {
 export interface Scene {
   id: string
   title: string
+  /** Top-level section of the book the scene belongs to («Localizaciones de Rathalas»): groups the index */
+  section?: string
   type: SceneType
   readAloud?: string
   content: string[]

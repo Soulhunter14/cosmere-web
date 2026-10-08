@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Check, Delete, ExternalLink, Pin, PinOff } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Delete, ExternalLink, ListTree, Pin, PinOff } from 'lucide-react'
 import { Button, IconButton, Sheet } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { PlotIcon } from '../../components/GameIcons'
@@ -247,50 +247,6 @@ export function Tesela({ t, children, tam = 36 }: { t: Tone; children: ReactNode
   )
 }
 
-/** A progress mark: a big checkbox row (checklist item, scene played, combat won…) */
-export function FilaMarca({
-  marcada,
-  onCambiar,
-  children,
-  extra,
-}: {
-  marcada: boolean
-  onCambiar: (v: boolean) => void
-  children: ReactNode
-  /** Pill or detail after the text (type of progression item…) */
-  extra?: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={marcada}
-      onClick={() => onCambiar(!marcada)}
-      className="ui-row"
-      style={{
-        ...buttonReset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, minHeight: 48, padding: '10px 12px',
-        borderRadius: radius.md, background: marcada ? tone.esmeralda.bg : c.s1, border: `1px solid ${marcada ? tone.esmeralda.border : c.border}`,
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 24, height: 24, flexShrink: 0, marginTop: 1, borderRadius: 7,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: marcada ? tone.esmeralda.fg : 'transparent', border: `1.5px solid ${marcada ? tone.esmeralda.fg : c.borderStrong}`,
-          color: 'var(--bg)',
-        }}
-      >
-        {marcada && <Check size={16} strokeWidth={3} />}
-      </span>
-      <span style={{ flex: 1, minWidth: 0, fontSize: fs.base - 1, lineHeight: 1.5, color: marcada ? c.muted : c.text, textDecoration: marcada ? 'line-through' : 'none', textDecorationColor: tone.esmeralda.border }}>
-        {children}
-      </span>
-      {extra}
-    </button>
-  )
-}
-
 /** Toggle button with pressed state (Actuado, Reacción, Jugada, Escena actual…) */
 export function Conmutador({
   activo,
@@ -337,15 +293,16 @@ export function Conmutador({
 // ── Shared scene header ──────────────────────────────────────────────────────
 
 export function CabeceraEscena({
-  titulo, tipo, kicker, actual, jugada, onActual, onJugada, escala, onEscala, acciones,
+  titulo, tipo, kicker, actual = false, jugada = false, onActual, onJugada, escala, onEscala, acciones,
 }: {
   titulo: string
   tipo: TipoEscena
   kicker?: string
-  actual: boolean
-  jugada: boolean
-  onActual: () => void
-  onJugada: () => void
+  actual?: boolean
+  jugada?: boolean
+  /** Progress of the session; without them (the book, a static reference) the header has no «Escena actual» or «Jugada» */
+  onActual?: () => void
+  onJugada?: () => void
   escala: number
   onEscala: (v: number) => void
   acciones?: ReactNode
@@ -367,13 +324,17 @@ export function CabeceraEscena({
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual}>
-          {actual ? 'Quitar de actual' : 'Escena actual'}
-        </Button>
-        <Button size="sm" variant="secondary" icon={<Check size={15} aria-hidden />} onClick={onJugada} aria-pressed={jugada}
-          style={jugada ? { background: tone.esmeralda.bg, borderColor: tone.esmeralda.border, color: tone.esmeralda.fg } : undefined}>
-          {jugada ? 'Jugada' : 'Marcar jugada'}
-        </Button>
+        {onActual && (
+          <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual}>
+            {actual ? 'Quitar de actual' : 'Escena actual'}
+          </Button>
+        )}
+        {onJugada && (
+          <Button size="sm" variant="secondary" icon={<Check size={15} aria-hidden />} onClick={onJugada} aria-pressed={jugada}
+            style={jugada ? { background: tone.esmeralda.bg, border: `1px solid ${tone.esmeralda.border}`, color: tone.esmeralda.fg } : undefined}>
+            {jugada ? 'Jugada' : 'Marcar jugada'}
+          </Button>
+        )}
         {acciones}
         <span style={{ marginLeft: 'auto' }}>
           <ControlLetra escala={escala} onChange={onEscala} />
@@ -405,41 +366,136 @@ export function Parrafos({ textos, escala }: { textos: string[]; escala: number 
   )
 }
 
-/** Chips to pick a scene: type glyph, title, played and current marks */
-export function SelectorEscenas({
-  escenas, seleccion, onElegir,
+/** A scene of the navigation index (book adventure or script) */
+export interface EntradaIndice {
+  id: string
+  titulo: string
+  tipo: TipoEscena
+  jugada: boolean
+  actual: boolean
+  /** Book section or script group the index lists it under ('' = none) */
+  grupo: string
+}
+
+/**
+ * Scene navigation of the Escena panel: a row that stays on top of the pane while reading (index, previous, the scene on screen
+ * and its position, next) and the whole index in a sheet, grouped by the book's sections or the script's groups, with played and
+ * current marks and big rows. After moving, the pane scrolls to the element `ancla` (the scene card).
+ */
+export function NavegadorEscenas({
+  escenas, seleccion, onElegir, ancla, titulo, progreso = true,
 }: {
-  escenas: { id: string; titulo: string; tipo: TipoEscena; jugada: boolean; actual: boolean }[]
+  escenas: EntradaIndice[]
   seleccion: string | null
   onElegir: (id: string) => void
+  ancla: string
+  /** Title of the index sheet («Capítulo 3 · La ciudad quemada») */
+  titulo: string
+  /** false for the book (a static reference): no played count or marks */
+  progreso?: boolean
 }) {
+  const [abierto, setAbierto] = useState(false)
+  if (escenas.length === 0) return null
+  const i = Math.max(0, escenas.findIndex((e) => e.id === seleccion))
+  const vista = escenas[i]
+  const jugadas = escenas.filter((e) => e.jugada).length
+  const enCurso = escenas.find((e) => e.actual)
+  const ir = (id: string) => {
+    onElegir(id)
+    setAbierto(false)
+    requestAnimationFrame(() => document.getElementById(ancla)?.scrollIntoView({ block: 'start' }))
+  }
+  // Consecutive scenes of the same group go under one heading
+  const grupos: { grupo: string; escenas: EntradaIndice[] }[] = []
+  for (const e of escenas) {
+    const ultimo = grupos[grupos.length - 1]
+    if (ultimo && ultimo.grupo === e.grupo) ultimo.escenas.push(e)
+    else grupos.push({ grupo: e.grupo, escenas: [e] })
+  }
+  const meta = ESCENA_META[vista.tipo]
+  const Icon = meta.icon
   return (
-    <ul aria-label="Escenas" style={{ ...listReset, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {escenas.map((e) => {
-        const on = e.id === seleccion
-        const meta = ESCENA_META[e.tipo]
-        const Icon = meta.icon
-        return (
-          <li key={e.id}>
-            <button
-              type="button"
-              aria-pressed={on}
-              onClick={() => onElegir(e.id)}
-              className="ui-btn"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 12px', borderRadius: radius.full, cursor: 'pointer',
-                background: on ? meta.tone.bg : c.s2, border: `1px solid ${on ? meta.tone.border : c.border}`,
-                color: on ? c.text : c.muted, fontSize: fs.sm, fontWeight: on ? 700 : 550,
-              }}
-            >
-              <Icon size={14} aria-hidden style={{ color: meta.tone.fg }} />
-              {e.titulo}
-              {e.actual && <><Pin size={12} aria-hidden style={{ color: tone.gold.fg }} /><span className="sr-only">, escena actual</span></>}
-              {e.jugada && <><Check size={13} aria-hidden style={{ color: tone.esmeralda.fg }} /><span className="sr-only">, jugada</span></>}
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      <nav
+        aria-label="Navegación entre escenas"
+        className="glass"
+        style={{
+          // The pane scrolls with 16 px of padding (PantallaPage): stuck at −16 px the row covers it and nothing shows above
+          position: 'sticky', top: -16, zIndex: 3, margin: '0 -16px', padding: '8px 16px',
+          display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${c.border}`,
+        }}
+      >
+        <Button size="sm" variant="secondary" icon={<ListTree size={15} aria-hidden />} onClick={() => setAbierto(true)} aria-haspopup="dialog">
+          Índice <span style={{ fontVariantNumeric: 'tabular-nums', color: c.subtle, fontWeight: 600 }}>{progreso ? `${jugadas}/${escenas.length}` : escenas.length}</span>
+        </Button>
+        <IconButton label="Escena anterior" size={40} variant="surface" disabled={i <= 0} onClick={() => ir(escenas[i - 1].id)}>
+          <ChevronLeft size={18} aria-hidden />
+        </IconButton>
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+          <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 650, color: c.text, fontSize: fs.base - 1 }}>
+            <Icon size={14} aria-hidden style={{ color: meta.tone.fg, flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vista.titulo}</span>
+          </p>
+          <p style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>{i + 1} de {escenas.length}</p>
+        </div>
+        <IconButton label="Escena siguiente" size={40} variant="surface" disabled={i >= escenas.length - 1} onClick={() => ir(escenas[i + 1].id)}>
+          <ChevronRight size={18} aria-hidden />
+        </IconButton>
+      </nav>
+
+      <Sheet open={abierto} onClose={() => setAbierto(false)} title={titulo} description={progreso ? `${jugadas} de ${escenas.length} escenas jugadas` : `${escenas.length} escenas`} maxWidth={600}>
+        <div style={stack(16)}>
+          {enCurso && enCurso.id !== vista.id && (
+            <Button variant="gold" icon={<Pin size={15} aria-hidden />} onClick={() => ir(enCurso.id)} style={{ alignSelf: 'flex-start' }}>
+              Ir a la escena actual: {enCurso.titulo}
+            </Button>
+          )}
+          {grupos.map((g, k) => {
+            const hechas = g.escenas.filter((e) => e.jugada).length
+            return (
+              <section key={`${g.grupo}-${k}`} style={stack(6)}>
+                {g.grupo && (
+                  <h3 style={{ ...eyebrow, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ flex: 1 }}>{g.grupo}</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', color: progreso && hechas === g.escenas.length ? tone.esmeralda.fg : c.subtle }}>
+                      {progreso ? `${hechas}/${g.escenas.length}` : g.escenas.length}
+                    </span>
+                  </h3>
+                )}
+                <ul style={{ ...listReset, ...stack(4) }}>
+                  {g.escenas.map((e) => {
+                    const on = e.id === vista.id
+                    const m = ESCENA_META[e.tipo]
+                    const I = m.icon
+                    return (
+                      <li key={e.id}>
+                        <button
+                          type="button"
+                          aria-current={on ? 'true' : undefined}
+                          onClick={() => ir(e.id)}
+                          className="ui-row"
+                          style={{
+                            ...buttonReset, width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '8px 12px',
+                            borderRadius: radius.md, textAlign: 'left',
+                            background: on ? m.tone.bg : c.s1, border: `1px solid ${on ? m.tone.border : c.border}`,
+                          }}
+                        >
+                          <I size={16} aria-hidden style={{ color: m.tone.fg, flexShrink: 0 }} />
+                          <span style={{ flex: 1, minWidth: 0, fontSize: fs.base - 1, fontWeight: on ? 700 : 550, color: e.jugada && !on ? c.muted : c.text }}>
+                            {e.titulo}
+                          </span>
+                          {e.actual && <span style={pill(tone.gold)}><Pin size={12} aria-hidden />Actual</span>}
+                          {e.jugada && <><Check size={16} aria-hidden style={{ color: tone.esmeralda.fg, flexShrink: 0 }} /><span className="sr-only">, jugada</span></>}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )
+          })}
+        </div>
+      </Sheet>
+    </>
   )
 }

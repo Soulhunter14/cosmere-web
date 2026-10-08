@@ -76,6 +76,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'apertura',
       title: 'A cobijo de la tormenta',
+      section: 'A cobijo de la tormenta',
       type: 'narrative',
       readAloud: 'Viajáis a través de las Montañas Irreclamadas, una región poco habitada de terreno irregular, arbustos y piedra de tonos ocres. Espesas nubes grises sobre vuestras cabezas amenazan con una alta tormenta, y vientospren de un azul brillante se mueven por el cielo.\n\nVuestro afable compañero Taszo juguetea con el yeso de su brazo roto y mira hacia arriba con aprensión.\n\nAlcanzáis la cima de la siguiente colina y Taszo exhala aliviado. Por debajo de vosotros se encuentra la cara protegida de la formación rocosa de la Encrucijada de la Piedra del Concilio. La pared mide 150 metros de alto y el doble de ancho. Proporciona una barrera natural contra las tormentas, lo que la convierte en un punto de paso muy popular para las caravanas. Ahora mismo hay unas cuantas de este tipo por la zona, incluida una gran caravana militar que exhibe las banderas azules de la casa Kholin.\n\n"Los espíritus de las piedras nos protegen". Los ojos de Taszo se detienen en las banderas. "La tormenta podría llegar en cualquier momento. ¡Hagamos algunos amigos, y rápido!"',
       content: [
@@ -103,6 +104,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'encrucijada',
       title: 'Encrucijada de la Piedra del Concilio',
+      section: 'A cobijo de la tormenta',
       type: 'exploration',
       readAloud: 'Cuatro carros de mercaderes forman un círculo casi listo para la tormenta. Un alezi de pelo ondulado revisa las cuerdas de unos fardos de armas de asta y bromea con que os plantáis justo bajo las narices del Padre Tormenta, mientras una elegante thayleña, sentada sobre un carro con un glifo azul, pregunta con ansiedad si habéis visto a su amigo y a la hija de este.\n\nEl campamento de la casa Kholin bulle de actividad: un sargento de pelo rapado grita órdenes mientras los soldados aseguran chulls, carros y suministros. Sobresalen un carruaje con barrotes en las ventanas y un carro envuelto en cadenas de hierro, vigilado por cuatro soldados impasibles. El sargento os avisa de que, si no sabéis empuñar una lanza, os apartéis con los civiles.',
       content: [
@@ -137,6 +139,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'leyenda',
       title: 'El regreso de una leyenda',
+      section: 'El regreso de una leyenda',
       type: 'social',
       readAloud: 'Taszo mira con asombro el carruaje con ventanas enrejadas, mientras los asombrospren revolotean sobre su cabeza en anillos de humo azul. Mirando al prisionero del interior, Taszo se agarra, dubitativo, a los barrotes.\n\nUna voz fuerte corta el viento: "¡Atrás, extraño!". Ellar da un paso adelante. "Este prisionero es un bobo delirante y blasfemo. Se pasa todo el día murmurando que es un gran Heraldo".\n\nEl sargento sacude la cabeza con desprecio, luego grita al interior del carro: "¿Puedes salvarnos de la tormenta, gran Heraldo?" Escupe entre los barrotes al hombre que hay en el interior.',
       content: [
@@ -178,6 +181,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'crem',
       title: 'Empapados e interrumpidos',
+      section: 'Empapados e interrumpidos',
       type: 'choice',
       readAloud: 'Un alboroto atrae la atención de ambas caravanas. En el centro, una adolescente gesticula desesperadamente hacia el camino. Unos miedospren morados se reúnen a sus pies, y su voz es frenética: "¡El carro está atascado y padre no quiere abandonarlo, necesitamos ayuda! ¡Por favor, es todo lo que tenemos!"',
       content: [
@@ -214,6 +218,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'quedarse-con-la-caravana',
       title: 'Quedarse con la caravana',
+      section: 'Quedarse con la caravana',
       type: 'exploration',
       content: [
         'Si los PJ se niegan a ayudar a Rebin, Bordin envía a regañadientes tres lanceros de su compañía. Los demás soldados siguen custodiando los carros y preparándose para la tormenta.',
@@ -239,6 +244,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'kaiana',
       title: 'Descubriendo a Kaiana',
+      section: 'Quedarse con la caravana',
       type: 'exploration',
       readAloud: 'En el interior del carro, una mujer de pelo negro está agachada junto a un cofre abierto. Lleva una capa marrón sobre un vestido verde y sostiene una hoja esquirlada con forma de púa enorme. Os mira con los ojos muy abiertos, y observáis un glifo verde pintado en su cara redonda. De repente, hay un destello cegador.',
       content: [
@@ -256,6 +262,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'emboscada',
       title: 'La emboscada de los bandidos',
+      section: 'La emboscada de los bandidos',
       type: 'combat',
       readAloud: 'Un silbido agudo recorre el campo de batalla y los bandidos dejan de atacar de golpe. Retroceden y se alejan a la carrera hacia la muralla de tormenta, apenas visible en el horizonte como una masa oscura y revuelta.',
       content: [
@@ -287,6 +294,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'tormenta',
       title: 'Hacia la tormenta',
+      section: 'Hacia la tormenta',
       type: 'combat',
       readAloud: 'La muralla de tormenta impacta. Aguas heladas y nubes de escombros asfixiantes os azotan. El viento es tan fuerte que puede levantar a una persona incluso a pesar del muro protector del macizo de piedra. Por encima del viento y la lluvia ensordecedores, se oye un estruendo. Una roca cae a solo tres metros de vosotros.',
       content: [
@@ -322,6 +330,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'mantenerse-a-salvo',
       title: 'Mantenerse a salvo',
+      section: 'Hacia la tormenta',
       type: 'narrative',
       readAloud: 'La muralla de tormenta se traga las colinas y reduce a Taszo a una mota diminuta antes de que Nen cierre la puerta del carro y todo quede a oscuras. Un rugido, grave al principio y enseguida ensordecedor, anuncia el impacto: el suelo tiembla, los bultos atados se sacuden y solo se oyen la lluvia y el aullido del viento. Nadie dice una palabra.',
       content: [
@@ -334,6 +343,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'una-promesa',
       title: 'Una promesa',
+      section: 'Hacia la tormenta',
       type: 'narrative',
       readAloud: 'Taszo agarra la mano del personaje más cercano y, con voz débil pero mirada intensa, le cuenta que vio la hoja y que los asesinos los lidera un hombre de piel dorada al que la tormenta no parecía importar. Os pide que cumpláis su misión y que busquéis a Liss, la aliada de los chamanes en los campamentos. Después abre el puño, os muestra una piedra y os pide que juréis sobre ella; cuando lo hacéis, una voz de mujer áspera como la grava parece brotar de la roca para sellar el juramento.',
       content: [
@@ -352,6 +362,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'repercusiones',
       title: 'Repercusiones',
+      section: 'Hacia la tormenta',
       type: 'narrative',
       content: [
         'EL FUNERAL: Bordin colabora con el grupo en una ceremonia modesta: el cuerpo de Taszo se incinera como ritual al pie de la Piedra del Concilio. Lo único digno de mención que poseía era su espada lateral.',
@@ -378,6 +389,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'piedra-de-taszo',
       title: 'La piedra de Taszo',
+      section: 'La piedra de Taszo',
       type: 'narrative',
       content: [
         'Po\'ahu es una cumbrespren que estaba vinculándose con Taszo. En el capítulo 2 revelará más sobre sí misma; por ahora se oculta en una piedra de basalto marrón grisáceo toscamente tallada, cálida al tacto. Tras su susurro inicial a los PJ, llora a Taszo y se sume en un estado de dolor y disociación. Para saber más sobre ella, consulta «Personajes principales» en la introducción del libro.',
@@ -393,6 +405,7 @@ export const CHAPTER_1: AdventureChapter = {
     {
       id: 'viaje-continua',
       title: 'El viaje continúa',
+      section: 'El viaje continúa',
       type: 'narrative',
       content: [
         'Cuando el grupo emprende de verdad el camino a las Llanuras Quebradas, a la mañana siguiente, los personajes pasan al nivel 2.',

@@ -6,8 +6,9 @@
  * Pure functions, no React.
  */
 import { foldText as normalizar } from '../../lib/catalogo'
+import type { AdventureChapter, Combat, Scene, SceneTable } from '../../data/caminapiedras'
 import type { EnemigoEscena, EscenaPropia, ImagenEscena, TipoEscena } from './estado'
-import { enemigosDeTexto } from './adversarios'
+import { cantidadDe, enemigosDeTexto } from './adversarios'
 
 /** Sections the screen gives a behaviour to; any other `###` section is shown as written */
 export type ClaseSeccion = 'pruebas' | 'pnj' | 'pj' | 'caminos' | 'reglas' | 'avances' | 'otra'
@@ -311,7 +312,9 @@ export interface ResultadoImportar {
  * Merges an imported script into the screen's one. A scene with the same title (and group) keeps its id, so its marks, results
  * and counters stay. `fusionar` updates those and adds the rest at the end; `reemplazar` leaves the file's scenes in its order.
  */
-export function fusionarGuion(actual: EscenaPropia[], mds: string[], modo: ModoImportar, nuevoId: () => string): ResultadoImportar {
+export function fusionarGuion(
+  actual: EscenaPropia[], mds: string[], modo: ModoImportar, nuevoId: () => string, tras: string | null = null,
+): ResultadoImportar {
   const clave = (md: string) => {
     const e = leerEscena(md)
     return `${normalizar(e.grupo)}|${normalizar(e.titulo)}`
@@ -334,8 +337,25 @@ export function fusionarGuion(actual: EscenaPropia[], mds: string[], modo: ModoI
     return { escenas: importadas, nuevas, actualizadas, quitadas: actual.filter((e) => !usadas.has(e.id)) }
   }
   const porId = new Map(importadas.map((e) => [e.id, e]))
-  const escenas = [...actual.map((e) => porId.get(e.id) ?? e), ...importadas.filter((e) => !actual.some((a) => a.id === e.id))]
+  const escenas = actual.map((e) => porId.get(e.id) ?? e)
+  // New scenes go after `tras` (the current scene) or, without it, at the end
+  escenas.splice(posicionTras(escenas, tras), 0, ...importadas.filter((e) => !actual.some((a) => a.id === e.id)))
   return { escenas, nuevas, actualizadas, quitadas: [] }
+}
+
+/** Where a scene added during the session goes: right after `tras` (the current scene) or, without it, at the end */
+export const posicionTras = (escenas: EscenaPropia[], tras: string | null) => {
+  const i = tras ? escenas.findIndex((e) => e.id === tras) : -1
+  return i >= 0 ? i + 1 : escenas.length
+}
+
+/** A scene of the session with the same group and title (an added book scene is not added twice) */
+export const yaEnSesion = (escenas: EscenaPropia[], md: string) => {
+  const e = leerEscena(md)
+  return escenas.some((x) => {
+    const y = leerEscena(x.md)
+    return normalizar(y.titulo) === normalizar(e.titulo) && normalizar(y.grupo) === normalizar(e.grupo)
+  })
 }
 
 /** The whole script as one Markdown file (the import format: re-importing it changes nothing) */
@@ -395,3 +415,87 @@ export const FORMATO_GUION = `Formato del guion (Markdown):
   - \`### Avances\`: avances recomendados (\`- Los PJ suben a nivel 4\`, un hito de una meta, un Ideal…). La pantalla solo los
     recomienda: se aplican en la ficha de cada personaje.
 - Negrita con \`**…**\` y cursiva con \`*…*\`. Nada de HTML, tablas ni enlaces.`
+
+// ── From the book to the session ─────────────────────────────────────────────
+
+const NOMBRE_TIPO: Record<TipoEscena, string> = {
+  narrative: 'narrativa', social: 'social', exploration: 'exploración', combat: 'combate', choice: 'decisión',
+}
+
+/** Text of the data as one Markdown line (no line breaks that would split it) */
+const enLinea = (t: string) => t.replace(/\s*\n\s*/g, ' ').trim()
+
+/** Paragraphs of a read-aloud text as `>` lines (a lone `>` separates them) */
+const citaMd = (t: string) => t.trim().split(/\n\s*\n/).filter(Boolean).flatMap((p, i) => [...(i ? ['>'] : []), `> ${enLinea(p)}`])
+
+const HABILIDAD = '[A-ZÁÉÍÓÚ][a-záéíóúñ]+(?: (?:ligero|pesado))?'
+const RE_PRUEBA = new RegExp(`(${HABILIDAD}(?:(?:, | o | y )${HABILIDAD})*)\\s+CD\\s*(\\d{1,2})`, 'g')
+const RE_PRUEBA_LIBRE = /prueba CD\s*(\d{1,2}) con una habilidad relevante/
+
+/**
+ * The tests of the book's text, as «Pruebas» items: «prueba de <Habilidad> CD n» explains itself with its whole sentence;
+ * «… (Atletismo CD 13)» with the clause before it (several tests can share one sentence)
+ */
+function pruebasDe(textos: string[]): string[] {
+  const items: string[] = []
+  for (const t of textos) {
+    for (const frase of t.match(/[^.!?]+[.!?]*/g) ?? []) {
+      const entera = enLinea(frase)
+      const libre = RE_PRUEBA_LIBRE.exec(entera)
+      if (libre) items.push(`**Habilidad relevante CD ${libre[1]}**: ${entera}`)
+      for (const m of entera.matchAll(RE_PRUEBA)) {
+        const antes = entera.slice(0, m.index)
+        const clausula = /pruebas?(?: enfrentada)? de\s*$/.test(antes)
+          ? ''
+          : (antes.replace(/\(\s*$/, '').split(/[:;,()]/).pop() ?? '').replace(/^\s*(?:o|y)\s+/, '').trim()
+        items.push(`**${m[1]} CD ${m[2]}**: ${clausula.length >= 12 ? clausula : entera}`)
+      }
+    }
+  }
+  return [...new Set(items)]
+}
+
+function tablaMd(t: SceneTable): string[] {
+  return ['', `### ${t.title}`, ...t.entries.map((e) => (e.roll ? `- **${e.roll}**: ${enLinea(e.text)}` : `- ${enLinea(e.text)}`))]
+}
+
+const grupoLibro = (cap: AdventureChapter) => `Capítulo ${cap.number} · ${cap.title}`
+const fuenteLibro = (cap: AdventureChapter, apartado?: string) =>
+  `Caminapiedras · capítulo ${cap.number}${apartado ? ` · ${apartado}` : ''} (PDF ${cap.pdfPages.from}-${cap.pdfPages.to})`
+
+/** A scene of the book as a scene of the session (read-aloud, text, tests, paths, tips and tables) */
+export function mdDesdeEscenaLibro(cap: AdventureChapter, escena: Scene): string {
+  const ls = [`## ${escena.title}`, `tipo: ${NOMBRE_TIPO[escena.type]}`, `grupo: ${grupoLibro(cap)}`, `fuente: ${fuenteLibro(cap, escena.section)}`]
+  if (escena.readAloud) ls.push('', ...citaMd(escena.readAloud))
+  for (const p of escena.content) ls.push('', enLinea(p))
+  const pruebas = pruebasDe(escena.content)
+  if (pruebas.length) ls.push('', '### Pruebas', ...pruebas.map((x) => `- ${x}`))
+  if (escena.branches?.length) ls.push('', '### Caminos', ...escena.branches.map((b) => `- **${enLinea(b.label)}**: ${enLinea(b.description)}`))
+  if (escena.tips?.length) ls.push('', '### Consejos del libro', ...escena.tips.map((t) => `- ${enLinea(t)}`))
+  for (const t of escena.tables ?? []) ls.push(...tablaMd(t))
+  return ls.join('\n')
+}
+
+/** A combat of the book as a scene of the session: enemies (to prepare the encounter), rules, map and tables */
+export function mdDesdeCombateLibro(cap: AdventureChapter, combate: Combat): string {
+  const mapa = combate.mapRef ? cap.maps.find((m) => m.id === combate.mapRef || m.id.endsWith(combate.mapRef ?? '')) : undefined
+  const ls = [`## ${combate.title}`, 'tipo: combate', `grupo: ${grupoLibro(cap)}`, `fuente: ${fuenteLibro(cap)}`]
+  if (mapa?.imagePath) ls.push(`imagen: ${mapa.imagePath} | Mapa ${mapa.id}: ${mapa.title}`)
+  ls.push(`enemigos: ${combate.enemies.map((e) => `${cantidadDe(e.count)} ${e.name}`).join(', ')}`)
+  if (combate.duration) ls.push('', `Duración: ${enLinea(combate.duration)}`)
+  const notas = combate.enemies.filter((e) => e.bonus || !/^\d+$/.test(e.count.trim()))
+  ls.push('', '### Reglas del combate', ...combate.specialRules.map((r) => `- ${enLinea(r)}`))
+  for (const e of notas) ls.push(`- **${e.name}** (${enLinea(e.count)})${e.bonus ? `: ${enLinea(e.bonus)}` : ''}`)
+  if (combate.rewards) ls.push('', '### Recompensas', enLinea(combate.rewards))
+  for (const t of combate.tables ?? []) ls.push(...tablaMd(t))
+  return ls.join('\n')
+}
+
+/** A scene added in the middle of the game: title, type, what to read aloud and what happens */
+export function mdEscenaRapida(o: { titulo: string; tipo: TipoEscena; grupo: string; leer: string; texto: string }): string {
+  const ls = [`## ${o.titulo.trim()}`, `tipo: ${NOMBRE_TIPO[o.tipo]}`]
+  if (o.grupo.trim()) ls.push(`grupo: ${o.grupo.trim()}`)
+  if (o.leer.trim()) ls.push('', ...citaMd(o.leer))
+  if (o.texto.trim()) ls.push('', o.texto.trim())
+  return ls.join('\n')
+}

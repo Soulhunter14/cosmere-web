@@ -36,6 +36,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'llegada-campamentos',
       title: 'Un respiro',
+      section: 'Un respiro',
       type: 'narrative',
       readAloud: 'La caravana deja atrás las Montañas Irreclamadas y avanza hacia las Llanuras Quebradas, un mar de mesetas áridas separadas por profundos abismos. En el extremo occidental se alzan diez enormes cráteres, cada uno con un campamento de guerra desde el que los alezi combaten a los parshendi; más al oeste hay una pequeña ciudad comercial, y sobre todo ello domina el palacio del rey.\n\nEl campamento de los Kholin respira orden y disciplina: cuarteles de piedra levantados con moldeado de almas, en filas rectas, y camaretas dispuestas en círculo alrededor de un complejo de mando central. Ellar ordena que lleven al prisionero ante el alto príncipe Dalinar y Bordin se despide de vosotros: podéis comer y descansar con las tropas, pero, después de eso, ¿qué os depara el futuro?',
       content: [
@@ -51,6 +52,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'campamento-kholin',
       title: 'El campamento de guerra de los Kholin',
+      section: 'Un respiro',
       type: 'exploration',
       content: [
         'El campamento de los Kholin es un bastión de orden en medio de una intensa actividad bélica. Aunque es la base del ejército de Dalinar Kholin, las tradiciones alezi animan a soldados y mayordomos a tener consigo a sus familias, así que se ha convertido en una comunidad autosuficiente: además de viviendas y cuarteles tiene tabernas, posadas, mercados y talleres para dar servicio a un ejército de diez mil hombres. A diferencia de otros campamentos mantiene un entorno funcional: la mayoría de los edificios permanentes son búnkeres de moldeado de almas, incluidos los hogares de los «ojos claros» de casta superior, y el azul de la casa Kholin adorna banderas y uniformes.',
@@ -63,6 +65,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'buscando-campamentos',
       title: 'Buscando por los campamentos de guerra',
+      section: 'Buscando por los campamentos de guerra',
       type: 'exploration',
       content: [
         'Los PJs son libres de recorrer los campamentos y de tirar del hilo que prefieran. Las seis escenas de este bloque les permiten conocer mejor a los alezi y la guerra en las Llanuras Quebradas, tocar sus propias metas y trasfondos, e ir avanzando en la trama central: dar con Liss, que hace de contacto de los chamanes de piedra.',
@@ -110,6 +113,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'abismos',
       title: 'Ofensiva en los abismos',
+      section: 'Buscando por los campamentos de guerra',
       type: 'combat',
       readAloud: 'El sendero baja desde la meseta devastada hasta el fondo del abismo, donde el aire es húmedo y las paredes están cubiertas de musgo y plantas. En un estrecho desfiladero lleno de escombros de la tormenta (rocas rotas, crem húmedo y cuerpos de soldados alezi y parshendi) hay cuatro parshendi que evitan tocar los cadáveres. Tres son corpulentos y van protegidos por un grueso caparazón; la cuarta es esbelta y lleva un caparazón delicado en antebrazos y hombros.',
       content: [
@@ -151,6 +155,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'esferas-culpables',
       title: 'Esferas culpables',
+      section: 'Buscando por los campamentos de guerra',
       type: 'social',
       readAloud: 'Seguís las indicaciones hasta un búnker de moldeado de almas en el borde del cráter del campamento de Aladar, del que salen gritos y risas de borrachos. Alrededor crecen rocabrotes con el caparazón pintado a brochazos de rojo carmesí, y la luz de las esferas y el calor de una chimenea os atraen hacia unas escaleras excavadas. Dentro, los clientes comparten bebida, historias y juegos de azar prohibidos, hasta que un guardia corpulento os corta el paso: los nuevos tienen que ver a la jefa.',
       content: [
@@ -191,6 +196,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'devotario',
       title: 'Radiantes perdidos',
+      section: 'Buscando por los campamentos de guerra',
       type: 'social',
       readAloud: 'Las indicaciones os conducen a un pequeño templo construido en la pared de un búnker militar. En su interior, un santuario dedicado a los diez Heraldos domina la única estancia, y los estantes rebosan de textos y tablillas religiosas.\n\nUn par de fervorosos trabajan con esmero; en un escritorio y en el santuario. Tienen la cabeza rapada y visten túnicas grises. Le fervorose del escritorio, une erudite delgade con gafas, levanta la vista de su escritura y entrecierra los ojos.\n\n"¿Sois vosotros, verdad? ¿Los que viajaban con el sargento Ellar?"',
       content: [
@@ -226,6 +232,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'animales',
       title: 'Animales amenazantes',
+      section: 'Buscando por los campamentos de guerra',
       type: 'combat',
       readAloud: 'Una multitud de carros pintados forma un semicírculo fuera del muro del cráter, junto al sendero que une los dominios de los altos príncipes. Un thayleño de largas cejas y barba teñidas de azul, con un chaleco multicolor, pregona a gritos la fauna de todos los rincones de Roshar: peces raros del Lagopuro, temibles espinablancas y excepcionales pollos de Shinovar.',
       content: [
@@ -269,6 +276,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'bettani',
       title: 'La vinculacaña de la escriba',
+      section: 'Buscando por los campamentos de guerra',
       type: 'exploration',
       readAloud: 'Encontráis a una alezi de ojos claros con una havah verde azulada, absorta en un escritorio cubierto de libros y notas desperdigadas. La manga de su mano segura está deshilachada de tanto uso y el pelo negro se le escapa de las horquillas. Al veros suspira y dice que espera que hayáis traído uno o dos rubíes nuevos.',
       content: [
@@ -310,6 +318,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'vedolin',
       title: 'Ojos de Doliente',
+      section: 'Buscando por los campamentos de guerra',
       type: 'exploration',
       readAloud: 'Un hombre desaliñado, de pelo largo y pringoso, se asoma por el lateral de un búnker mientras juguetea nerviosamente con un cuchillo. Os sigue con la mirada y, al verse descubierto, abre mucho los ojos, da media vuelta y echa a correr por el callejón hacia un mercado callejero abarrotado.',
       content: [
@@ -349,6 +358,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'contacto',
       title: 'El contacto',
+      section: 'El contacto',
       type: 'social',
       readAloud: 'La panadería es un edificio de piedra ruinoso, aún cubierto de crem húmedo en su lado de guardatormenta. Una chimenea expulsa humo denso desde el lado de sotavento, y el cálido resplandor del fuego emana de las ventanas abiertas.\n\nEn el interior, una mujer morena y corpulenta os observa con atención. Lleva un vestido negro, joyas con esmeraldas y unas botas modernas pero prácticas. Agarrando con calma un cuchillo de pan, grita:\n\n"Así que por fin habéis venido."',
       content: [
@@ -384,6 +394,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'confrontacion',
       title: 'Confrontación',
+      section: 'El contacto',
       type: 'combat',
       readAloud: 'Un soldado de uniforme impecable pero mirada salvaje os grita mientras regresáis a los campamentos. Le acompañan cuatro hombres armados, todos con el verde bosque y el burdeos del alto mariscal Amaram. Os dice que os estáis labrando una gran reputación, os pregunta si vais a contarle qué está pasando o preferís pasar directamente a la parte divertida, y desenvaina; los demás lo imitan.',
       content: [
@@ -399,6 +410,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'heraldo-guerra',
       title: 'Heraldo de la Guerra',
+      section: 'Heraldo de la Guerra',
       type: 'exploration',
       readAloud: 'Mientras cruzáis los pabellones del campamento, los soldados no hablan de otra cosa: se dice que el alto príncipe Dalinar ha refundado a los antiguos Caballeros Radiantes y ha nombrado líder al héroe Meridas Amaram. Los guardias Kholin de los muros del monasterio, normalmente tan rígidos, están relajados y distraídos con los chismes. Tras ellos esperan multitudes de alezi para ritos religiosos y tratamientos médicos, mientras los fervorosos recorren las colas: a muchos los hacen pasar al búnker de piedra del edificio principal y a otros los dejan para el triaje en los jardines de cortezapizarra esculpidos.',
       content: [
@@ -442,6 +454,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'talenel-elin',
       title: 'Talenel\'Elin',
+      section: 'Heraldo de la Guerra',
       type: 'social',
       readAloud: 'Taln descansa en el rincón más oscuro de la celda, donde solo llega un hilo de luz por un ventanuco de pocos dedos de ancho. Susurra que hay que estar preparados y que se os ha olvidado mucho.',
       content: [
@@ -473,6 +486,7 @@ export const CHAPTER_2: AdventureChapter = {
     {
       id: 'hijo-de-honor',
       title: 'Hijo de Honor',
+      section: 'Heraldo de la Guerra',
       type: 'choice',
       readAloud: 'Cuando casi habéis salido del complejo del templo, un grito os detiene: «¡Alto!». Soldados de uniforme verde bosque bloquean los dos caminos que se alejan del monasterio, y uno con nudos de líder de escuadrón al hombro os apunta con una lanza corta y gruñe que le expliquéis qué hacíais allí dentro.',
       content: [

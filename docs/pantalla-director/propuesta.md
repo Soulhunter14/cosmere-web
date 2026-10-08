@@ -390,8 +390,20 @@ imágenes. Lo jugado manda: al subir la crónica, el siguiente borrador parte de
   PDF 34: ahora es el mapa real (`public/maps/map_p35.webp`).
 - **Libro completo para importar**: `scripts/aventura/parsear_caminapiedras.py` (ver `guion-formato.md`). Salidas en local, fuera
   de git.
-- **Piezas compartidas** movidas a `piezas.tsx` (`CabeceraEscena`, `Apartado`, `Parrafos`, `SelectorEscenas`, `EnLinea`);
-  `useCatalogo` va en `contexto.ts`.
+- **Libro y Sesión** (a propuesta de Xavi). El panel Escena tiene dos fuentes:
+  - **Libro**: referencia fija. Sin escena actual ni marcas de jugada o superado (`claveAventura`, `useAlternarMarca` y `FilaMarca`
+    se retiran; las marcas `aventura:…` de documentos antiguos se ignoran). Cada escena y cada combate tiene «Añadir a la sesión»
+    (`BotonAnadirASesion`), que la convierte con `mdDesdeEscenaLibro` / `mdDesdeCombateLibro`: lectura, texto, pruebas sacadas del
+    texto («prueba de X CD n» con su frase y «(X CD n)» con su cláusula), caminos, consejos, tablas, mapa, enemigos y reglas.
+  - **Sesión**: el esqueleto preparado y todo el progreso. «Nueva escena» (`HojaEscenaRapida`) crea una escena en la mesa con
+    título, tipo, lectura y qué pasa. Importar deja elegir escenas con casillas.
+  - Lo añadido entra tras la escena actual de la sesión, o al final (`posicionTras`).
+- **Índice en hoja** (`NavegadorEscenas`, en `piezas.tsx`, para las dos fuentes): fila fija con «Índice», ◀, título y ▶; la hoja
+  agrupa por `grupo` (sesión) o por `section` (libro, nuevo campo de `Scene`) y tiene «Ir a la escena actual». Sustituye a la nube
+  de 25 botones.
+- **Piezas compartidas** movidas a `piezas.tsx` (`CabeceraEscena`, `Apartado`, `Parrafos`, `NavegadorEscenas`, `EnLinea`);
+  `useCatalogo` va en `contexto.ts`. `CaminapiedrasPage` se carga bajo demanda en `GmPage` (los datos del libro salen del *chunk*
+  principal).
 - **Imágenes oficiales**: 12 WebP en `public/aventura/caminapiedras/` (1,5 MB, se cargan bajo demanda; la PWA no las precachea).
 - **Datos DEV.**
   - Campaña **40 «Caminapiedras (copia 8 oct)»**: los 6 PJ y sus metas copiados de producción, sin diario ni sesiones.
@@ -406,6 +418,9 @@ imágenes. Lo jugado manda: al subir la crónica, el siguiente borrador parte de
   - prueba superada a la bitácora; escena actual y «Jugada · pasar»;
   - encuentro de anguilas con 4 fichas del catálogo, reglas y «Daño del barco» compartido; empeño 6/4 superado a la bitácora;
   - *prompt* con PJ, metas y estado del guion; editor; sin desbordes en móvil.
+  - Libro → Sesión: una escena del capítulo 4 sin escena actual entra al final; un combate del libro entra con mapa, enemigos y
+    reglas; «Nueva escena» con «Karanak» como actual entra justo detrás y pasa a ser la actual; importar con una casilla
+    desmarcada importa 2 de 3. Las escenas del libro dan 105 pruebas con CD en los cuatro capítulos.
   - `npx tsc -b`, `npm run lint` y `npm run build` limpios; ninguna comparación de ids de mundo. La pantalla sigue siendo un
     *chunk* propio.
 - **Al desplegar.** No hay migraciones. Una web anterior abre un documento de versión 3 en solo lectura, con el aviso «Esta pantalla

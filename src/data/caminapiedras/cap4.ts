@@ -33,6 +33,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'zarpamos',
       title: 'Zarpamos',
+      section: 'Zarpamos',
       type: 'narrative',
       content: [
         'Libres del control de Ylt, los bandidos leales a Teryn quieren ayudar al grupo a detener al tirano. Teryn o Ubo conducen a los PJs a un puerto oculto a orillas del mar de las Lanzas, al que se llega desde el taller de carpintería.',
@@ -45,6 +46,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'anguilas-aereas',
       title: 'Nubes que se retuercen',
+      section: 'La tormenta eterna',
       type: 'combat',
       readAloud: 'Un trueno retumba en el cielo gris, resonando desde el oeste. Ubo da unas órdenes bruscas a la tripulación. "¡Arriad las velas! ¡Se acerca una tormenta!". Sus gritos se convierten en un susurro. "¿Una tormenta... desde el oeste?". Un golpe seco y húmedo hace que Ubo dé un respingo cuando algo cae a la cubierta junto a sus pies. Es una anguila aérea de un metro de largo que lucha por respirar.',
       content: [
@@ -74,6 +76,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'tormenta-eterna',
       title: 'Una nueva tormenta',
+      section: 'La tormenta eterna',
       type: 'exploration',
       readAloud: 'El cielo occidental se hunde en la sombra mientras una tormenta negra se arremolina hacia el este. A diferencia de las altas tormentas, esta masa turbulenta está surcada por violentos relámpagos rojos. Aunque no arrastra crem, se abate con un frío agudo, un mar de humo y ceniza asfixiante.',
       content: [
@@ -136,6 +139,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'despertar',
       title: 'Despertar',
+      section: 'La tormenta eterna',
       type: 'narrative',
       readAloud: 'Cuando los fuertes vientos y el oleaje finalmente cesan, encontráis a los dos parshmenios de la tripulación fundidos en un estrecho abrazo, riendo, llorando y hablando entre ellos en voz baja. Uno de los dos se inclina para levantar un garrote abandonado en cubierta. Le tiemblan las manos al apuntarlo hacia el resto de la tripulación. "Nos llevamos el bote salvavidas. Eso es todo. Nos vamos."',
       content: [
@@ -162,6 +166,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'en-busca-de-la-verdad',
       title: 'En busca de la verdad',
+      section: 'En busca de la verdad',
       type: 'narrative',
       content: [
         'Pasada la primera tormenta eterna, los tripulantes que quedan se juntan, muertos de miedo. Ignoran qué implica una tormenta tan nueva y letal, y solo quieren alcanzar el puerto más próximo, Karanak.',
@@ -171,6 +176,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'karanak',
       title: 'Karanak',
+      section: 'En busca de la verdad',
       type: 'exploration',
       readAloud: 'Finas columnas de humo se alzan hacia el cielo a medida que la ciudad portuaria de Karanak aparece a la vista. Incluso desde la distancia, la destrucción causada por la tormenta es evidente. Los edificios del lado oeste están partidos en dos. Los pilares agrietados de un gran templo vorin apuntan hacia el cielo como huesos expuestos. Pero los muelles siguen en pie, y la ciudad bulle de actividad.',
       content: [
@@ -201,6 +207,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'siguiendo-ylt',
       title: 'Siguiendo a Ylt',
+      section: 'En busca de la verdad',
       type: 'exploration',
       content: [
         'Cuando los PJs dejan Karanak, resuelve la persecución de Ylt como un único empeño que condensa varias semanas de navegación por el mar de Tarat hasta las tierras altas del Gran Hexi. Se trata de llegar cuanto antes y pillar sin preparar a los acólitos de los Ojos de Pala.',
@@ -233,6 +240,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'zanjas-hexi',
       title: 'Retaguardia',
+      section: 'En busca de la verdad',
       type: 'combat',
       readAloud: 'Piedras, grava y una fina capa de nieve crujen bajo vuestros pies mientras las lluvias se congelan con el frío aire del sur. Las desoladas tierras bajas están surcadas por terreno rugoso: zanjas que ascienden y descienden varios metros. Un liquen resbaladizo se aferra a los lados de guardatormenta.',
       content: [
@@ -277,6 +285,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'rescate-axoq',
       title: 'Rescate de Axoq',
+      section: 'En busca de la verdad',
       type: 'social',
       content: [
         'Si Axoq sale con vida del combate, agradece su ayuda a los PJs. Cuenta que ejercía de médico en una patrulla emuli implicada en la guerra contra los tukari (ver «La Guerra de los Ochenta», cap. 5); atravesó las montañas con sus compañeros para conseguir ingredientes medicinales. Los hombres de Ylt acabaron con casi todos los soldados emuli y lo apretaron a él para que dijera dónde queda el valle.',
@@ -287,6 +296,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'valle-vigilante-nocturna',
       title: 'El Valle de la Vigilante Nocturna',
+      section: 'El Valle de la Vigilante Nocturna',
       type: 'exploration',
       readAloud: 'Entre las nevadas faldas de las montañas Hexi se encuentra el Valle de la Vigilante Nocturna. La tierra apenas puede contener la vida silvestre de su interior: enredaderas retorcidas y árboles nudosos se enredan en un denso dosel. El aire es cálido y denso, y unos crujidos intermitentes hacen que parezca que el valle está creciendo activamente, o respirando.',
       content: [
@@ -297,6 +307,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'visiones-manana',
       title: 'Visiones del mañana',
+      section: 'El Valle de la Vigilante Nocturna',
       type: 'narrative',
       content: [
         'Al entrar en el valle, el grupo deambula un tiempo difícil de calcular a través de densas cortinas de enredaderas y musgo que bloquean la vista. Los túneles entre el follaje se mueven sutilmente y acaban separando a los PJs. Cuando los personajes están solos y perdidos, la Vigilante Nocturna muestra a cada uno una visión.',
@@ -330,6 +341,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'locura-vigilante-verdad',
       title: 'La locura del Vigilante de la Verdad',
+      section: 'El Valle de la Vigilante Nocturna',
       type: 'narrative',
       readAloud: 'Al disiparse las visiones, la bruma se transforma en una última visión que todos comparten: Ylt está ante una espiral de nieblas esmeralda que forma un rostro femenino, la Vigilante Nocturna, con Kaiana a su lado. Ylt pide como bendición el poder de derrocar a un Heraldo para ocupar el lugar de Pala. Las enredaderas descubren un cuchillo dorado con una esmeralda en el pomo, y la spren le advierte de que puede matar a un Heraldo; cuando Ylt se lanza a cogerlo, su mano lo atraviesa. La bendición de Ylt es el arma, y su maldición, que debe persuadir a otra persona para que la empuñe; Kaiana lo contempla todo con asombro.',
       content: [
@@ -340,6 +352,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'batalla-valle',
       title: 'La batalla de la arboleda',
+      section: 'El Valle de la Vigilante Nocturna',
       type: 'combat',
       readAloud: 'Ylt vuelve hacia vosotros la hoja de Honor y adopta una postura de combate, mientras habla a Kaiana en tono tranquilizador. Le dice que sus visiones intentaban mostrarles esto, que Pala está perdida y que ya han reclamado el poder de la hoja de un Heraldo. Si Kaiana tiene la fuerza para abatirla, él asumirá su carga.',
       content: [
@@ -399,6 +412,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'bendicion-maldicion',
       title: 'Una bendición y una maldición',
+      section: 'El Valle de la Vigilante Nocturna',
       type: 'choice',
       readAloud: 'La Vigilante Nocturna surge de la bruma que rodea la arboleda con una amplia sonrisa y dice que han actuado bien, tal como esperaba. Su tono se vuelve serio: hay que detener a Ylt y la hoja de Honor debe llegar a Shinovar. Pide al grupo que lleve el cuchillo que ella ofreció al Heraldo de la Justicia, porque el cuchillo ayudará al Heraldo a ver la verdad y servirá al grupo en su viaje.',
       content: [
@@ -457,6 +471,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'abandonando-valle',
       title: 'Abandonando el valle',
+      section: 'El Valle de la Vigilante Nocturna',
       type: 'narrative',
       content: [
         'Una vez cerrados todos los pactos, la Vigilante Nocturna se desvanece junto con su arboleda y el grupo queda a solas. Po\'ahu presiona a los PJs para que marchen hacia el oeste cruzando las montañas, tal como pidió la Vigilante Nocturna.',
@@ -473,6 +488,7 @@ export const CHAPTER_4: AdventureChapter = {
     {
       id: 'viaje-continua',
       title: 'El viaje continúa',
+      section: 'El viaje continúa',
       type: 'narrative',
       content: [
         'Tras frustrar los planes de Ylt y decidir el destino de Kaiana, el grupo puede partir del valle, ir por tierra a Emul y proseguir con la misión de la Vigilante Nocturna, además de su misión de recuperar la hoja de Honor de Taln.',

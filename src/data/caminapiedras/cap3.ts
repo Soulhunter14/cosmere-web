@@ -31,6 +31,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'viaje-rathalas',
       title: 'El viaje a Rathalas',
+      section: 'El viaje a Rathalas',
       type: 'choice',
       content: [
         'Para conseguir transporte a Rathalas, el grupo puede acudir a Bordin, a Liss o a alguien que les deba un favor. El libro propone dos opciones.',
@@ -52,6 +53,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'un-viajero-en-el-camino',
       title: 'Un viajero en el camino',
+      section: 'El viaje a Rathalas',
       type: 'social',
       readAloud: 'Al caer la tarde, buscando un sitio donde pasar la noche, topáis con un viejo de aspecto curtido que ya ha instalado su campamento a resguardo del viento del este, tras una formación de roca. Lleva armas, pero os recibe con aire afable.',
       content: [
@@ -79,6 +81,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'rathalas-ciudad-cenizas',
       title: 'Rathalas, la ciudad reducida a cenizas',
+      section: 'Rathalas, la ciudad reducida a cenizas',
       type: 'narrative',
       content: [
         'Hace diez años, recién unificada Alezkar, Rathalas (la Grieta) era el hogar de decenas de miles de alezi bajo el mando del brillante señor Tanalan, y su emplazamiento dentro de un gran cañón la resguardaba de las altas tormentas como a pocas ciudades.',
@@ -92,6 +95,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'llegando-rathalas',
       title: 'Llegando a Rathalas',
+      section: 'Rathalas, la ciudad reducida a cenizas',
       type: 'exploration',
       readAloud: 'Al otro lado de las llanuras aparece Rathalas, otrora una gran ciudad, apoyada en las paredes de un cañón. Abajo, un río somero fluye hacia el oeste y desemboca en el mar de las Lanzas; las antiguas rampas ya no sirven y solo se entra por el extremo occidental, desde el fondo del cañón. Los restos de una muralla poderosa, agrietada y cubierta de crem, rodean las ruinas, y solo un puesto de vigilancia luce esferas encendidas.',
       content: [
@@ -122,6 +126,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'suceso-bandidos-alerta',
       title: 'Suceso: Bandidos en alerta',
+      section: 'Rathalas, la ciudad reducida a cenizas',
       type: 'exploration',
       content: [
         'Cuando el grupo se acerca a la ciudad, la mayoría de los bandidos supone que son nuevos reclutas. Anuncia a los jugadores que van a iniciar un suceso (ver «Sucesos» en el capítulo 9 del Manual del Archivo de las Tormentas). «Bandidos en alerta» es un suceso negativo con tres espacios que miden cuándo descubren los bandidos que hay intrusos entre ellos. Se activa cuando se rellena el último espacio de Complicación.',
@@ -137,6 +142,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'como-moverse-rathalas',
       title: 'Cómo moverse por Rathalas',
+      section: 'Rathalas, la ciudad reducida a cenizas',
       type: 'exploration',
       readAloud: 'Entráis en una ciudad muerta y chamuscada, marcada por la tragedia. Troncos pelados se levantan donde antes hubo cimientos de madera, y los puentes y las casas caídas aparecen cubiertos de deteriospren. Huele a cenizas y aceite, todo cruje bajo los pies y, en las cornisas y túneles de la pared del risco, se adivina movimiento.',
       content: [
@@ -154,6 +160,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a1-suelo-canon',
       title: 'A1: El suelo del cañón',
+      section: 'Localizaciones de Rathalas',
       type: 'combat',
       content: [
         'La boca occidental del cañón (mapa 3.2) está plagada de rocabrotes de ribera de unos dos metros, abultados por la humedad del lago, con gruesas enredaderas tendidas entre ellos que hacen de toda la zona terreno difícil.',
@@ -166,6 +173,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a2-puesto-vigilancia',
       title: 'A2: El puesto de vigilancia',
+      section: 'Localizaciones de Rathalas',
       type: 'social',
       content: [
         'Nada más pasar las puertas, los bandidos han montado escaleras, rampas y controles para ir y venir con seguridad entre su base y las llanuras; un torno con poleas mueve el botín, aunque casi todos prefieren las escaleras a la plataforma colgante. Este puesto, a nivel de la llanura, está ocupado por ocho bandidos fanáticos.',
@@ -187,6 +195,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a3-pared-risco',
       title: 'A3: Pared del risco',
+      section: 'Localizaciones de Rathalas',
       type: 'exploration',
       content: [
         'El descenso es peligroso: cada personaje debe superar una prueba de Atletismo CD 13 para dar con un apoyo firme. Sube la apuesta en la prueba del primer PJ que tome esta ruta.',
@@ -216,6 +225,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a4-taller-carpinteria',
       title: 'A4: El taller de carpintería',
+      section: 'Localizaciones de Rathalas',
       type: 'social',
       readAloud: 'Una docena de obreros aserran y labran maderas para vigas y rampas, mientras otros descansan en una cantina sin molestar a nadie. Entre ellos sobresale un herdaziano maduro al que todos tratan con respeto y que mantiene las distancias con seis bandidos armados que visten de verde. Subido a un banco, aplaude y anuncia que los recién llegados se presenten ante él para recibir faena.',
       content: [
@@ -253,6 +263,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a5-devotario',
       title: 'A5: El devotario',
+      section: 'Localizaciones de Rathalas',
       type: 'exploration',
       readAloud: 'Lo que queda del devotario es un pasillo abovedado excavado en la roca que da a una sala igualmente abovedada; el resto del edificio se vino abajo hace años. Los bandidos despejan allí los escombros para guardar cajas. En un arco con vistas a la ciudad calcinada, una mujer morena con ropa de cuero muy usada vigila con mirada afilada y regaña a los obreros cuando aflojan.',
       content: [
@@ -308,6 +319,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a6-laberinto-puentes',
       title: 'A6: El laberinto de puentes',
+      section: 'Localizaciones de Rathalas',
       type: 'exploration',
       readAloud: 'Ante vosotros se abre un barranco enorme sembrado de cascotes chamuscados que divide la ciudad en sectores habitados. Pasarelas de cuerda, rampas en ambos sentidos y senderos que se cuelan por edificios o túneles de roca unen los distintos niveles, y en muchos se nota el paso de bandidos o de animales salvajes. Cualquier ruta parece arriesgada y los niveles inferiores resultan impracticables.',
       content: [
@@ -352,6 +364,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a7-prision',
       title: 'A7: La prisión',
+      section: 'Localizaciones de Rathalas',
       type: 'exploration',
       content: [
         'En la prisión aguarda Kaiana, la Vigilante de la Verdad que es mano derecha de Ylt y atraviesa un conflicto interior; además, los PJs pueden liberar a unos cuantos presos que serían buenos aliados. El plano es el mapa 3.3. Desde aquí se llega a A5 (devotario), A6 (laberinto de puentes) y A8 (corazón de la fortaleza).',
@@ -388,6 +401,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a7-celdas-kaiana',
       title: 'P4: Las celdas (Kaiana y Teryn)',
+      section: 'Localizaciones de Rathalas',
       type: 'social',
       readAloud: 'Al fondo de la sala, a la luz de una lámpara de esferas, dos mujeres cuchichean dentro de una celda. Una, de brazos robustos y llenos de cicatrices, está esposada y tiene una herida abierta en la sien que soporta sin una queja. La otra, una reshi de túnica verde y dorada, le extiende un ungüento y, al respirar hondo, de su mano brota un resplandor tenue, como un humo luminoso.',
       content: [
@@ -450,6 +464,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a7-fuga-prision',
       title: 'Fuga de la prisión',
+      section: 'Localizaciones de Rathalas',
       type: 'combat',
       content: [
         'Liberar a los presos o pelear contra los guardias de la prisión plantea varios obstáculos.',
@@ -479,6 +494,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a8-corazon-fortaleza',
       title: 'A8: El corazón de la fortaleza',
+      section: 'Localizaciones de Rathalas',
       type: 'narrative',
       readAloud: 'La caverna es inmensa y uno de sus lados se abre al cañón, frente a las ruinas de un palacio que fue blanco. Una gran plataforma circular de madera cuelga de cadenas de hierro y llena todo el espacio, con una multitud expectante que mira hacia una cornisa tallada. En ella, sobre un estrado, un hombre alto de piel dorada, con túnica verde y un glifo verde pintado en torno a los ojos hasta la punta de la barbilla, domina a la gente.',
       content: [
@@ -503,6 +519,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a8-discurso-ylt',
       title: 'El discurso de Ylt',
+      section: 'Localizaciones de Rathalas',
       type: 'narrative',
       readAloud: 'Ylt arenga a la multitud con voz firme y apasionada: dice que el pueblo de Rathalas no está solo ni indefenso y que, confiando en los Heraldos, puede renacer mediante el moldeado de almas. Entre vapores de niebla hace surgir en su mano una hoja larga y fina: es la hoja de Honor que le robó a Taln.\n\nLuego baja del estrado y anuncia a grandes zancadas que llega la Noche de las Penas, la verdadera Desolación, y que hay que volver a pronunciar las antiguas Palabras, pero antes hay que eliminar a los intrusos. Mientras los bandidos se giran hacia vosotros, Ylt descarga la hoja sobre una de las cadenas de la plataforma, que revienta con un chasquido: la plataforma tiembla y se inclina.',
       content: [
@@ -517,6 +534,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'a8-batalla-salon',
       title: 'La batalla del salón',
+      section: 'Localizaciones de Rathalas',
       type: 'combat',
       readAloud: 'Ylt alza la palma y la roca bajo sus pies se retira. Al instante, una gigantesca púa de piedra revienta la plataforma desde abajo y todo el suelo de madera se sacude y se hunde.',
       content: [
@@ -550,6 +568,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'repercusiones',
       title: 'Repercusiones',
+      section: 'Localizaciones de Rathalas',
       type: 'narrative',
       content: [
         'Los fanáticos pelean hasta morir, absorbidos por la fe en las perversas doctrinas de Ylt.',
@@ -572,6 +591,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'baja-rathalas',
       title: 'La Baja Rathalas',
+      section: 'La Baja Rathalas',
       type: 'exploration',
       readAloud: 'El túnel hacia la Baja Rathalas es sorprendentemente liso, aunque Axies opina que no lo ha cortado una hoja esquirlada. Huele a humedad por las filtraciones del mar de las Lanzas y, entre putrispren y paredes que devuelven los ecos, se notan marcas de dónde se trabajó o se colocó la piedra.',
       content: [
@@ -592,6 +612,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'templo-heraldos',
       title: 'El templo de los Heraldos',
+      section: 'La Baja Rathalas',
       type: 'exploration',
       readAloud: 'Os encontráis en lo que queda de un templo antiguo, tallado a gran profundidad en la pared del risco. Enormes murales cubren los muros: portadores de esquirlada con armaduras imponentes combaten contra monstruos gigantescos y seres blindados de fuego y viento. Son los Radiantes Perdidos en su guerra contra los Portadores del Vacío.',
       content: [
@@ -613,6 +634,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'camara-heraldos',
       title: 'Cámara de los Heraldos',
+      section: 'La Baja Rathalas',
       type: 'exploration',
       readAloud: 'La sala es circular y austera, de unos quince metros de diámetro, con una bóveda de artesonado. Diez hornacinas regulares albergan sendas estatuas de tamaño natural sobre pedestales altos. El tiempo las ha castigado y solo tres conservan rasgos que aún se distinguen.',
       content: [
@@ -630,6 +652,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'el-resto-gris',
       title: 'El Resto Gris',
+      section: 'La Baja Rathalas',
       type: 'social',
       readAloud: 'Una gota de barro húmedo cae a vuestro lado, y luego otra. En el techo, los paneles se llenan de un lodo parecido al crem que se agita como si tuviera vida; de él emergen dedos y, enseguida, decenas de manos flacas que se mueven cada una por su cuenta, entre la súplica, la violencia y la desesperación. Una voz grave y rasposa os dice que, como él, buscáis la verdad, pero que la verdad debe doler.',
       content: [
@@ -674,6 +697,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'despedida-resto-gris',
       title: 'La advertencia del Resto Gris',
+      section: 'La Baja Rathalas',
       type: 'narrative',
       readAloud: 'La forma del spren se agita y su voz vuelve a rasparse: ahora es él quien os regala una verdad dolorosa. El camino que os aguarda será duro; se acerca la tormenta eterna, los Heraldos caerán y vuestros juramentos serán puestos a prueba. De repente las manos se quedan quietas; el spren dice que está agotado, agradece vuestro obsequio y se sumerge en el techo, escurriéndose por las fisuras de la roca antigua.',
       content: [
@@ -683,6 +707,7 @@ export const CHAPTER_3: AdventureChapter = {
     {
       id: 'el-viaje-continua',
       title: 'El viaje continúa',
+      section: 'El viaje continúa',
       type: 'narrative',
       content: [
         'Gracias a lo que ha revelado el Resto Gris, el grupo puede salir de Rathalas y seguir la pista de Ylt y sus acólitos hasta el Gran Hexi.',

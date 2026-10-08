@@ -191,7 +191,8 @@ export interface PantallaEstado {
   empenos: Record<string, ProgresoEmpeno>
   contadores: Record<string, number>
   resultados: Record<string, ResultadoPrueba>
-  /** Progress marks: key (`claveAventura`, `claveEscenaPropia`) → ISO date when it was marked */
+  /** Progress marks of the session: key (`claveEscenaPropia`) → ISO date when it was marked (older documents may keep marks of
+   * the book, `aventura:…`, which nothing shows any more) */
   marcas: Record<string, string>
   tramas: Trama[]
   /** Open encounters, in the order they started: usually one, more when the fight happens in several places at once */
@@ -449,9 +450,6 @@ export function normalizarEstado(raw: unknown): PantallaEstado {
 
 // ── Progress marks ───────────────────────────────────────────────────────────
 
-export type TipoMarcaAventura = 'lista' | 'progresion' | 'escena' | 'combate'
-/** `aventura:cap1:escena:apertura`, `aventura:cap1:lista:0`… (checklist and progression items have no id: their index) */
-export const claveAventura = (capituloId: string, tipo: TipoMarcaAventura, id: string | number) => `aventura:${capituloId}:${tipo}:${id}`
 export const claveEscenaPropia = (escenaId: string) => `propia:escena:${escenaId}`
 
 /** Item text as part of a key: the same item keeps its key if only its bold marks or accents change */

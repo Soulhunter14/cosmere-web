@@ -1,20 +1,37 @@
-# Guion de la partida: formato
+# La sesión de la pantalla: formato
 
-El **Guion** de la pantalla del director (panel Escena → Guion) es el borrador de lo que debería pasar en las próximas sesiones.
-No se escribe en la app: se genera fuera, normalmente con IA a partir del libro y de lo jugado, y se importa como Markdown. Durante
-la partida el director lo usa como guion: lee en voz alta, enseña imágenes, marca pruebas, empeños y contadores, prepara los
-combates y pasa a la escena siguiente. Todo lo que marca se anota en la bitácora. Los avances de los personajes (nivel, metas,
-Ideales) solo se **recomiendan**: se aplican en la ficha de cada personaje, nunca desde la pantalla.
+El panel Escena de la pantalla del director tiene dos fuentes:
+
+- **Libro**: la aventura tal como la cuenta el libro (`src/data/caminapiedras/`). Es una referencia fija: se lee y se consulta,
+  pero no guarda progreso (ni escena actual, ni jugadas).
+- **Sesión**: el guion de lo que debería pasar a partir de ahora, el esqueleto de la partida. Aquí vive todo el progreso: escena
+  actual, escenas jugadas, pruebas superadas o falladas, empeños y contadores. Todo lo que se marca se anota en la bitácora.
+
+La sesión no se escribe entera en la app: se prepara fuera, normalmente con IA a partir del libro y de lo jugado, y se importa como
+Markdown. En la mesa se completa de dos formas:
+
+- **Desde el libro.** Cada escena y cada combate del libro tiene **Añadir a la sesión**, que la copia a la sesión en este formato
+  (lectura en voz alta, texto, pruebas con su CD, caminos, consejos y tablas; en los combates, el mapa, los enemigos, las reglas y
+  las recompensas). Si ya hay una escena con ese título, el botón dice «En la sesión».
+- **In situ.** **Nueva escena** pide título, tipo, texto para leer en voz alta y qué pasa; hereda el grupo de la escena actual y
+  pasa a ser la actual. «Escribirla completa en Markdown» abre el editor con todo el formato.
+
+Las escenas añadidas (del libro, in situ o importadas) entran **tras la escena actual**, o al final si no hay ninguna.
+
+Los avances de los personajes (nivel, metas, Ideales) solo se **recomiendan**: se aplican en la ficha de cada personaje, nunca
+desde la pantalla.
 
 ## El ciclo
 
-1. **Borrador.** En Guion, «Prompt del siguiente guion» copia un *prompt* con los PJ (caminos, propósito, obstáculo y metas
-   activas), la última crónica del diario, el estado de cada escena del guion actual (jugada, en juego o sin jugar, con las pruebas
+1. **Borrador.** En Sesión, «Prompt de la siguiente sesión» copia un *prompt* con los PJ (caminos, propósito, obstáculo y metas
+   activas), la última crónica del diario, el estado de cada escena de la sesión (jugada, en juego o sin jugar, con las pruebas
    superadas o falladas, el empeño y los contadores) y las notas de la bitácora. Se pega en la IA, mejor con
    el libro de la aventura a mano.
-2. **Importar.** «Importar» → pegar el Markdown o elegir el `.md`. *Añadir y actualizar* conserva lo marcado en las escenas con el
-   mismo grupo y título; *Reemplazar el guion* quita las que no estén en el archivo (pide confirmación).
-3. **Jugar.** «Escena actual» fija dónde está la historia; «Jugada · pasar a…» marca la escena y pasa a la siguiente.
+2. **Importar.** «Importar» → pegar el Markdown o elegir el `.md`. La hoja lista las escenas del archivo con una casilla: se
+   desmarcan las que no se quieran. *Añadir y actualizar* conserva lo marcado en las escenas con el mismo grupo y título;
+   *Reemplazar la sesión* quita las que no estén en el archivo (pide confirmación).
+3. **Jugar.** «Escena actual» fija dónde está la historia; «Jugada · pasar a…» marca la escena y pasa a la siguiente. El índice se
+   abre en una hoja agrupada, con «Ir a la escena actual»; ◀ ▶ pasan de escena sin abrirlo.
 4. **Crónica.** Bitácora → «Copiar prompt de crónica» y subir la crónica al diario. El siguiente borrador parte de ella.
 
 Cada escena se guarda como su propio Markdown dentro del documento de la pantalla (`GmScreens.State`, `escenasPropias[].md`), así
@@ -111,12 +128,14 @@ genera, por partes:
   funciones sobre la aventura.
 - `docs/pantalla-director/guiones/libro/<parte>.md`: el mismo texto en este formato, con una escena `##` por apartado del libro,
   `>` para los recuadros «Lee lo siguiente», `### PNJ` para los «Cómo interpretar a…», las tablas como listas y los mapas publicados
-  como imágenes. Se importa en Guion → Importar (mejor un capítulo cada vez: el documento de la pantalla admite hasta 1 MB).
+  como imágenes. Se importa en Sesión → Importar (mejor un capítulo cada vez, desmarcando lo que no se vaya a jugar: el documento
+  de la pantalla admite hasta 1 MB).
 
 ```bash
 python -I scripts/aventura/parsear_caminapiedras.py "<ruta>/ARTO007_Caminapiedras aventura_high.pdf" ../cosmere-api/Resources/pdfextract/caminapiedras_libro docs/pantalla-director/guiones/libro
 ```
 
 Las dos salidas son texto literal del libro, que tiene derechos de autor: se quedan en local y fuera de git (las dos carpetas están
-ignoradas). En el repositorio solo está el script. Los datos de la pestaña Aventura (`src/data/caminapiedras/`, un archivo por
-capítulo) sí se versionan: son fieles al libro en todo dato, con redacción propia y la página para leer el original.
+ignoradas). En el repositorio solo está el script. Los datos de la fuente Libro (`src/data/caminapiedras/`, un archivo por
+capítulo) sí se versionan: son fieles al libro en todo dato, con redacción propia y la página para leer el original. Cada escena
+lleva su `section` (el apartado del libro), que agrupa el índice del Libro y va en la `fuente:` de la escena añadida a la sesión.

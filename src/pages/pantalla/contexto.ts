@@ -1,6 +1,8 @@
 import { createContext, useContext, useSyncExternalStore } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { globalNpcsApi } from '../../api/global-npcs'
 import type { GmScreen } from '../../types'
-import { anotar, marcar, type PantallaEstado, type TipoEvento } from './estado'
+import type { PantallaEstado, TipoEvento } from './estado'
 
 /** Saving state shown in the top bar: `error` is a network failure (retried), `rechazado` a refusal of the server (not retried) */
 export type EstadoGuardado = 'guardado' | 'pendiente' | 'guardando' | 'error' | 'rechazado' | 'conflicto'
@@ -41,19 +43,17 @@ export function usePantalla(): PantallaCtx {
   return ctx
 }
 
-/** Toggles a progress mark; marking it (not unmarking) also writes the log line «{etiqueta}: {texto}» */
-export function useAlternarMarca() {
-  const { estado, actualizar, ultimoDiario } = usePantalla()
-  return (clave: string, texto: string, etiqueta: string) => {
-    const marcada = !!estado.marcas[clave]
-    actualizar((b) => {
-      marcar(b, clave, !marcada)
-      if (!marcada) anotar(b, { tipo: 'avance', etiqueta, texto }, ultimoDiario)
-    })
-  }
+/**
+ * Adversaries of the campaign's world and era (`/global-npcs`): to link enemies and NPCs by name. `catalogoListo` is false while
+ * it loads or if it failed, so an encounter is never prepared with every enemy as a free one by mistake
+ */
+export function useCatalogo() {
+  const { cId } = usePantalla()
+  const q = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
+  return { catalogo: q.data ?? [], catalogoListo: q.isSuccess, catalogoFallo: q.isError }
 }
 
-export type PanelId = 'escena' | 'encuentro' | 'grupo' | 'tiradas' | 'bitacora' | 'avances'
+export type PanelId = 'escena' | 'encuentro' | 'grupo' | 'tiradas' | 'bitacora'
 
 export interface PanelesCtx {
   /** Shows a panel: in two panes it selects the tab of its pane, in one pane the only tab strip */

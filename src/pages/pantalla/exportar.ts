@@ -42,6 +42,67 @@ export function promptCronica(s: SesionMesa, o: { campana: string; mundo: string
   ].join('\n')
 }
 
+/** How a scene of the current script went, for the prompt of the next one */
+export interface EscenaJugada {
+  grupo: string
+  titulo: string
+  estado: 'jugada' | 'actual' | 'pendiente'
+  /** «Supervivencia CD 14: superada», «Empeño: superado (6 éxitos, 2 fallos)», «Hecho: Los PJ suben a nivel 4» */
+  detalles: string[]
+}
+
+const ESTADO_ESCENA: Record<EscenaJugada['estado'], string> = { jugada: 'jugada', actual: 'en juego', pendiente: 'sin jugar' }
+
+/**
+ * The prompt that asks an AI for the next draft of the script («Guion»): where the story is (last diary chronicle, what was
+ * played of the current script, the director's notes), who the PJs are, and the import format. The loop is: draft → play →
+ * upload the chronicle → this prompt → import the new draft.
+ */
+export function promptSiguienteGuion(o: {
+  campana: string
+  mundo: string
+  pjs: string[]
+  cronica: { numero: number; titulo: string; texto: string } | null
+  guionTitulo: string
+  escenas: EscenaJugada[]
+  notas: EventoBitacora[]
+  formato: string
+}): string {
+  const guion = o.escenas.map((e) => {
+    const cabeza = `- [${ESTADO_ESCENA[e.estado]}] ${e.grupo ? `${e.grupo} · ` : ''}${e.titulo}`
+    return e.detalles.length ? `${cabeza}. ${e.detalles.join('. ')}.` : cabeza
+  })
+  return [
+    `Eres el ayudante de guion del director de nuestra campaña «${o.campana}» (${o.mundo}). Escribe el borrador de lo que debería ` +
+      'suceder a partir de ahora: las escenas de la próxima sesión (y de la siguiente si la historia lo pide), para usarlo como guion ' +
+      'en la mesa desde la pantalla del director.',
+    '',
+    'Cómo hacerlo:',
+    '- Empieza en el punto exacto donde termina la última crónica. Lo que se jugó manda sobre lo previsto en el guion anterior: ' +
+      'las escenas sin jugar se pueden reaprovechar, cambiar o descartar.',
+    '- Si hay una aventura publicada, úsala como base y adáptala a lo que ya ha cambiado nuestra historia; cita la página en `fuente:`. ' +
+      'Escribe con tus propias palabras: no copies párrafos del libro.',
+    '- Cada escena debe servir para dirigir sin abrir el libro: qué pasa y cómo dirigirlo, texto para leer en voz alta, pruebas con su CD ' +
+      'y qué ocurre si se superan o se fallan, PNJ con cómo interpretarlos, un gancho para cada PJ que esté presente, caminos según lo que ' +
+      'decidan los jugadores y, en los combates, enemigos del catálogo de adversarios y reglas del campo de batalla.',
+    '- Devuelve solo el guion, en un único bloque de Markdown con este formato:',
+    '',
+    o.formato,
+    '',
+    'Personajes jugadores:',
+    ...(o.pjs.length ? o.pjs.map((p) => `- ${p}`) : ['(sin personajes)']),
+    '',
+    o.cronica ? `Última crónica del diario (sesión ${o.cronica.numero} · ${o.cronica.titulo}):` : 'Última crónica del diario: (todavía no hay ninguna)',
+    ...(o.cronica ? [o.cronica.texto.trim()] : []),
+    '',
+    `Guion anterior${o.guionTitulo ? ` «${o.guionTitulo}»` : ''}:`,
+    ...(guion.length ? guion : ['(vacío)']),
+    '',
+    'Notas del director de la última sesión:',
+    ...(o.notas.length ? o.notas.map(lineaEvento) : ['(sin notas)']),
+  ].join('\n')
+}
+
 /** Clipboard. `navigator.clipboard` only exists in a secure context: on http://<LAN ip> the old `execCommand` path copies instead */
 export async function copiarTexto(texto: string): Promise<boolean> {
   try {

@@ -5,10 +5,13 @@
  * Everything here is pure (no React): the panels change the document through `usePantalla().actualizar(borrador => …)`.
  */
 import type { AnyRollResult } from '../../utils/dice'
+import { foldText } from '../../lib/catalogo'
 
-export const VERSION_ESTADO = 2
+export const VERSION_ESTADO = 3
 /** Closed sessions kept in the document (the oldest ones are dropped) */
 const MAX_HISTORIAL = 30
+/** Closed sessions that keep the Markdown of their scenes; older ones keep only the titles and what the table noted (1 MB cap) */
+const MAX_SESIONES_CON_ESCENAS = 3
 const MAX_TIRADAS_PRIVADAS = 60
 const MAX_CAMBIOS = 150
 /** Quick taps on the same resource of the same combatant join one line of the record */
@@ -103,21 +106,25 @@ export interface Encuentro {
   iniciadoEn: string
   combatientes: Combatiente[]
   retirados: Retirado[]
+  /** Script scene it was prepared from: the encounter shows its combat rules and counters */
+  escenaId: string | null
 }
 
 export interface ImagenEscena { url: string; titulo: string }
 export interface EnemigoEscena { nombre: string; cantidad: number; adversarioId: number | null }
 
-/** A scene written by the director (any world): what the book's adventure gives, typed by hand */
+/**
+ * A scene of the director's script (any world): its whole content is Markdown (`guion.ts` reads it: title, type, images,
+ * enemies, read-aloud text, tests, NPCs…), usually drafted with AI and imported. Version 2 kept separate fields.
+ */
 export interface EscenaPropia {
   id: string
-  titulo: string
-  tipo: TipoEscena
-  leerEnVozAlta: string
-  notas: string
-  imagenes: ImagenEscena[]
-  enemigos: EnemigoEscena[]
+  md: string
 }
+
+/** Progress of the endeavour of a script scene (its targets are in the scene's Markdown) */
+export interface ProgresoEmpeno { exitos: number; fallos: number }
+export type ResultadoPrueba = 'exito' | 'fallo'
 
 export interface Trama { id: string; titulo: string; detalle: string; estado: EstadoTrama }
 
@@ -131,6 +138,17 @@ export interface EventoBitacora {
   texto: string
 }
 
+/** A scene played in a closed session: it went with the session, with what the table noted on it already written as text */
+export interface EscenaArchivada {
+  id: string
+  grupo: string
+  titulo: string
+  /** Markdown of the scene, kept only in the last closed sessions ('' in older ones) */
+  md: string
+  /** «Supervivencia CD 14 superada (…)», «Empeño superado (6 éxitos, 2 fallos)», «Daño del barco: 3» */
+  detalles: string[]
+}
+
 /** A table session of the log: number of the diary session it will become, and its events */
 export interface SesionMesa {
   id: string
@@ -139,6 +157,8 @@ export interface SesionMesa {
   iniciadaEn: string
   terminadaEn: string | null
   eventos: EventoBitacora[]
+  /** Scenes played in it, archived when it closed (empty while it is open: its scenes are `escenasPropias`) */
+  escenas: EscenaArchivada[]
 }
 
 export interface TiradaPrivada {
@@ -179,8 +199,18 @@ export interface PantallaEstado {
   version: typeof VERSION_ESTADO
   /** Where the story is: shown in the top bar */
   escenaActual: EscenaRef | null
+  /**
+   * Scenes of the session («Sesión»), in order: those of the open session, or of the next one while none is open (prepared
+   * beforehand). Closing a session takes the played ones with it (`terminarSesion`); the others stay for the next session.
+   */
   escenasPropias: EscenaPropia[]
-  /** Progress marks: key (`claveAventura`, `claveEscenaPropia`) → ISO date when it was marked */
+  guionTitulo: string
+  /** Table state of the script, by scene: endeavours (by scene id), counters and test results (`claveContador`, `claveResultado`) */
+  empenos: Record<string, ProgresoEmpeno>
+  contadores: Record<string, number>
+  resultados: Record<string, ResultadoPrueba>
+  /** Progress marks of the session: key (`claveEscenaPropia`) → ISO date when it was marked (older documents may keep marks of
+   * the book, `aventura:…`, which nothing shows any more) */
   marcas: Record<string, string>
   tramas: Trama[]
   /** Open encounters, in the order they started: usually one, more when the fight happens in several places at once */
@@ -209,6 +239,10 @@ export const estadoVacio = (): PantallaEstado => ({
   version: VERSION_ESTADO,
   escenaActual: null,
   escenasPropias: [],
+  guionTitulo: '',
+  empenos: {},
+  contadores: {},
+  resultados: {},
   marcas: {},
   tramas: [],
   encuentros: [],
@@ -293,28 +327,73 @@ const encuentro = (v: unknown): Encuentro | null =>
           typeof s === 'string' && s ? { nombre: s, motivo: 'derrotado' }
             : esObj(s) && texto(s.nombre) ? { nombre: texto(s.nombre), motivo: una(s.motivo, MOTIVOS_SALIDA, 'derrotado') }
               : null),
+        escenaId: typeof v.escenaId === 'string' && v.escenaId ? v.escenaId : null,
       }
     : null
 
-const escenaPropia = (v: unknown): EscenaPropia | null =>
-  esObj(v) && texto(v.titulo)
-    ? {
-        id: idDe(v.id),
-        titulo: texto(v.titulo),
-        tipo: una(v.tipo, TIPOS_ESCENA, 'narrative'),
-        leerEnVozAlta: texto(v.leerEnVozAlta),
-        notas: texto(v.notas),
-        imagenes: lista(v.imagenes, (i) => (esObj(i) && texto(i.url) ? { url: texto(i.url), titulo: texto(i.titulo) } : null)),
-        enemigos: lista(v.enemigos, (e) =>
-          esObj(e) && texto(e.nombre)
-            ? { nombre: texto(e.nombre), cantidad: Math.min(MAX_CANTIDAD, Math.max(1, entero(e.cantidad, 1))), adversarioId: typeof e.adversarioId === 'number' ? e.adversarioId : null }
-            : null),
-      }
-    : null
+const NOMBRE_TIPO: Record<TipoEscena, string> = {
+  narrative: 'narrativa', social: 'social', exploration: 'exploración', combat: 'combate', choice: 'decisión',
+}
+
+/** A scene of version 2 (separate fields) as the Markdown of the script (`guion.ts`) */
+function mdDesdeCampos(v: {
+  titulo: string
+  tipo: TipoEscena
+  leerEnVozAlta: string
+  notas: string
+  imagenes: ImagenEscena[]
+  enemigos: { nombre: string; cantidad: number }[]
+}): string {
+  const ls = [`## ${v.titulo}`, `tipo: ${NOMBRE_TIPO[v.tipo]}`]
+  if (v.enemigos.length) ls.push(`enemigos: ${v.enemigos.map((e) => `${e.cantidad} ${e.nombre}`).join(', ')}`)
+  for (const img of v.imagenes) ls.push(`imagen: ${img.url}${img.titulo ? ` | ${img.titulo}` : ''}`)
+  if (v.leerEnVozAlta.trim()) ls.push('', ...v.leerEnVozAlta.trim().split('\n').map((l) => (l.trim() ? `> ${l.trim()}` : '>')))
+  if (v.notas.trim()) ls.push('', v.notas.trim())
+  return ls.join('\n')
+}
+
+/** A script scene: version 3 keeps its Markdown; version 2 had separate fields, written as Markdown here */
+const escenaPropia = (v: unknown): EscenaPropia | null => {
+  if (!esObj(v)) return null
+  if (texto(v.md).trim()) return { id: idDe(v.id), md: texto(v.md) }
+  if (!texto(v.titulo)) return null
+  return {
+    id: idDe(v.id),
+    md: mdDesdeCampos({
+      titulo: texto(v.titulo),
+      tipo: una(v.tipo, TIPOS_ESCENA, 'narrative'),
+      leerEnVozAlta: texto(v.leerEnVozAlta),
+      notas: texto(v.notas),
+      imagenes: lista(v.imagenes, (i) => (esObj(i) && texto(i.url) ? { url: texto(i.url), titulo: texto(i.titulo) } : null)),
+      enemigos: lista(v.enemigos, (e) => (esObj(e) && texto(e.nombre) ? { nombre: texto(e.nombre), cantidad: Math.min(MAX_CANTIDAD, Math.max(1, entero(e.cantidad, 1))) } : null)),
+    }),
+  }
+}
+
+/** A `Record<string, T>` of the document, keeping only valid values */
+function mapa<T>(v: unknown, f: (x: unknown) => T | null): Record<string, T> {
+  const r: Record<string, T> = {}
+  if (esObj(v)) for (const [k, x] of Object.entries(v)) {
+    const y = f(x)
+    if (y !== null) r[k] = y
+  }
+  return r
+}
 
 const evento = (v: unknown): EventoBitacora | null =>
   esObj(v) && texto(v.texto)
     ? { id: idDe(v.id), en: texto(v.en, ahoraIso()), tipo: una(v.tipo, TIPOS_EVENTO, 'apunte'), etiqueta: texto(v.etiqueta), texto: texto(v.texto) }
+    : null
+
+const escenaArchivada = (v: unknown): EscenaArchivada | null =>
+  esObj(v) && texto(v.titulo)
+    ? {
+        id: idDe(v.id),
+        grupo: texto(v.grupo),
+        titulo: texto(v.titulo),
+        md: texto(v.md),
+        detalles: lista(v.detalles, (d) => (typeof d === 'string' && d ? d : null)),
+      }
     : null
 
 const sesion = (v: unknown): SesionMesa | null =>
@@ -326,6 +405,7 @@ const sesion = (v: unknown): SesionMesa | null =>
         iniciadaEn: texto(v.iniciadaEn, ahoraIso()),
         terminadaEn: typeof v.terminadaEn === 'string' ? v.terminadaEn : null,
         eventos: lista(v.eventos, evento),
+        escenas: lista(v.escenas, escenaArchivada),
       }
     : null
 
@@ -382,6 +462,10 @@ export function normalizarEstado(raw: unknown): PantallaEstado {
       ? { origen: una(ref.origen, ['aventura', 'propia'] as const, 'aventura'), capituloId: typeof ref.capituloId === 'string' ? ref.capituloId : null, escenaId: texto(ref.escenaId) }
       : null,
     escenasPropias: lista(o.escenasPropias, escenaPropia),
+    guionTitulo: texto(o.guionTitulo),
+    empenos: mapa(o.empenos, (x) => (esObj(x) ? { exitos: Math.max(0, entero(x.exitos)), fallos: Math.max(0, entero(x.fallos)) } : null)),
+    contadores: mapa(o.contadores, (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.trunc(x) : null)),
+    resultados: mapa(o.resultados, (x) => (x === 'exito' || x === 'fallo' ? x : null)),
     marcas,
     tramas: lista(o.tramas, (t) =>
       esObj(t) && texto(t.titulo) ? { id: idDe(t.id), titulo: texto(t.titulo), detalle: texto(t.detalle), estado: una(t.estado, ESTADOS_TRAMA, 'abierta') } : null),
@@ -396,10 +480,25 @@ export function normalizarEstado(raw: unknown): PantallaEstado {
 
 // ── Progress marks ───────────────────────────────────────────────────────────
 
-export type TipoMarcaAventura = 'lista' | 'progresion' | 'escena' | 'combate'
-/** `aventura:cap1:escena:apertura`, `aventura:cap1:lista:0`… (checklist and progression items have no id: their index) */
-export const claveAventura = (capituloId: string, tipo: TipoMarcaAventura, id: string | number) => `aventura:${capituloId}:${tipo}:${id}`
 export const claveEscenaPropia = (escenaId: string) => `propia:escena:${escenaId}`
+
+/** Item text as part of a key: the same item keeps its key if only its bold marks or accents change */
+const corta = (s: string) => foldText(s.replace(/\*\*/g, '')).slice(0, 80)
+/** Test of a script scene (in `resultados`) */
+export const claveResultado = (escenaId: string, texto: string) => `${escenaId}:${corta(texto)}`
+/** Counter of a script scene (in `contadores`) */
+export const claveContador = (escenaId: string, nombre: string) => `${escenaId}:${corta(nombre)}`
+
+/** Removes a script scene and everything the table noted on it (marks, test results, counters, endeavour) */
+export function quitarEscena(b: PantallaEstado, id: string) {
+  b.escenasPropias = b.escenasPropias.filter((e) => e.id !== id)
+  if (b.escenaActual?.origen === 'propia' && b.escenaActual.escenaId === id) b.escenaActual = null
+  delete b.marcas[claveEscenaPropia(id)]
+  for (const k of Object.keys(b.resultados)) if (k.startsWith(`${id}:`)) delete b.resultados[k]
+  for (const k of Object.keys(b.contadores)) if (k.startsWith(`${id}:`)) delete b.contadores[k]
+  delete b.empenos[id]
+  for (const e of b.encuentros) if (e.escenaId === id) e.escenaId = null
+}
 
 export function marcar(b: PantallaEstado, clave: string, valor: boolean) {
   if (valor) b.marcas[clave] = ahoraIso()
@@ -409,8 +508,11 @@ export function marcar(b: PantallaEstado, clave: string, valor: boolean) {
 // ── Log (bitácora) ───────────────────────────────────────────────────────────
 
 export function nuevaSesion(numero: number | null, titulo = ''): SesionMesa {
-  return { id: nuevoId(), numero, titulo, iniciadaEn: ahoraIso(), terminadaEn: null, eventos: [] }
+  return { id: nuevoId(), numero, titulo, iniciadaEn: ahoraIso(), terminadaEn: null, eventos: [], escenas: [] }
 }
+
+/** Scenes of the session marked as played: the ones that go with it when it closes */
+export const escenasJugadas = (b: PantallaEstado) => b.escenasPropias.filter((e) => !!b.marcas[claveEscenaPropia(e.id)])
 
 /** Number the next session gets: one more than the highest of the diary and the closed sessions */
 export function numeroSiguiente(b: PantallaEstado, ultimoDiario: number | null): number {
@@ -428,10 +530,19 @@ export function anotar(b: PantallaEstado, ev: { tipo: TipoEvento; texto: string;
   if (b.sesion.eventos.length > MAX_EVENTOS) b.sesion.eventos.splice(0, b.sesion.eventos.length - MAX_EVENTOS)
 }
 
-export function terminarSesion(b: PantallaEstado) {
+/**
+ * Closes the open session. The scenes played in it go with it (`archivar` writes what the table noted on each one); the others
+ * stay, with their state, for the next session. Only the last closed sessions keep the Markdown of their scenes.
+ */
+export function terminarSesion(b: PantallaEstado, archivar: (esc: EscenaPropia) => EscenaArchivada) {
   if (!b.sesion) return
-  b.historial.unshift({ ...b.sesion, terminadaEn: ahoraIso() })
+  const jugadas = escenasJugadas(b)
+  const escenas = [...b.sesion.escenas, ...jugadas.map(archivar)]
+  for (const e of jugadas) quitarEscena(b, e.id)
+  if (b.escenasPropias.length === 0) b.guionTitulo = ''
+  b.historial.unshift({ ...b.sesion, escenas, terminadaEn: ahoraIso() })
   b.historial.splice(MAX_HISTORIAL)
+  for (const s of b.historial.slice(MAX_SESIONES_CON_ESCENAS)) for (const e of s.escenas) e.md = ''
   b.sesion = null
 }
 
@@ -481,8 +592,8 @@ export function pasoRecurso(b: PantallaEstado, c: Combatiente, clave: 'concentra
 
 // ── Encounter ────────────────────────────────────────────────────────────────
 
-export function nuevoEncuentro(titulo = 'Encuentro'): Encuentro {
-  return { id: nuevoId(), titulo, ronda: 1, fase: 'pj-rapido', iniciadoEn: ahoraIso(), combatientes: [], retirados: [] }
+export function nuevoEncuentro(titulo = 'Encuentro', escenaId: string | null = null): Encuentro {
+  return { id: nuevoId(), titulo, ronda: 1, fase: 'pj-rapido', iniciadoEn: ahoraIso(), combatientes: [], retirados: [], escenaId }
 }
 
 /** The encounter on screen: the active one or, if its id is stale, the first open one */

@@ -3528,7 +3528,10 @@ alcance confirmado (§13); Q11 y Q18 pasan a ser tareas de agente con imágenes 
 - **Campañas que cruzan las dos eras** (como «El legado de los nacidos de la bruma»): la era se fija al crear (decisión (b)), así
   que en v1 se juegan como dos campañas; relacionar eras o mundos queda para más adelante.
 - Aventura **El legado de los nacidos de la bruma** (registro de aventuras por mundo, pestaña «Aventura» en Mistborn, escenas y
-  mapas).
+  mapas). **Hecho en parte (8 de octubre de 2026):** el registro por mundo es `WorldConfig.libro`, y los 9 capítulos, con sus
+  escenas, combates, PNJ y 21 mapas, son el «Libro» de la pantalla del director, filtrado por la era de la campaña
+  (`src/data/mistborn/legado/`, `docs/pantalla-director/propuesta.md`). La pestaña «Aventura» de Director sigue siendo solo de
+  Archivo de las Tormentas.
 - **Guía del mundo** de Scadrial: adversarios y PNJ sembrados (la lista MB nace vacía); iconos oficiales de los 5 caminos de
   nacido del metal (no existen en el libro); emblemas de era.
 - Mezcla de ambientaciones con Investidura única (`"mixto"`): `IWorldRules` de unión, overlays aditivos, inventarios por id en

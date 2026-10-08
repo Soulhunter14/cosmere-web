@@ -1,12 +1,30 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Check, Delete, ExternalLink } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Delete, ExternalLink, ListTree, Pin, PinOff } from 'lucide-react'
 import { Button, IconButton, Sheet } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { PlotIcon } from '../../components/GameIcons'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, tone, type Tone } from '../../theme'
 import type { TramaDieResult } from '../../utils/dice'
+import type { TipoEscena } from './estado'
+import { ESCENA_META } from './meta'
 
 /* Building blocks shared by the panels of the «Pantalla del director» (big touch targets, readable at arm's length). */
+
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
+
+/** `**negrita**` and `*cursiva*` of the script's Markdown, as text nodes (never HTML) */
+export function EnLinea({ texto }: { texto: string }) {
+  const partes = texto.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g)
+  return (
+    <>
+      {partes.map((p, i) =>
+        p.startsWith('**') && p.endsWith('**') && p.length > 4 ? <strong key={i} style={{ fontWeight: 700, color: c.text }}>{p.slice(2, -2)}</strong>
+          : p.startsWith('*') && p.endsWith('*') && p.length > 2 ? <em key={i}>{p.slice(1, -1)}</em>
+            : p)}
+    </>
+  )
+}
 
 /** Resource bar with label and «actual / max» (salud, concentración, Investidura) */
 export function BarraRecurso({
@@ -108,7 +126,7 @@ export function LeerEnVozAlta({ texto, escala }: { texto: string; escala: number
               color: c.text, margin: i ? '12px 0 0' : 0, whiteSpace: 'pre-line',
             }}
           >
-            {p}
+            <EnLinea texto={p} />
           </p>
         ))}
       </div>
@@ -229,50 +247,6 @@ export function Tesela({ t, children, tam = 36 }: { t: Tone; children: ReactNode
   )
 }
 
-/** A progress mark: a big checkbox row (checklist item, scene played, combat won…) */
-export function FilaMarca({
-  marcada,
-  onCambiar,
-  children,
-  extra,
-}: {
-  marcada: boolean
-  onCambiar: (v: boolean) => void
-  children: ReactNode
-  /** Pill or detail after the text (type of progression item…) */
-  extra?: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={marcada}
-      onClick={() => onCambiar(!marcada)}
-      className="ui-row"
-      style={{
-        ...buttonReset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, minHeight: 48, padding: '10px 12px',
-        borderRadius: radius.md, background: marcada ? tone.esmeralda.bg : c.s1, border: `1px solid ${marcada ? tone.esmeralda.border : c.border}`,
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 24, height: 24, flexShrink: 0, marginTop: 1, borderRadius: 7,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: marcada ? tone.esmeralda.fg : 'transparent', border: `1.5px solid ${marcada ? tone.esmeralda.fg : c.borderStrong}`,
-          color: 'var(--bg)',
-        }}
-      >
-        {marcada && <Check size={16} strokeWidth={3} />}
-      </span>
-      <span style={{ flex: 1, minWidth: 0, fontSize: fs.base - 1, lineHeight: 1.5, color: marcada ? c.muted : c.text, textDecoration: marcada ? 'line-through' : 'none', textDecorationColor: tone.esmeralda.border }}>
-        {children}
-      </span>
-      {extra}
-    </button>
-  )
-}
-
 /** Toggle button with pressed state (Actuado, Reacción, Jugada, Escena actual…) */
 export function Conmutador({
   activo,
@@ -313,5 +287,228 @@ export function Conmutador({
       {icono}
       {etiqueta}
     </button>
+  )
+}
+
+// ── Shared scene header ──────────────────────────────────────────────────────
+
+export function CabeceraEscena({
+  titulo, tipo, kicker, actual = false, jugada = false, onActual, onJugada, escala, onEscala, acciones,
+}: {
+  titulo: string
+  tipo: TipoEscena
+  kicker?: string
+  actual?: boolean
+  jugada?: boolean
+  /** Progress of the session; without them (the book, a static reference) the header has no «Escena actual» or «Jugada» */
+  onActual?: () => void
+  onJugada?: () => void
+  escala: number
+  onEscala: (v: number) => void
+  acciones?: ReactNode
+}) {
+  const meta = ESCENA_META[tipo]
+  const Icon = meta.icon
+  return (
+    <header style={stack(10)}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <Tesela t={meta.tone} tam={40}><Icon size={19} /></Tesela>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {kicker && <p style={{ ...eyebrow, color: tone.gold.fg, marginBottom: 2 }}>{kicker}</p>}
+          <h2 style={{ fontFamily: font.display, fontSize: fs.xl + 2, fontWeight: 600, lineHeight: 1.2, color: c.text }}>{titulo}</h2>
+          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            <span style={pill(meta.tone)}>{meta.label}</span>
+            {actual && <span style={pill(tone.gold)}><Pin size={12} aria-hidden />Escena actual</span>}
+            {jugada && <span style={pill(tone.esmeralda)}><Check size={12} aria-hidden />Jugada</span>}
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {onActual && (
+          <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual}>
+            {actual ? 'Quitar de actual' : 'Escena actual'}
+          </Button>
+        )}
+        {onJugada && (
+          <Button size="sm" variant="secondary" icon={<Check size={15} aria-hidden />} onClick={onJugada} aria-pressed={jugada}
+            style={jugada ? { background: tone.esmeralda.bg, border: `1px solid ${tone.esmeralda.border}`, color: tone.esmeralda.fg } : undefined}>
+            {jugada ? 'Jugada' : 'Marcar jugada'}
+          </Button>
+        )}
+        {acciones}
+        <span style={{ marginLeft: 'auto' }}>
+          <ControlLetra escala={escala} onChange={onEscala} />
+        </span>
+      </div>
+    </header>
+  )
+}
+
+export function Apartado({ titulo, icono, color = c.subtle, children }: { titulo: string; icono?: ReactNode; color?: string; children: ReactNode }) {
+  return (
+    <section style={stack(8)}>
+      <h3 style={{ ...eyebrow, color, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {icono}
+        {titulo}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+export function Parrafos({ textos, escala }: { textos: string[]; escala: number }) {
+  return (
+    <div style={stack(10)}>
+      {textos.map((p, i) => (
+        <p key={i} style={{ fontSize: Math.round(16 * escala), color: c.text, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{p}</p>
+      ))}
+    </div>
+  )
+}
+
+/** A scene of the navigation index (book adventure or script) */
+export interface EntradaIndice {
+  id: string
+  titulo: string
+  tipo: TipoEscena
+  jugada: boolean
+  actual: boolean
+  /** Book section or script group the index lists it under ('' = none) */
+  grupo: string
+}
+
+/**
+ * Scene navigation of the Escena panel: a row that stays on top of the pane while reading (index, previous, the scene on screen
+ * and its position, next) and the whole index in a sheet, grouped by the book's sections or the script's groups, with played and
+ * current marks and big rows. After moving, the pane scrolls to the element `ancla` (the scene card).
+ */
+export function NavegadorEscenas({
+  escenas, seleccion, onElegir, ancla, titulo, progreso = true, accion,
+}: {
+  escenas: EntradaIndice[]
+  seleccion: string | null
+  onElegir: (id: string) => void
+  ancla: string
+  /** Title of the index sheet («Capítulo 3 · La ciudad quemada») */
+  titulo: string
+  /** false for the book (a static reference): no played count or marks */
+  progreso?: boolean
+  /** An action on the scene on screen, always at hand in the fixed row («Añadir a la sesión» in the book) */
+  accion?: ReactNode
+}) {
+  const [abierto, setAbierto] = useState(false)
+  if (escenas.length === 0) return null
+  const i = Math.max(0, escenas.findIndex((e) => e.id === seleccion))
+  const vista = escenas[i]
+  const jugadas = escenas.filter((e) => e.jugada).length
+  const enCurso = escenas.find((e) => e.actual)
+  const ir = (id: string) => {
+    onElegir(id)
+    setAbierto(false)
+    requestAnimationFrame(() => document.getElementById(ancla)?.scrollIntoView({ block: 'start' }))
+  }
+  // Consecutive scenes of the same group go under one heading
+  const grupos: { grupo: string; escenas: EntradaIndice[] }[] = []
+  for (const e of escenas) {
+    const ultimo = grupos[grupos.length - 1]
+    if (ultimo && ultimo.grupo === e.grupo) ultimo.escenas.push(e)
+    else grupos.push({ grupo: e.grupo, escenas: [e] })
+  }
+  const meta = ESCENA_META[vista.tipo]
+  const Icon = meta.icon
+  return (
+    <>
+      <nav
+        aria-label="Navegación entre escenas"
+        className="glass"
+        style={{
+          // The pane scrolls with 16 px of padding (PantallaPage): stuck at −16 px the row covers it and nothing shows above
+          position: 'sticky', top: -16, zIndex: 3, margin: '0 -16px', padding: '8px 16px',
+          display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${c.border}`,
+        }}
+      >
+        {/* On a phone only the icon and the count, to leave room for the title */}
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={<ListTree size={15} aria-hidden />}
+          onClick={() => setAbierto(true)}
+          aria-haspopup="dialog"
+          aria-label={`Índice de escenas (${progreso ? `${jugadas} de ${escenas.length} jugadas` : escenas.length})`}
+          style={{ flexShrink: 0 }}
+        >
+          <span className="hide-mobile">Índice</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: c.subtle, fontWeight: 600 }}>{progreso ? `${jugadas}/${escenas.length}` : escenas.length}</span>
+        </Button>
+        <IconButton label="Escena anterior" size={40} variant="surface" disabled={i <= 0} onClick={() => ir(escenas[i - 1].id)}>
+          <ChevronLeft size={18} aria-hidden />
+        </IconButton>
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+          <p style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 650, color: c.text, fontSize: fs.base - 1 }}>
+            <Icon size={14} aria-hidden style={{ color: meta.tone.fg, flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vista.titulo}</span>
+          </p>
+          <p style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>{i + 1} de {escenas.length}</p>
+        </div>
+        <IconButton label="Escena siguiente" size={40} variant="surface" disabled={i >= escenas.length - 1} onClick={() => ir(escenas[i + 1].id)}>
+          <ChevronRight size={18} aria-hidden />
+        </IconButton>
+        {accion}
+      </nav>
+
+      <Sheet open={abierto} onClose={() => setAbierto(false)} title={titulo} description={progreso ? `${jugadas} de ${escenas.length} escenas jugadas` : `${escenas.length} escenas`} maxWidth={600}>
+        <div style={stack(16)}>
+          {enCurso && enCurso.id !== vista.id && (
+            <Button variant="gold" icon={<Pin size={15} aria-hidden />} onClick={() => ir(enCurso.id)} style={{ alignSelf: 'flex-start' }}>
+              Ir a la escena actual: {enCurso.titulo}
+            </Button>
+          )}
+          {grupos.map((g, k) => {
+            const hechas = g.escenas.filter((e) => e.jugada).length
+            return (
+              <section key={`${g.grupo}-${k}`} style={stack(6)}>
+                {g.grupo && (
+                  <h3 style={{ ...eyebrow, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ flex: 1 }}>{g.grupo}</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', color: progreso && hechas === g.escenas.length ? tone.esmeralda.fg : c.subtle }}>
+                      {progreso ? `${hechas}/${g.escenas.length}` : g.escenas.length}
+                    </span>
+                  </h3>
+                )}
+                <ul style={{ ...listReset, ...stack(4) }}>
+                  {g.escenas.map((e) => {
+                    const on = e.id === vista.id
+                    const m = ESCENA_META[e.tipo]
+                    const I = m.icon
+                    return (
+                      <li key={e.id}>
+                        <button
+                          type="button"
+                          aria-current={on ? 'true' : undefined}
+                          onClick={() => ir(e.id)}
+                          className="ui-row"
+                          style={{
+                            ...buttonReset, width: '100%', display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '8px 12px',
+                            borderRadius: radius.md, textAlign: 'left',
+                            background: on ? m.tone.bg : c.s1, border: `1px solid ${on ? m.tone.border : c.border}`,
+                          }}
+                        >
+                          <I size={16} aria-hidden style={{ color: m.tone.fg, flexShrink: 0 }} />
+                          <span style={{ flex: 1, minWidth: 0, fontSize: fs.base - 1, fontWeight: on ? 700 : 550, color: e.jugada && !on ? c.muted : c.text }}>
+                            {e.titulo}
+                          </span>
+                          {e.actual && <span style={pill(tone.gold)}><Pin size={12} aria-hidden />Actual</span>}
+                          {e.jugada && <><Check size={16} aria-hidden style={{ color: tone.esmeralda.fg, flexShrink: 0 }} /><span className="sr-only">, jugada</span></>}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )
+          })}
+        </div>
+      </Sheet>
+    </>
   )
 }

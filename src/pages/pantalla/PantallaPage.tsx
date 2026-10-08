@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, Check, ChevronLeft, CloudOff, Dices, Flag, LoaderCircle, Maximize2, Minimize2, NotebookPen, RefreshCw, Sun, SunDim, Swords,
+  BookOpen, Check, ChevronLeft, CloudOff, Dices, LoaderCircle, Maximize2, Minimize2, NotebookPen, RefreshCw, Sun, SunDim, Swords,
   Timer, TriangleAlert, Users, type LucideIcon,
 } from 'lucide-react'
 import { gmScreenApi } from '../../api/gmScreen'
@@ -10,7 +10,6 @@ import type { DiceRollResponse } from '../../api/diceRolls'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { Button, ConfirmDialog, ErrorMessage, IconButton, Spinner, Tabs, type TabItem } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
-import { CHAPTERS } from '../../data/caminapiedras'
 import { buttonReset, c, fs, radius, titleText, tone, type Tone } from '../../theme'
 import { PantallaProvider } from './PantallaProvider'
 import {
@@ -24,7 +23,9 @@ import { PanelEncuentro } from './PanelEncuentro'
 import { PanelGrupo } from './PanelGrupo'
 import { PanelTiradas } from './PanelTiradas'
 import { PanelBitacora } from './PanelBitacora'
-import { PanelAvances } from './PanelAvances'
+import { tituloDe } from './guion'
+import { useLibro } from './libro'
+import type { LibroAventura } from '../../data/libros/tipos'
 
 const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => ReactNode }> = {
   escena: { label: 'Escena', icon: BookOpen, render: () => <PanelEscena /> },
@@ -32,11 +33,10 @@ const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => 
   grupo: { label: 'Grupo', icon: Users, render: () => <PanelGrupo /> },
   tiradas: { label: 'Tiradas', icon: Dices, render: () => <PanelTiradas /> },
   bitacora: { label: 'Bitácora', icon: NotebookPen, render: () => <PanelBitacora /> },
-  avances: { label: 'Avances', icon: Flag, render: () => <PanelAvances /> },
 }
 /** Left pane: what is happening (story, fight, party); right pane: what comes in and what is noted */
 const PANEL_A: PanelId[] = ['escena', 'encuentro', 'grupo']
-const PANEL_B: PanelId[] = ['tiradas', 'bitacora', 'avances']
+const PANEL_B: PanelId[] = ['tiradas', 'bitacora']
 const TODOS: PanelId[] = [...PANEL_A, ...PANEL_B]
 
 const esDe = (ids: PanelId[]) => (v: unknown): v is PanelId => typeof v === 'string' && ids.includes(v as PanelId)
@@ -282,11 +282,15 @@ function Panel({
 
 // ── Top bar ──────────────────────────────────────────────────────────────────
 
-function tituloEscenaActual(estado: PantallaEstado): string | null {
+/** Title of the current scene: one of the session, or one of the book (documents saved before the book became a static reference) */
+function tituloEscenaActual(estado: PantallaEstado, libro: LibroAventura | null): string | null {
   const ref = estado.escenaActual
   if (!ref) return null
-  if (ref.origen === 'propia') return estado.escenasPropias.find((e) => e.id === ref.escenaId)?.titulo ?? null
-  return CHAPTERS.find((ch) => ch.id === ref.capituloId)?.scenes.find((s) => s.id === ref.escenaId)?.title ?? null
+  if (ref.origen === 'propia') {
+    const esc = estado.escenasPropias.find((e) => e.id === ref.escenaId)
+    return esc ? tituloDe(esc) : null
+  }
+  return libro?.capitulos.find((ch) => ch.id === ref.capituloId)?.scenes.find((s) => s.id === ref.escenaId)?.title ?? null
 }
 
 function BarraSuperior() {
@@ -297,7 +301,8 @@ function BarraSuperior() {
   const cfg = useWorldConfig()
   const campana = useCampaignStore((s) => s.currentCampaign)
   const ahora = useAhora()
-  const escena = tituloEscenaActual(estado)
+  const libro = useLibro()
+  const escena = tituloEscenaActual(estado, libro)
   const varios = estado.encuentros.length > 1
   const activo = estado.encuentros.find((e) => e.id === estado.encuentroActivo) ?? estado.encuentros[0]
   const sesion = estado.sesion

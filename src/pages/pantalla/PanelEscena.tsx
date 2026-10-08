@@ -1,22 +1,19 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { BookOpen, Check, Clock, Heart, ImagePlus, Info, MapPin, Pencil, Pin, PinOff, Plus, Shield, Star, Swords, Trash2, UserPlus, Users, X, Zap, type LucideIcon } from 'lucide-react'
-import { CHAPTERS, type AdventureChapter, type Combat, type Npc, type NpcRole, type Scene } from '../../data/caminapiedras'
+import { useState, type CSSProperties } from 'react'
+import { BookOpen, Check, Clock, Heart, Info, MapPin, Pin, ScrollText, Shield, Star, Swords, UserPlus, Users, Zap, type LucideIcon } from 'lucide-react'
+import type { AdventureChapter, Combat, LibroAventura, Npc, NpcRole, Scene } from '../../data/libros/tipos'
 import { RollTable } from '../gm/CaminapiedrasPage'
-import { globalNpcsApi } from '../../api/global-npcs'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
-import { Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, Segmented, Select, Sheet, Textarea } from '../../components/ui'
+import { Button, Disclosure, Segmented, Select } from '../../components/ui'
 import { c, eyebrow, font, fs, pill, radius, shadow, tone, type Tone } from '../../theme'
 import type { GlobalNpc } from '../../types'
-import { guardarPreferencia, leerPreferencia, useAlternarMarca, usePaneles, usePantalla } from './contexto'
-import {
-  MAX_ENCUENTROS, anotar, claveAventura, claveEscenaPropia, encuentroEnPantalla, marcar, nuevoId,
-  type EscenaPropia, type ImagenEscena, type PantallaEstado, type TipoEscena,
-} from './estado'
-import { buscarAdversario, cantidadDe, enemigosDeTexto, eraNumero } from './adversarios'
+import { guardarPreferencia, leerPreferencia, useCatalogo, usePaneles, usePantalla } from './contexto'
+import { MAX_ENCUENTROS, encuentroEnPantalla } from './estado'
+import { buscarAdversario, cantidadDe, eraNumero } from './adversarios'
 import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, destinoAnadir } from './encuentro'
-import { ESCENA_META, TIPOS_ESCENA } from './meta'
-import { ControlLetra, FilaMarca, Galeria, LeerEnVozAlta, Tesela } from './piezas'
+import { Apartado, CabeceraEscena, Galeria, LeerEnVozAlta, NavegadorEscenas, Parrafos, Tesela } from './piezas'
+import { BotonAnadirASesion, PanelGuion } from './PanelGuion'
+import { mdDesdeCombateLibro, mdDesdeEscenaLibro } from './guion'
+import { useLibro } from './libro'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -56,15 +53,18 @@ const PROGRESION: Record<'key' | 'spren' | 'info', { label: string; tone: Tone }
 
 export function PanelEscena() {
   const { cId, estado } = usePantalla()
-  const cfg = useWorldConfig()
-  const conAventura = cfg.features.pestanaAventura && CHAPTERS.length > 0
+  // The book of the world, with the chapters of the campaign's era (null while it loads or when there is none)
+  const libro = useLibro()
+  const capitulos = libro?.capitulos ?? []
+  const conAventura = !!libro
   const clave = `cosmere-pantalla-escena-${cId}`
 
   const [pref, setPrefEstado] = useState<PrefEscena>(() => {
     const ref = estado.escenaActual
     const porDefecto: PrefEscena = {
-      fuente: ref?.origen === 'propia' || !conAventura ? 'propias' : 'aventura',
-      capituloId: ref?.capituloId ?? CHAPTERS[0]?.id ?? '',
+      // The script when it is where the story is, or when there is one and the story is not in the book
+      fuente: !conAventura || ref?.origen === 'propia' || (!ref && estado.escenasPropias.length > 0) ? 'propias' : 'aventura',
+      capituloId: ref?.capituloId ?? '',
       vista: 'escenas',
       escenaId: ref?.origen === 'aventura' ? ref.escenaId : null,
       propiaId: ref?.origen === 'propia' ? ref.escenaId : null,
@@ -83,8 +83,10 @@ export function PanelEscena() {
   const viendoActual =
     !ref ||
     (ref.origen === 'aventura'
-      ? fuente === 'aventura' && pref.capituloId === ref.capituloId && pref.escenaId === ref.escenaId && pref.vista === 'escenas'
-      : fuente === 'propias' && pref.propiaId === ref.escenaId)
+      ? fuente === 'aventura' && pref.capituloId === ref.capituloId && pref.vista === 'escenas' &&
+        // With nothing picked yet the chapter shows its first scene
+        (pref.escenaId ?? capitulos.find((ch) => ch.id === pref.capituloId)?.scenes[0]?.id) === ref.escenaId
+      : fuente === 'propias' && (pref.propiaId ?? estado.escenasPropias[0]?.id) === ref.escenaId)
   const irAActual = () => {
     if (!ref) return
     if (ref.origen === 'aventura') setPref({ fuente: 'aventura', capituloId: ref.capituloId ?? pref.capituloId, escenaId: ref.escenaId, vista: 'escenas' })
@@ -99,8 +101,8 @@ export function PanelEscena() {
           value={fuente}
           onChange={(v) => setPref({ fuente: v })}
           options={[
-            { value: 'aventura', label: <><BookOpen size={15} aria-hidden />Aventura</> },
-            { value: 'propias', label: <><Pencil size={15} aria-hidden />Escenas propias</> },
+            { value: 'aventura', label: <><BookOpen size={15} aria-hidden />Libro</> },
+            { value: 'propias', label: <><ScrollText size={15} aria-hidden />Sesión</> },
           ]}
         />
       )}
@@ -109,150 +111,42 @@ export function PanelEscena() {
           Ir a la escena actual
         </Button>
       )}
-      {fuente === 'aventura' ? <GuiaAventura pref={pref} setPref={setPref} /> : <EscenasPropias pref={pref} setPref={setPref} />}
+      {fuente === 'aventura' && libro ? (
+        <GuiaAventura libro={libro} pref={pref} setPref={setPref} />
+      ) : (
+        <PanelGuion
+          seleccion={pref.propiaId}
+          onElegir={(id) => setPref({ propiaId: id })}
+          escala={pref.escala}
+          onEscala={(v) => setPref({ escala: v })}
+          onLibro={conAventura ? () => setPref({ fuente: 'aventura', vista: 'escenas' }) : undefined}
+        />
+      )}
     </div>
-  )
-}
-
-// ── Shared scene header ──────────────────────────────────────────────────────
-
-function CabeceraEscena({
-  titulo, tipo, kicker, actual, jugada, onActual, onJugada, escala, onEscala, acciones,
-}: {
-  titulo: string
-  tipo: TipoEscena
-  kicker?: string
-  actual: boolean
-  jugada: boolean
-  onActual: () => void
-  onJugada: () => void
-  escala: number
-  onEscala: (v: number) => void
-  acciones?: ReactNode
-}) {
-  const meta = ESCENA_META[tipo]
-  const Icon = meta.icon
-  return (
-    <header style={stack(10)}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <Tesela t={meta.tone} tam={40}><Icon size={19} /></Tesela>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {kicker && <p style={{ ...eyebrow, color: tone.gold.fg, marginBottom: 2 }}>{kicker}</p>}
-          <h2 style={{ fontFamily: font.display, fontSize: fs.xl + 2, fontWeight: 600, lineHeight: 1.2, color: c.text }}>{titulo}</h2>
-          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-            <span style={pill(meta.tone)}>{meta.label}</span>
-            {actual && <span style={pill(tone.gold)}><Pin size={12} aria-hidden />Escena actual</span>}
-            {jugada && <span style={pill(tone.esmeralda)}><Check size={12} aria-hidden />Jugada</span>}
-          </span>
-        </div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual}>
-          {actual ? 'Quitar de actual' : 'Escena actual'}
-        </Button>
-        <Button size="sm" variant="secondary" icon={<Check size={15} aria-hidden />} onClick={onJugada} aria-pressed={jugada}
-          style={jugada ? { background: tone.esmeralda.bg, borderColor: tone.esmeralda.border, color: tone.esmeralda.fg } : undefined}>
-          {jugada ? 'Jugada' : 'Marcar jugada'}
-        </Button>
-        {acciones}
-        <span style={{ marginLeft: 'auto' }}>
-          <ControlLetra escala={escala} onChange={onEscala} />
-        </span>
-      </div>
-    </header>
-  )
-}
-
-function Bloque({ titulo, icono, color = c.subtle, children }: { titulo: string; icono?: ReactNode; color?: string; children: ReactNode }) {
-  return (
-    <section style={stack(8)}>
-      <h3 style={{ ...eyebrow, color, display: 'flex', alignItems: 'center', gap: 6 }}>
-        {icono}
-        {titulo}
-      </h3>
-      {children}
-    </section>
-  )
-}
-
-function Parrafos({ textos, escala }: { textos: string[]; escala: number }) {
-  return (
-    <div style={stack(10)}>
-      {textos.map((p, i) => (
-        <p key={i} style={{ fontSize: Math.round(16 * escala), color: c.text, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{p}</p>
-      ))}
-    </div>
-  )
-}
-
-/** Chips to pick a scene: type glyph, title, played and current marks */
-function SelectorEscenas({
-  escenas, seleccion, onElegir,
-}: {
-  escenas: { id: string; titulo: string; tipo: TipoEscena; jugada: boolean; actual: boolean }[]
-  seleccion: string | null
-  onElegir: (id: string) => void
-}) {
-  return (
-    <ul aria-label="Escenas" style={{ ...listReset, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {escenas.map((e) => {
-        const on = e.id === seleccion
-        const meta = ESCENA_META[e.tipo]
-        const Icon = meta.icon
-        return (
-          <li key={e.id}>
-            <button
-              type="button"
-              aria-pressed={on}
-              onClick={() => onElegir(e.id)}
-              className="ui-btn"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 12px', borderRadius: radius.full, cursor: 'pointer',
-                background: on ? meta.tone.bg : c.s2, border: `1px solid ${on ? meta.tone.border : c.border}`,
-                color: on ? c.text : c.muted, fontSize: fs.sm, fontWeight: on ? 700 : 550,
-              }}
-            >
-              <Icon size={14} aria-hidden style={{ color: meta.tone.fg }} />
-              {e.titulo}
-              {e.actual && <><Pin size={12} aria-hidden style={{ color: tone.gold.fg }} /><span className="sr-only">, escena actual</span></>}
-              {e.jugada && <><Check size={13} aria-hidden style={{ color: tone.esmeralda.fg }} /><span className="sr-only">, jugada</span></>}
-            </button>
-          </li>
-        )
-      })}
-    </ul>
   )
 }
 
 // ── Book adventure ───────────────────────────────────────────────────────────
 
-function useCatalogo() {
-  const { cId } = usePantalla()
-  const q = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
-  return { catalogo: q.data ?? [], catalogoListo: q.isSuccess, catalogoFallo: q.isError }
-}
-
-function GuiaAventura({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partial<PrefEscena>) => void }) {
-  const { estado } = usePantalla()
-  const cap = CHAPTERS.find((ch) => ch.id === pref.capituloId) ?? CHAPTERS[0]
+function GuiaAventura({ libro, pref, setPref }: { libro: LibroAventura; pref: PrefEscena; setPref: (p: Partial<PrefEscena>) => void }) {
+  const cap = libro.capitulos.find((ch) => ch.id === pref.capituloId) ?? libro.capitulos[0]
   const escena = cap.scenes.find((s) => s.id === pref.escenaId) ?? cap.scenes[0]
-  const jugadas = cap.scenes.filter((s) => estado.marcas[claveAventura(cap.id, 'escena', s.id)]).length
 
   return (
     <div style={stack(14)}>
+      <p style={{ ...eyebrow, color: tone.gold.fg, marginBottom: -6 }}>{libro.titulo}</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <Select
-          aria-label="Capítulo"
+          aria-label={`Capítulo de ${libro.titulo}`}
           value={cap.id}
           onChange={(e) => setPref({ capituloId: e.target.value, escenaId: null })}
           style={{ flex: '1 1 240px', minWidth: 0, fontWeight: 650 }}
         >
-          {CHAPTERS.map((ch) => (
+          {libro.capitulos.map((ch) => (
             <option key={ch.id} value={ch.id}>Capítulo {ch.number} · {ch.title}</option>
           ))}
         </Select>
-        <span style={pill(tone.gold)}>Nv. {cap.levelFrom}–{cap.levelTo}</span>
-        <span style={pill(jugadas === cap.scenes.length ? tone.esmeralda : tone.cuarzo)}>{jugadas}/{cap.scenes.length} escenas</span>
+        <span style={pill(tone.gold)}>Nv. {cap.levelFrom}{cap.levelTo !== cap.levelFrom ? `–${cap.levelTo}` : ''}</span>
       </div>
 
       <Segmented<Vista>
@@ -271,57 +165,44 @@ function GuiaAventura({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partia
 
       {pref.vista === 'escenas' && escena && (
         <>
-          <SelectorEscenas
-            escenas={cap.scenes.map((s) => ({
-              id: s.id, titulo: s.title, tipo: s.type,
-              jugada: !!estado.marcas[claveAventura(cap.id, 'escena', s.id)],
-              actual: estado.escenaActual?.origen === 'aventura' && estado.escenaActual.capituloId === cap.id && estado.escenaActual.escenaId === s.id,
-            }))}
+          <NavegadorEscenas
+            titulo={`Capítulo ${cap.number} · ${cap.title}`}
+            ancla="escena-aventura"
+            progreso={false}
+            escenas={cap.scenes.map((s) => ({ id: s.id, titulo: s.title, tipo: s.type, grupo: s.section ?? '', jugada: false, actual: false }))}
             seleccion={escena.id}
             onElegir={(id) => setPref({ escenaId: id })}
+            accion={<BotonAnadirASesion md={mdDesdeEscenaLibro(libro.titulo, cap, escena)} compacto />}
           />
           <DetalleEscenaAventura cap={cap} escena={escena} escala={pref.escala} onEscala={(v) => setPref({ escala: v })} />
         </>
       )}
       {pref.vista === 'pnj' && <PnjCapitulo cap={cap} />}
-      {pref.vista === 'combates' && <CombatesCapitulo cap={cap} />}
+      {pref.vista === 'combates' && <CombatesCapitulo libro={libro.titulo} cap={cap} />}
       {pref.vista === 'mapas' && <MapasCapitulo cap={cap} />}
       {pref.vista === 'resumen' && <ResumenCapitulo cap={cap} escala={pref.escala} />}
     </div>
   )
 }
 
+/**
+ * A scene of the book: to read and consult. «Añadir a la sesión» (in the fixed row of the index, always at hand) copies it into the
+ * session, where it is played
+ */
 function DetalleEscenaAventura({ cap, escena, escala, onEscala }: { cap: AdventureChapter; escena: Scene; escala: number; onEscala: (v: number) => void }) {
-  const { estado, actualizar, ultimoDiario } = usePantalla()
-  const clave = claveAventura(cap.id, 'escena', escena.id)
-  const jugada = !!estado.marcas[clave]
-  const ref = estado.escenaActual
-  const actual = ref?.origen === 'aventura' && ref.capituloId === cap.id && ref.escenaId === escena.id
-
   return (
-    <article style={{ ...tarjeta, ...stack(18), padding: 18 }}>
+    <article id="escena-aventura" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: 76 }}>
       <CabeceraEscena
         titulo={escena.title}
         tipo={escena.type}
-        kicker={`Capítulo ${cap.number}`}
-        actual={actual}
-        jugada={jugada}
+        kicker={`Capítulo ${cap.number}${escena.section && escena.section !== escena.title ? ` · ${escena.section}` : ''}`}
         escala={escala}
         onEscala={onEscala}
-        onActual={() => actualizar((b) => {
-          if (actual) { b.escenaActual = null; return }
-          b.escenaActual = { origen: 'aventura', capituloId: cap.id, escenaId: escena.id }
-          anotar(b, { tipo: 'escena', etiqueta: 'Escena', texto: `${escena.title} (capítulo ${cap.number})` }, ultimoDiario)
-        })}
-        onJugada={() => actualizar((b) => {
-          marcar(b, clave, !jugada)
-          if (!jugada) anotar(b, { tipo: 'avance', etiqueta: 'Escena jugada', texto: escena.title }, ultimoDiario)
-        })}
       />
       {escena.readAloud && <LeerEnVozAlta texto={escena.readAloud} escala={escala} />}
       {escena.content.length > 0 && <Parrafos textos={escena.content} escala={escala} />}
       {escena.branches && escena.branches.length > 0 && (
-        <Bloque titulo="Caminos posibles" color={tone.topacio.fg}>
+        <Apartado titulo="Caminos posibles" color={tone.topacio.fg}>
           <ul style={{ ...listReset, ...stack(8) }}>
             {escena.branches.map((br, i) => (
               <li key={i} style={{ padding: '10px 12px', borderRadius: radius.md, background: tone.topacio.bg, border: `1px solid ${tone.topacio.border}` }}>
@@ -330,16 +211,16 @@ function DetalleEscenaAventura({ cap, escena, escala, onEscala }: { cap: Adventu
               </li>
             ))}
           </ul>
-        </Bloque>
+        </Apartado>
       )}
       {escena.tips && escena.tips.length > 0 && (
-        <Bloque titulo="Notas para la DJ" icono={<Info size={13} aria-hidden />}>
+        <Apartado titulo="Notas para la DJ" icono={<Info size={13} aria-hidden />}>
           <ul style={{ ...listReset, ...stack(6) }}>
             {escena.tips.map((t, i) => (
               <li key={i} style={{ fontSize: fs.sm + 1, color: c.text, lineHeight: 1.5, paddingLeft: 10, borderLeft: '2px solid var(--gold-border)' }}>{t}</li>
             ))}
           </ul>
-        </Bloque>
+        </Apartado>
       )}
       {escena.tables?.map((t, i) => <RollTable key={i} table={t} t={tone.gold} />)}
     </article>
@@ -406,23 +287,21 @@ function TarjetaPnj({ npc, adversario }: { npc: Npc; adversario: GlobalNpc | nul
   )
 }
 
-function CombatesCapitulo({ cap }: { cap: AdventureChapter }) {
+function CombatesCapitulo({ libro, cap }: { libro: string; cap: AdventureChapter }) {
   if (cap.combats.length === 0) return <p style={{ color: c.muted }}>Este capítulo no tiene combates.</p>
   return (
     <ul style={{ ...listReset, ...stack(10) }}>
-      {cap.combats.map((cb) => <li key={cb.id}><TarjetaCombate cap={cap} combate={cb} /></li>)}
+      {cap.combats.map((cb) => <li key={cb.id}><TarjetaCombate libro={libro} cap={cap} combate={cb} /></li>)}
     </ul>
   )
 }
 
-function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Combat }) {
+function TarjetaCombate({ libro, cap, combate }: { libro: string; cap: AdventureChapter; combate: Combat }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
   const { irA } = usePaneles()
   const cfg = useWorldConfig()
   const { catalogo, catalogoListo, catalogoFallo } = useCatalogo()
   const era = eraNumero(useEra())
-  const clave = claveAventura(cap.id, 'combate', combate.id)
-  const superado = !!estado.marcas[clave]
   const hayEncuentro = encuentroEnPantalla(estado) !== null
 
   /** To the encounter on screen or, `simultaneo`, as a new fight at the same time as the open ones */
@@ -435,7 +314,7 @@ function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Comb
   }
 
   return (
-    <article style={{ ...tarjeta, ...stack(12), boxShadow: superado ? shadow[1] : `inset 3px 0 0 ${tone.rubi.fg}, ${shadow[1]}` }}>
+    <article style={{ ...tarjeta, ...stack(12), boxShadow: `inset 3px 0 0 ${tone.rubi.fg}, ${shadow[1]}` }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <Tesela t={tone.rubi}><Swords size={17} /></Tesela>
         <h3 style={{ flex: 1, fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, lineHeight: 1.25, color: c.text }}>{combate.title}</h3>
@@ -456,13 +335,13 @@ function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Comb
         </p>
       )}
       {combate.specialRules.length > 0 && (
-        <Bloque titulo="Reglas especiales" color={tone.rubi.fg}>
+        <Apartado titulo="Reglas especiales" color={tone.rubi.fg}>
           <ul style={{ ...listReset, ...stack(6) }}>
             {combate.specialRules.map((r, i) => (
               <li key={i} style={{ fontSize: fs.sm + 1, lineHeight: 1.5, paddingLeft: 10, borderLeft: `2px solid ${tone.rubi.border}` }}>{r}</li>
             ))}
           </ul>
-        </Bloque>
+        </Apartado>
       )}
       {combate.rewards && (
         <p style={{ padding: '10px 12px', borderRadius: radius.md, background: tone.esmeralda.bg, border: `1px solid ${tone.esmeralda.border}`, fontSize: fs.sm + 1, lineHeight: 1.5 }}>
@@ -484,18 +363,7 @@ function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Comb
             {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para preparar el encuentro con sus fichas.' : 'Cargando el catálogo de adversarios…'}
           </p>
         )}
-        <Button
-          variant="secondary"
-          icon={<Check size={16} aria-hidden />}
-          aria-pressed={superado}
-          onClick={() => actualizar((b) => {
-            marcar(b, clave, !superado)
-            if (!superado) anotar(b, { tipo: 'avance', etiqueta: 'Combate superado', texto: combate.title }, ultimoDiario)
-          })}
-          style={superado ? { background: tone.esmeralda.bg, borderColor: tone.esmeralda.border, color: tone.esmeralda.fg } : undefined}
-        >
-          {superado ? 'Superado' : 'Marcar superado'}
-        </Button>
+        <BotonAnadirASesion md={mdDesdeCombateLibro(libro, cap, combate)} />
       </div>
     </article>
   )
@@ -525,303 +393,37 @@ function MapasCapitulo({ cap }: { cap: AdventureChapter }) {
 }
 
 function ResumenCapitulo({ cap, escala }: { cap: AdventureChapter; escala: number }) {
-  const { estado } = usePantalla()
-  const alternar = useAlternarMarca()
+  const punto = { fontSize: fs.sm + 1, lineHeight: 1.5, color: c.text, paddingLeft: 10, borderLeft: '2px solid var(--gold-border)' }
   return (
     <div style={stack(18)}>
       <p style={{ fontFamily: font.display, fontSize: Math.round(18 * escala), lineHeight: 1.55, color: c.text, padding: '14px 16px', borderRadius: radius.lg, background: tone.gold.bg, border: `1px solid ${tone.gold.border}` }}>
         {cap.summary}
       </p>
-      <Bloque titulo="Trasfondo del capítulo">
+      <Apartado titulo="Trasfondo del capítulo">
         <p style={{ fontFamily: font.display, fontSize: Math.round(17 * escala), lineHeight: 1.6, color: c.text }}>{cap.background}</p>
-      </Bloque>
-      <Bloque titulo="Lista de verificación DJ" icono={<Check size={13} aria-hidden />}>
+      </Apartado>
+      <Apartado titulo="Lista de verificación DJ" icono={<Check size={13} aria-hidden />}>
         <ul style={{ ...listReset, ...stack(6) }}>
-          {cap.prepChecklist.map((t, i) => {
-            const clave = claveAventura(cap.id, 'lista', i)
-            return (
-              <li key={i}>
-                <FilaMarca marcada={!!estado.marcas[clave]} onCambiar={() => alternar(clave, t, 'Avance')}>{t}</FilaMarca>
-              </li>
-            )
-          })}
+          {cap.prepChecklist.map((t, i) => <li key={i} style={punto}>{t}</li>)}
         </ul>
-      </Bloque>
-      <Bloque titulo="Progresión de personajes" icono={<Zap size={13} aria-hidden />}>
+      </Apartado>
+      <Apartado titulo="Progresión de personajes" icono={<Zap size={13} aria-hidden />}>
         <ul style={{ ...listReset, ...stack(6) }}>
           {cap.progressionItems.map((p, i) => {
-            const clave = claveAventura(cap.id, 'progresion', i)
             const meta = PROGRESION[p.type]
             return (
-              <li key={i}>
-                <FilaMarca marcada={!!estado.marcas[clave]} onCambiar={() => alternar(clave, p.text, 'Progresión')} extra={<span style={pill(meta.tone)}>{meta.label}</span>}>
-                  {p.text}
-                </FilaMarca>
+              <li key={i} style={{ ...punto, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ flex: 1 }}>{p.text}</span>
+                <span style={pill(meta.tone)}>{meta.label}</span>
               </li>
             )
           })}
         </ul>
-      </Bloque>
+      </Apartado>
       <p style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: fs.sm, color: c.muted }}>
         <BookOpen size={15} aria-hidden style={{ color: tone.gold.fg }} />
         Páginas del libro: {cap.pdfPages.from}–{cap.pdfPages.to}
       </p>
     </div>
-  )
-}
-
-// ── Own scenes ───────────────────────────────────────────────────────────────
-
-function EscenasPropias({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partial<PrefEscena>) => void }) {
-  const { estado, actualizar } = usePantalla()
-  const [editando, setEditando] = useState<EscenaPropia | 'nueva' | null>(null)
-  const [borrando, setBorrando] = useState<EscenaPropia | null>(null)
-  const lista = estado.escenasPropias
-  const sel = lista.find((e) => e.id === pref.propiaId) ?? lista[0] ?? null
-
-  const borrar = () => {
-    if (!borrando) return
-    const id = borrando.id
-    actualizar((b) => {
-      b.escenasPropias = b.escenasPropias.filter((e) => e.id !== id)
-      if (b.escenaActual?.origen === 'propia' && b.escenaActual.escenaId === id) b.escenaActual = null
-      marcar(b, claveEscenaPropia(id), false)
-    })
-    setBorrando(null)
-  }
-
-  return (
-    <div style={stack(14)}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <p style={{ flex: 1, fontSize: fs.sm, color: c.muted }}>
-          Tus escenas para cualquier mundo: texto para leer, notas, imágenes y enemigos.
-        </p>
-        <Button size="sm" icon={<Plus size={15} aria-hidden />} onClick={() => setEditando('nueva')}>Nueva escena</Button>
-      </div>
-
-      {lista.length === 0 ? (
-        <EmptyState
-          icon={<ImagePlus size={22} aria-hidden />}
-          title="Aún no hay escenas propias"
-          description="Escribe la escena que vas a dirigir: lo que leerás en voz alta, tus notas, imágenes por URL y los enemigos para preparar el encuentro."
-          action={<Button icon={<Plus size={16} aria-hidden />} onClick={() => setEditando('nueva')}>Nueva escena</Button>}
-        />
-      ) : (
-        <>
-          <SelectorEscenas
-            escenas={lista.map((e) => ({
-              id: e.id, titulo: e.titulo, tipo: e.tipo,
-              jugada: !!estado.marcas[claveEscenaPropia(e.id)],
-              actual: estado.escenaActual?.origen === 'propia' && estado.escenaActual.escenaId === e.id,
-            }))}
-            seleccion={sel?.id ?? null}
-            onElegir={(id) => setPref({ propiaId: id })}
-          />
-          {sel && (
-            <DetalleEscenaPropia
-              escena={sel}
-              escala={pref.escala}
-              onEscala={(v) => setPref({ escala: v })}
-              onEditar={() => setEditando(sel)}
-              onBorrar={() => setBorrando(sel)}
-            />
-          )}
-        </>
-      )}
-
-      {editando && (
-        <HojaEscenaPropia
-          escena={editando === 'nueva' ? null : editando}
-          onClose={() => setEditando(null)}
-          onGuardada={(id) => setPref({ propiaId: id })}
-        />
-      )}
-      <ConfirmDialog
-        open={!!borrando}
-        title={`¿Eliminar «${borrando?.titulo ?? ''}»?`}
-        message="Se borran su texto, notas, imágenes y enemigos. Esta acción no se puede deshacer."
-        onConfirm={borrar}
-        onCancel={() => setBorrando(null)}
-      />
-    </div>
-  )
-}
-
-function DetalleEscenaPropia({
-  escena, escala, onEscala, onEditar, onBorrar,
-}: { escena: EscenaPropia; escala: number; onEscala: (v: number) => void; onEditar: () => void; onBorrar: () => void }) {
-  const { estado, actualizar, ultimoDiario } = usePantalla()
-  const { irA } = usePaneles()
-  const cfg = useWorldConfig()
-  const { catalogo, catalogoListo, catalogoFallo } = useCatalogo()
-  const era = eraNumero(useEra())
-  const clave = claveEscenaPropia(escena.id)
-  const jugada = !!estado.marcas[clave]
-  const actual = estado.escenaActual?.origen === 'propia' && estado.escenaActual.escenaId === escena.id
-  const hayEncuentro = encuentroEnPantalla(estado) !== null
-
-  /** To the encounter on screen or, `simultaneo`, as a new fight at the same time as the open ones */
-  const preparar = (simultaneo: boolean) => {
-    actualizar((b) => {
-      const enc = simultaneo ? abrirEncuentro(b, escena.titulo, ultimoDiario) : asegurarEncuentro(b, escena.titulo, ultimoDiario)
-      anadirEnemigos(enc, escena.enemigos, catalogo, cfg.habilidades, era)
-    })
-    irA('encuentro')
-  }
-
-  return (
-    <article style={{ ...tarjeta, ...stack(18), padding: 18 }}>
-      <CabeceraEscena
-        titulo={escena.titulo}
-        tipo={escena.tipo}
-        actual={actual}
-        jugada={jugada}
-        escala={escala}
-        onEscala={onEscala}
-        onActual={() => actualizar((b: PantallaEstado) => {
-          if (actual) { b.escenaActual = null; return }
-          b.escenaActual = { origen: 'propia', capituloId: null, escenaId: escena.id }
-          anotar(b, { tipo: 'escena', etiqueta: 'Escena', texto: escena.titulo }, ultimoDiario)
-        })}
-        onJugada={() => actualizar((b) => {
-          marcar(b, clave, !jugada)
-          if (!jugada) anotar(b, { tipo: 'avance', etiqueta: 'Escena jugada', texto: escena.titulo }, ultimoDiario)
-        })}
-        acciones={
-          <>
-            <IconButton label={`Editar ${escena.titulo}`} variant="surface" size={36} onClick={onEditar}><Pencil size={15} aria-hidden /></IconButton>
-            <IconButton label={`Eliminar ${escena.titulo}`} variant="danger" size={36} onClick={onBorrar}><Trash2 size={15} aria-hidden /></IconButton>
-          </>
-        }
-      />
-      {escena.leerEnVozAlta && <LeerEnVozAlta texto={escena.leerEnVozAlta} escala={escala} />}
-      {escena.notas && (
-        <Bloque titulo="Notas" icono={<Info size={13} aria-hidden />}>
-          <Parrafos textos={escena.notas.split(/\n\s*\n/)} escala={escala} />
-        </Bloque>
-      )}
-      {escena.imagenes.length > 0 && (
-        <Bloque titulo="Imágenes">
-          <Galeria imagenes={escena.imagenes} />
-        </Bloque>
-      )}
-      {escena.enemigos.length > 0 && (
-        <Bloque titulo="Enemigos" icono={<Swords size={13} aria-hidden />} color={tone.rubi.fg}>
-          <ul style={{ ...listReset, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {escena.enemigos.map((e, i) => {
-              const ficha = buscarAdversario(e.nombre, catalogo)
-              return (
-                <li key={i} style={{ ...pill(ficha ? tone.rubi : tone.cuarzo), borderRadius: radius.sm }} title={ficha ? `Ficha: ${ficha.name}` : 'Sin ficha en el catálogo'}>
-                  {e.cantidad} {e.nombre}
-                </li>
-              )
-            })}
-          </ul>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(false)}>
-              {hayEncuentro ? `Añadir ${destinoAnadir(estado)}` : 'Preparar encuentro'}
-            </Button>
-            {hayEncuentro && estado.encuentros.length < MAX_ENCUENTROS && (
-              <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(true)}>
-                Como combate simultáneo
-              </Button>
-            )}
-            {!catalogoListo && (
-          <p style={{ width: '100%', fontSize: fs.xs, color: catalogoFallo ? tone.rubi.fg : c.subtle }}>
-            {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para preparar el encuentro con sus fichas.' : 'Cargando el catálogo de adversarios…'}
-          </p>
-        )}
-          </div>
-        </Bloque>
-      )}
-    </article>
-  )
-}
-
-function HojaEscenaPropia({ escena, onClose, onGuardada }: { escena: EscenaPropia | null; onClose: () => void; onGuardada: (id: string) => void }) {
-  const { actualizar } = usePantalla()
-  const [titulo, setTitulo] = useState(escena?.titulo ?? '')
-  const [tipo, setTipo] = useState<TipoEscena>(escena?.tipo ?? 'narrative')
-  const [leer, setLeer] = useState(escena?.leerEnVozAlta ?? '')
-  const [notas, setNotas] = useState(escena?.notas ?? '')
-  const [imagenes, setImagenes] = useState<ImagenEscena[]>(escena?.imagenes ?? [])
-  const [enemigos, setEnemigos] = useState(escena?.enemigos.map((e) => `${e.cantidad} ${e.nombre}`).join('\n') ?? '')
-
-  const guardar = () => {
-    const id = escena?.id ?? nuevoId()
-    const datos: EscenaPropia = {
-      id,
-      titulo: titulo.trim(),
-      tipo,
-      leerEnVozAlta: leer.trim(),
-      notas: notas.trim(),
-      imagenes: imagenes.map((i) => ({ url: i.url.trim(), titulo: i.titulo.trim() })).filter((i) => i.url),
-      enemigos: enemigosDeTexto(enemigos).map((e) => ({ ...e, adversarioId: null })),
-    }
-    actualizar((b) => {
-      const i = b.escenasPropias.findIndex((e) => e.id === id)
-      if (i >= 0) b.escenasPropias[i] = datos
-      else b.escenasPropias.push(datos)
-    })
-    onGuardada(id)
-    onClose()
-  }
-
-  const setImagen = (i: number, campo: keyof ImagenEscena, valor: string) =>
-    setImagenes((l) => l.map((img, j) => (j === i ? { ...img, [campo]: valor } : img)))
-
-  return (
-    <Sheet
-      open
-      onClose={onClose}
-      title={escena ? 'Editar escena' : 'Nueva escena'}
-      maxWidth={680}
-      footer={
-        <>
-          <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
-          <Button size="lg" style={{ flex: 2 }} disabled={!titulo.trim()} onClick={guardar}>Guardar</Button>
-        </>
-      }
-    >
-      <div style={stack(14)}>
-        <Field label="Título">
-          <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="La fiesta en la mansión Renoux" data-autofocus />
-        </Field>
-        <div>
-          <span style={{ ...eyebrow, display: 'block', marginBottom: 8 }}>Tipo</span>
-          <Segmented<TipoEscena>
-            ariaLabel="Tipo de escena"
-            size="sm"
-            value={tipo}
-            onChange={setTipo}
-            options={TIPOS_ESCENA.map((t) => ({ value: t, label: ESCENA_META[t].label }))}
-          />
-        </div>
-        <Field label="Leer en voz alta" hint="Separa los párrafos con una línea en blanco.">
-          <Textarea rows={6} value={leer} onChange={(e) => setLeer(e.target.value)} />
-        </Field>
-        <Field label="Notas del director">
-          <Textarea rows={5} value={notas} onChange={(e) => setNotas(e.target.value)} />
-        </Field>
-        <section style={stack(8)}>
-          <span style={eyebrow}>Imágenes (por URL)</span>
-          {imagenes.map((img, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <Input aria-label={`URL de la imagen ${i + 1}`} value={img.url} onChange={(e) => setImagen(i, 'url', e.target.value)} placeholder="https://…" style={{ flex: 2 }} />
-              <Input aria-label={`Título de la imagen ${i + 1}`} value={img.titulo} onChange={(e) => setImagen(i, 'titulo', e.target.value)} placeholder="Título" style={{ flex: 1 }} />
-              <IconButton label={`Quitar la imagen ${i + 1}`} size={40} onClick={() => setImagenes((l) => l.filter((_, j) => j !== i))}>
-                <X size={16} aria-hidden />
-              </IconButton>
-            </div>
-          ))}
-          <Button size="sm" variant="secondary" icon={<ImagePlus size={15} aria-hidden />} onClick={() => setImagenes((l) => [...l, { url: '', titulo: '' }])} style={{ alignSelf: 'flex-start' }}>
-            Añadir imagen
-          </Button>
-        </section>
-        <Field label="Enemigos" hint="Uno por línea: «3 Bandido» o «Kelsier». Se enlazan con el catálogo por el nombre.">
-          <Textarea rows={3} value={enemigos} onChange={(e) => setEnemigos(e.target.value)} />
-        </Field>
-      </div>
-    </Sheet>
   )
 }

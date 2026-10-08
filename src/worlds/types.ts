@@ -21,6 +21,7 @@ import type { AventurasOverlay, CombatOverlay } from '../data/overlays'
 import type { TalentRules } from '../lib/talentRules'
 import type { RadiantOrder } from '../data/radiantOrders'
 import type { CaminoNacidoDelMetal } from '../data/mistborn/caminosNacidosDelMetal'
+import type { AdventureChapter } from '../data/libros/tipos'
 
 /** Character fields that hold an attribute value (talentGraph.ts only has `SkillField` for skills). */
 export type AttrField = 'fuerza' | 'velocidad' | 'intelecto' | 'voluntad' | 'discernimiento' | 'presencia'
@@ -176,6 +177,11 @@ export interface WorldConfig {
   syncData?: WorldData
   /** Conditions of the world: the Cosmere ones (`ESTADOS_COSMERE`, src/worlds/estados.ts) plus its own, alphabetical; read by the «Pantalla del director» */
   estados: EstadoDef[]
+  /**
+   * The adventure book of the world: the «Libro» of the director's screen, filtered by the campaign's era (`AdventureChapter.eras`).
+   * `cargar` is a lazy `import()`, so its chapters never travel in the main bundle; `null` = the world has no book
+   */
+  libro: { id: string; titulo: string; cargar: () => Promise<AdventureChapter[]> } | null
 }
 
 export interface WorldData {

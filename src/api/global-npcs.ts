@@ -1,8 +1,11 @@
 import client from './client'
 import type { GlobalNpc } from '../types'
 
-/** The caller never sets the world: the server takes it from the campaign of `?campaignId=` and ignores a `world` in the body (§5.2) */
-type GlobalNpcBody = Partial<Omit<GlobalNpc, 'world'>>
+/**
+ * The caller never sets the world nor the era: the server takes them from the campaign of `?campaignId=` and ignores them in
+ * the body (§5.2)
+ */
+type GlobalNpcBody = Partial<Omit<GlobalNpc, 'world' | 'era'>>
 
 // Every call but `getById` carries `?campaignId=`: the server lists the adversaries of that campaign's world, creates the new one in it
 // and answers 404 when the adversary of an update or a delete belongs to another world.

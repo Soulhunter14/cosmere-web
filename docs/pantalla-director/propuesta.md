@@ -307,6 +307,54 @@ P1-P13 y la iteración 2 integradas en `main` el 8 oct 2026 (merge de `feature/p
 - Verificado en el navegador en las campañas de prueba 10 (Era 1), 11 (Era 2) y 3 (Archivo de las Tormentas, sin cambios de
   comportamiento salvo los nuevos de la pantalla).
 
+### Revisión tras el despliegue (8 oct 2026, rama `fix/pantalla-director-revision`)
+Revisión de código en tres partes (API y datos, estado y lógica, paneles), con cada hallazgo comprobado antes de tocarlo.
+- **API.** Un texto con medio emoji (un *surrogate* UTF-16 suelto) se guardaba y luego no se podía devolver: todo GET y todo 409
+  de la campaña daban 500 hasta tocar la base de datos. Ahora el PUT responde 400 sin guardar. El 409 se limita a las carreras de
+  verdad: concurrencia o clave primaria duplicada. Los PNJ globales (crear, editar, borrar) piden ser director de la campaña: un
+  jugador podía cambiar el catálogo de todo el mundo.
+- **Guardado.**
+  - Se envía el texto saneado (medio emoji → U+FFFD), con 15 s de tiempo máximo.
+  - Un 4xx («rechazado») se muestra con su motivo y un botón «Reintentar», sin reintentos en bucle; la red y los 5xx sí se reintentan.
+  - Por encima de 900 KB se quitan las sesiones cerradas más antiguas.
+  - Una respuesta perdida ya no da un falso conflicto: si el 409 trae nuestro mismo documento, se sigue desde su versión.
+  - Al salir se intenta un último guardado, sin bucle; la visita siguiente lo espera antes de leer el documento.
+  - Un documento de una versión más nueva de la app se abre en solo lectura.
+  - Salir con cambios que el servidor no tiene pide confirmación.
+  - Los dos botones del conflicto piden confirmación.
+- **Paneles.**
+  - Un panel abierto desde un chip queda montado (no se pierden borradores).
+  - Las pestañas y los chips de combate solo guardan si cambian; el chip del combate en pantalla se marca (`aria-current`).
+  - Pantalla completa y orientación se liberan al salir.
+  - Las tiradas de la mesa se releen al volver de reposo, y una tirada pública que no llega a la mesa se avisa.
+  - «Preparar encuentro» espera al catálogo.
+  - El botón de añadir dice qué añade («Añadir 3 × Bandido»), y una búsqueda sin coincidencias lo dice.
+- **Encuentro.**
+  - «Cancelar» en «Retirar del combate» vuelve a la hoja de editar con sus cambios, y «Quitar sin más» pide confirmación.
+  - Un PJ que vuelve deja de contar entre los que huyeron, y los PJ que se mueven de combate se anotan.
+  - Las series nunca renombran a un PJ ni repiten el número de un retirado.
+  - Los nombres del catálogo se usan tal cual («Quimera hemalúrgica, líder de manada»); solo se acortan los de la aventura.
+  - Cantidades de 1 a 30.
+  - Salud mínima de 1.
+  - El desvío condicional del libro se ve («5 · solo contra laceración») en la tarjeta, en la cuenta y en el interruptor.
+  - «Duplicar» trae concentración e Investidura llenas, y los títulos repetidos se numeran.
+  - Al cargar, los ids repetidos se regeneran y un PJ nunca está en dos combates.
+  - «falta 1».
+- **Datos.** El glifo de reacción de Kwylliam Elariel salía como «R» mayúscula y unía dos acciones: se corrigió el analizador y la
+  migración de El legado antes del despliegue. Los scripts SQL de datos son ahora no idempotentes, porque el `--idempotent` de EF
+  sangra los textos.
+- **Para más adelante** (anotado, sin hacer):
+  - Al girar la tablet se remontan los paneles y se pierden las hojas abiertas (el documento no).
+  - Aviso de cambios sin guardar al cerrar una hoja de formulario.
+  - La tarjeta se remonta al cambiar de turno rápido/lento (se pliega la de un PJ desplegado).
+  - Navegación con flechas en la lista de motivos de «Retirar».
+  - Cabecera en 375 px.
+  - Lista de PNJ del *prompt* de crónica cuando ya no hay combate abierto.
+  - Copia local del documento sin guardar.
+  - Nombres de funciones en español frente a la norma del proyecto.
+  - `GET /global-npcs/{id}` sin filtrar por mundo y era.
+  - Respuesta del PUT más ligera y atributos de Swagger.
+
 ### Datos de prueba creados en DEV (campaña 3 «Regresión Stormlight», usuario de pruebas)
 Documento de la pantalla (encuentro, sesión 1, una escena propia, una trama «Trama creada en otro dispositivo»), la meta de prueba
 «Proteger a los suyos (prueba pantalla)» (id 80, personaje 9) y una tirada pública de prueba en el registro de dados.

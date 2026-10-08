@@ -36,7 +36,8 @@ interface PrefEscena {
 }
 
 const esPref = (v: unknown): v is PrefEscena =>
-  typeof v === 'object' && v !== null && 'fuente' in v && 'capituloId' in v && 'vista' in v && VISTAS.includes((v as PrefEscena).vista)
+  typeof v === 'object' && v !== null && 'fuente' in v && 'capituloId' in v && 'vista' in v && VISTAS.includes((v as PrefEscena).vista) &&
+  Number.isFinite((v as PrefEscena).escala)
 
 const NPC_ROL: Record<NpcRole, { label: string; tone: Tone; icon: LucideIcon }> = {
   special: { label: 'Especial', tone: tone.topacio, icon: Star },
@@ -146,7 +147,7 @@ function CabeceraEscena({
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual} aria-pressed={actual}>
+        <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual}>
           {actual ? 'Quitar de actual' : 'Escena actual'}
         </Button>
         <Button size="sm" variant="secondary" icon={<Check size={15} aria-hidden />} onClick={onJugada} aria-pressed={jugada}
@@ -227,7 +228,8 @@ function SelectorEscenas({
 
 function useCatalogo() {
   const { cId } = usePantalla()
-  return useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) }).data ?? []
+  const q = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
+  return { catalogo: q.data ?? [], catalogoListo: q.isSuccess, catalogoFallo: q.isError }
 }
 
 function GuiaAventura({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partial<PrefEscena>) => void }) {
@@ -345,7 +347,7 @@ function DetalleEscenaAventura({ cap, escena, escala, onEscala }: { cap: Adventu
 }
 
 function PnjCapitulo({ cap }: { cap: AdventureChapter }) {
-  const catalogo = useCatalogo()
+  const { catalogo } = useCatalogo()
   if (cap.npcs.length === 0) return <p style={{ color: c.muted }}>Este capítulo no tiene PNJ descritos.</p>
   return (
     <ul style={{ ...listReset, ...stack(8) }}>
@@ -417,7 +419,7 @@ function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Comb
   const { estado, actualizar, ultimoDiario } = usePantalla()
   const { irA } = usePaneles()
   const cfg = useWorldConfig()
-  const catalogo = useCatalogo()
+  const { catalogo, catalogoListo, catalogoFallo } = useCatalogo()
   const era = eraNumero(useEra())
   const clave = claveAventura(cap.id, 'combate', combate.id)
   const superado = !!estado.marcas[clave]
@@ -469,13 +471,18 @@ function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Comb
       )}
       {combate.tables?.map((t, i) => <RollTable key={i} table={t} t={tone.rubi} />)}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button icon={<Swords size={16} aria-hidden />} onClick={() => preparar(false)}>
+        <Button icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(false)}>
           {hayEncuentro ? `Añadir ${destinoAnadir(estado)}` : 'Preparar encuentro'}
         </Button>
         {hayEncuentro && estado.encuentros.length < MAX_ENCUENTROS && (
-          <Button variant="secondary" icon={<Swords size={16} aria-hidden />} onClick={() => preparar(true)}>
+          <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(true)}>
             Como combate simultáneo
           </Button>
+        )}
+        {!catalogoListo && (
+          <p style={{ width: '100%', fontSize: fs.xs, color: catalogoFallo ? tone.rubi.fg : c.subtle }}>
+            {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para preparar el encuentro con sus fichas.' : 'Cargando el catálogo de adversarios…'}
+          </p>
         )}
         <Button
           variant="secondary"
@@ -646,7 +653,7 @@ function DetalleEscenaPropia({
   const { estado, actualizar, ultimoDiario } = usePantalla()
   const { irA } = usePaneles()
   const cfg = useWorldConfig()
-  const catalogo = useCatalogo()
+  const { catalogo, catalogoListo, catalogoFallo } = useCatalogo()
   const era = eraNumero(useEra())
   const clave = claveEscenaPropia(escena.id)
   const jugada = !!estado.marcas[clave]
@@ -711,14 +718,19 @@ function DetalleEscenaPropia({
             })}
           </ul>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button icon={<Swords size={16} aria-hidden />} onClick={() => preparar(false)}>
+            <Button icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(false)}>
               {hayEncuentro ? `Añadir ${destinoAnadir(estado)}` : 'Preparar encuentro'}
             </Button>
             {hayEncuentro && estado.encuentros.length < MAX_ENCUENTROS && (
-              <Button variant="secondary" icon={<Swords size={16} aria-hidden />} onClick={() => preparar(true)}>
+              <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(true)}>
                 Como combate simultáneo
               </Button>
             )}
+            {!catalogoListo && (
+          <p style={{ width: '100%', fontSize: fs.xs, color: catalogoFallo ? tone.rubi.fg : c.subtle }}>
+            {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para preparar el encuentro con sus fichas.' : 'Cargando el catálogo de adversarios…'}
+          </p>
+        )}
           </div>
         </Bloque>
       )}

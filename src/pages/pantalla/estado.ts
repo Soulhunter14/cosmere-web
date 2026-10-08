@@ -16,6 +16,8 @@ const UNIR_CAMBIOS_MS = 20_000
 const MAX_EVENTOS = 400
 /** Encounters open at the same time (the party split in two or three fights) */
 export const MAX_ENCUENTROS = 4
+/** Most combatants added at once: a scene line «1000 Bandido» would make the document too large to save (or hang the tab) */
+export const MAX_CANTIDAD = 30
 
 export type TipoEscena = 'narrative' | 'social' | 'exploration' | 'combat' | 'choice'
 export type Fase = 'pj-rapido' | 'pnj-rapido' | 'pj-lento' | 'pnj-lento'
@@ -74,6 +76,8 @@ export interface Combatiente {
   investidura: Recurso
   defensas: Defensas
   desvio: number
+  /** What limits the deflect when the stat block says so («solo contra laceración»), or '' */
+  desvioNota: string
   estados: EstadoAplicado[]
   /** Condition names the adversary ignores («Inmunidades: Aturdido…») */
   inmunidades: string[]
@@ -265,6 +269,7 @@ const combatiente = (v: unknown): Combatiente | null => {
     investidura: recurso(v.investidura),
     defensas: { fisica: entero(d.fisica, 10), cognitiva: entero(d.cognitiva, 10), espiritual: entero(d.espiritual, 10) },
     desvio: Math.max(0, entero(v.desvio)),
+    desvioNota: texto(v.desvioNota),
     estados: lista(v.estados, (e) => (esObj(e) && texto(e.id) ? { id: texto(e.id), valor: texto(e.valor) } : null)),
     inmunidades: lista(v.inmunidades, (s) => (typeof s === 'string' && s ? s : null)),
     ataques: lista(v.ataques, ataque),
@@ -302,7 +307,7 @@ const escenaPropia = (v: unknown): EscenaPropia | null =>
         imagenes: lista(v.imagenes, (i) => (esObj(i) && texto(i.url) ? { url: texto(i.url), titulo: texto(i.titulo) } : null)),
         enemigos: lista(v.enemigos, (e) =>
           esObj(e) && texto(e.nombre)
-            ? { nombre: texto(e.nombre), cantidad: Math.max(1, entero(e.cantidad, 1)), adversarioId: typeof e.adversarioId === 'number' ? e.adversarioId : null }
+            ? { nombre: texto(e.nombre), cantidad: Math.min(MAX_CANTIDAD, Math.max(1, entero(e.cantidad, 1))), adversarioId: typeof e.adversarioId === 'number' ? e.adversarioId : null }
             : null),
       }
     : null
@@ -339,13 +344,37 @@ const tiradaPrivada = (v: unknown): TiradaPrivada | null =>
     ? { id: idDe(v.id), en: texto(v.en, ahoraIso()), quien: texto(v.quien, 'Director'), etiqueta: texto(v.etiqueta), resultado: v.resultado as unknown as AnyRollResult }
     : null
 
+/**
+ * A hand-edited or pasted document may repeat ids or a character: ids are made unique again (encounters, combatants) and a
+ * character stays only in the first fight it appears in, as the whole screen assumes
+ */
+function unicos(encuentros: Encuentro[]) {
+  const idsEncuentro = new Set<string>()
+  const idsCombatiente = new Set<string>()
+  const personajes = new Set<number>()
+  for (const e of encuentros) {
+    if (idsEncuentro.has(e.id)) e.id = nuevoId()
+    idsEncuentro.add(e.id)
+    e.combatientes = e.combatientes.filter((x) => {
+      if (x.characterId !== null) {
+        if (personajes.has(x.characterId)) return false
+        personajes.add(x.characterId)
+      }
+      if (idsCombatiente.has(x.id)) x.id = nuevoId()
+      idsCombatiente.add(x.id)
+      return true
+    })
+  }
+  return encuentros
+}
+
 export function normalizarEstado(raw: unknown): PantallaEstado {
   const o = esObj(raw) ? raw : {}
   const ref = esObj(o.escenaActual) && texto(o.escenaActual.escenaId) ? o.escenaActual : null
   const marcas: Record<string, string> = {}
   if (esObj(o.marcas)) for (const [k, f] of Object.entries(o.marcas)) if (typeof f === 'string') marcas[k] = f
   // Version 1 kept a single encounter in `encuentro`
-  const encuentros = lista(Array.isArray(o.encuentros) ? o.encuentros : [o.encuentro], encuentro).slice(0, MAX_ENCUENTROS)
+  const encuentros = unicos(lista(Array.isArray(o.encuentros) ? o.encuentros : [o.encuentro], encuentro).slice(0, MAX_ENCUENTROS))
   const activo = encuentros.find((e) => e.id === o.encuentroActivo) ?? encuentros[0]
   return {
     version: VERSION_ESTADO,
@@ -475,7 +504,8 @@ export function personajeEnCombate(b: PantallaEstado, characterId: number): { en
 
 /**
  * Moves a combatant to another open encounter with its health, resources and conditions. It has not acted yet in the other
- * fight's round; a namesake already there gives it the next number («Bandido 3»). Returns false when nothing moved.
+ * fight's round. A character keeps its name; an enemy with a namesake there joins its series («Guardia 1, Guardia 2»).
+ * Returns false when nothing moved.
  */
 export function moverCombatiente(b: PantallaEstado, id: string, destinoId: string): boolean {
   const origen = encuentroDe(b, id)
@@ -483,8 +513,9 @@ export function moverCombatiente(b: PantallaEstado, id: string, destinoId: strin
   const x = origen?.combatientes.find((y) => y.id === id)
   if (!origen || !destino || origen === destino || !x) return false
   origen.combatientes = origen.combatientes.filter((y) => y !== x)
-  const nombres = destino.combatientes.map((y) => y.nombre)
-  if (nombres.includes(x.nombre)) [x.nombre] = nombresNuevos(x.nombre.replace(/\s+\d+$/, ''), 1, nombres)
+  if (x.characterId === null && destino.combatientes.some((y) => y.nombre === x.nombre)) {
+    [x.nombre] = nombrarSerie(destino, x.nombre.replace(/\s+\d+$/, ''), 1)
+  }
   x.actuoRapido = false
   x.actuoLento = false
   destino.combatientes.push(x)
@@ -583,13 +614,18 @@ export const caidosDe = (enc: Encuentro) => [
 export const salidasDe = (enc: Encuentro, motivo: MotivoSalida) => enc.retirados.filter((r) => r.motivo === motivo).map((r) => r.nombre)
 
 /**
- * Names for `cantidad` new combatants called `base` in `enc`, so a group reads «Guardia 1, Guardia 2, Guardia 3»: a namesake
- * without a number becomes «base 1» when another one arrives, and the new ones go on from the highest number.
+ * Names for `cantidad` new combatants called `base` in `enc`, so a group reads «Guardia 1, Guardia 2, Guardia 3»: an enemy
+ * namesake without a number becomes «base 1» when another one arrives (a character is never renamed), and the new ones go on
+ * from the highest number, also counting those already taken off the screen (the summary never lists two «Bandido 1»).
  */
 export function nombrarSerie(enc: Encuentro, base: string, cantidad: number): string[] {
-  const solo = enc.combatientes.find((x) => x.nombre === base)
-  if (solo && !enc.combatientes.some((x) => x.nombre === `${base} 1`)) solo.nombre = `${base} 1`
-  return nombresNuevos(base, cantidad, enc.combatientes.map((x) => x.nombre))
+  const usados = [...enc.combatientes.map((x) => x.nombre), ...enc.retirados.map((r) => r.nombre)]
+  const solo = enc.combatientes.find((x) => x.nombre === base && x.characterId === null)
+  if (solo && !usados.includes(`${base} 1`)) {
+    solo.nombre = `${base} 1`
+    usados.push(solo.nombre)
+  }
+  return nombresNuevos(base, cantidad, usados)
 }
 
 /**
@@ -597,7 +633,7 @@ export function nombrarSerie(enc: Encuentro, base: string, cantidad: number): st
  * («Nadia de la Era 1» is not number 1 of anything), so a PJ always shows its initial
  */
 export const marcaDe = (c: Pick<Combatiente, 'nombre' | 'bando'>) =>
-  (c.bando === 'pnj' ? /\s(\d{1,3})$/.exec(c.nombre.trim())?.[1] : undefined) ?? (c.nombre.trim()[0]?.toUpperCase() ?? '?')
+  (c.bando === 'pnj' ? /\s(\d{1,3})$/.exec(c.nombre.trim())?.[1] : undefined) ?? (Array.from(c.nombre.trim())[0]?.toUpperCase() ?? '?')
 
 /**
  * Names for `cantidad` new combatants called `base`, numbered after those already in the encounter («Bandido 3», «Bandido 4»).

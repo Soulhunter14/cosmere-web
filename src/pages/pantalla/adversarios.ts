@@ -7,7 +7,7 @@ import type { Character, Era, GlobalNpc } from '../../types'
 import type { AttrField, HabilidadDef } from '../../worlds/types'
 import type { SkillField } from '../../lib/talentGraph'
 import { COLUMNAS_COSMERE } from '../../worlds/skills'
-import { nuevoId, type AtaqueDef, type Bando, type Combatiente, type DadoDano, type Defensas, type Rango } from './estado'
+import { MAX_CANTIDAD, nuevoId, type AtaqueDef, type Bando, type Combatiente, type DadoDano, type Defensas, type Rango } from './estado'
 
 // ── Catalog text ─────────────────────────────────────────────────────────────
 
@@ -45,9 +45,18 @@ export function desvioDe(texto: string): number {
 }
 
 /** «Inmunidades: Afligido, Agotado, Aturdido.» → ['Afligido', 'Agotado', 'Aturdido'] */
+/**
+ * What limits the deflect, when the line says so: «Desvío: 5 solo contra laceración (ascendencia kandra).» → «solo contra
+ * laceración»; «Desvío: 0, a menos que…» → «a menos que…». The armour that gives it, in brackets («(cuero)»), is not a limit → ''
+ */
+export function desvioNotaDe(texto: string): string {
+  const m = /Desv[ií]o:\s*\d+\s*([^\n.]*)/i.exec(texto)
+  return m ? m[1].replace(/\([^)]*\)/g, '').replace(/^[\s,;:]+|[\s,;:]+$/g, '').replace(/\s{2,}/g, ' ') : ''
+}
+
 export function inmunidadesDe(texto: string): string[] {
   const m = /Inmunidades:\s*([^.\n]+)/i.exec(texto)
-  return m ? m[1].split(/,|\by\b/).map((s) => s.trim()).filter(Boolean) : []
+  return m ? m[1].split(/,|\by\b|\be\b/).map((s) => s.trim()).filter(Boolean) : []
 }
 
 const RE_IMPACTO = /Impacto:?\s*\d+\s*\((\d+)d(\d+)(?:\s*\+\s*(\d+))?\)\s*(esp\.?)?/i
@@ -172,6 +181,7 @@ const base = (bando: Bando, nombre: string): Combatiente => ({
   investidura: { actual: 0, max: 0 },
   defensas: { fisica: 10, cognitiva: 10, espiritual: 10 },
   desvio: 0,
+  desvioNota: '',
   estados: [],
   inmunidades: [],
   ataques: [],
@@ -193,6 +203,7 @@ export function combatienteDeAdversario(npc: GlobalNpc, nombre: string, habilida
     investidura: lleno(npc.maxInvestiture),
     defensas: defensasLibroDe(textoFicha) ?? defensasDe(npc),
     desvio: desvioDe(textoFicha),
+    desvioNota: desvioNotaDe(textoFicha),
     inmunidades: inmunidadesDe(textoFicha),
     ataques: ataquesDe(textoFicha, era),
     habilidades: { ...habilidadesDe(npc, habilidades), ...habilidadesInvestidasDe(textoFicha) },
@@ -269,7 +280,9 @@ export function cantidadDe(texto: string | number): number {
   return m ? Math.max(1, Number(m[0])) : 1
 }
 
-/** One enemy per line: «3 Bandido», «Bandido x3», «Bandido» */
+const cantidadEntre = (s: string) => Math.min(MAX_CANTIDAD, Math.max(1, Number(s) || 1))
+
+/** One enemy per line: «3 Bandido», «Bandido x3», «Bandido»; at most `MAX_CANTIDAD` of each */
 export function enemigosDeTexto(texto: string): { nombre: string; cantidad: number }[] {
   return texto
     .split('\n')
@@ -277,9 +290,10 @@ export function enemigosDeTexto(texto: string): { nombre: string; cantidad: numb
     .filter(Boolean)
     .map((l) => {
       const delante = /^(\d+)\s*[x×]?\s+(.+)$/i.exec(l)
-      if (delante) return { nombre: delante[2].trim(), cantidad: Math.max(1, Number(delante[1])) }
-      const detras = /^(.+?)\s*[x×]\s*(\d+)$/i.exec(l)
-      if (detras) return { nombre: detras[1].trim(), cantidad: Math.max(1, Number(detras[2])) }
+      if (delante) return { nombre: delante[2].trim(), cantidad: cantidadEntre(delante[1]) }
+      // «Bandido x3», with a space before the x: the x of a name is not a count («Rax 2», «Fénix 2»)
+      const detras = /^(.+?)\s+[x×]\s*(\d+)$/i.exec(l)
+      if (detras) return { nombre: detras[1].trim(), cantidad: cantidadEntre(detras[2]) }
       return { nombre: l, cantidad: 1 }
     })
 }

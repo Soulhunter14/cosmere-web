@@ -6,7 +6,7 @@
 import type { Character, GlobalNpc } from '../../types'
 import type { HabilidadDef } from '../../worlds/types'
 import {
-  MAX_ENCUENTROS, anotar, caidosDe, encuentroEnPantalla, moverCombatiente, nombrarSerie, nombresNuevos, nuevoEncuentro, salidasDe,
+  MAX_CANTIDAD, MAX_ENCUENTROS, anotar, caidosDe, encuentroEnPantalla, moverCombatiente, nombrarSerie, nombresNuevos, nuevoEncuentro, salidasDe,
   type Bando, type Encuentro, type PantallaEstado, type Rango,
 } from './estado'
 import { buscarAdversario, combatienteDeAdversario, combatienteDePersonaje, combatienteLibre, type EraNum } from './adversarios'
@@ -58,11 +58,18 @@ export function cerrarEncuentro(b: PantallaEstado, id: string, ultimoDiario: num
 /** «Bandido (Ojos de Pala)» → «Bandido»; «Ylt, Vigilante de la Verdad» → «Ylt»; «Khornak adulto» stays */
 export const nombreBase = (nombre: string) => nombre.replace(/\([^)]*\)/g, '').split(',')[0].replace(/\s+/g, ' ').trim() || nombre.trim()
 
-/** `era`: the campaign's (1 | 2), so the stat block only brings the attacks of that era; null in a world without eras */
+/** At least 1 and at most `MAX_CANTIDAD` combatants per addition */
+const acotar = (cantidad: number) => Math.min(MAX_CANTIDAD, Math.max(1, Math.trunc(cantidad) || 1))
+
+/**
+ * `era`: the campaign's (1 | 2), so the stat block only brings the attacks of that era; null in a world without eras. Without
+ * `nombre` the combatants take the catalog's name as it is («Quimera hemalúrgica, líder de manada» is not the plain one); with
+ * the name of an adventure character it is shortened («Ylt, Vigilante de la Verdad» → «Ylt»).
+ */
 export function anadirAdversario(
-  enc: Encuentro, npc: GlobalNpc, cantidad: number, habilidades: HabilidadDef[], era: EraNum, nombre = npc.name, nota = '',
+  enc: Encuentro, npc: GlobalNpc, cantidad: number, habilidades: HabilidadDef[], era: EraNum, nombre?: string, nota = '',
 ) {
-  for (const n of nombrarSerie(enc, nombreBase(nombre), cantidad)) {
+  for (const n of nombrarSerie(enc, nombre === undefined ? npc.name : nombreBase(nombre), acotar(cantidad))) {
     const cb = combatienteDeAdversario(npc, n, habilidades, era)
     cb.notas = nota
     enc.combatientes.push(cb)
@@ -71,18 +78,26 @@ export function anadirAdversario(
 
 /**
  * Brings characters to `enc`: one in no fight joins as a new combatant; one fighting in another encounter moves here with its
- * health and conditions (a PJ is in one fight at a time). Returns how many joined.
+ * health and conditions (a PJ is in one fight at a time), and the log says so. One who had left this fight (fled, surrendered)
+ * is back in it, so the summary no longer counts it out. Returns how many joined.
  */
 export function anadirPersonajes(
   b: PantallaEstado, enc: Encuentro, personajes: Character[], habilidades: HabilidadDef[], contarBonos: boolean,
+  ultimoDiario: number | null = null,
 ): number {
   let n = 0
   for (const ch of personajes) {
     const otro = b.encuentros.find((e) => e.combatientes.some((c) => c.characterId === ch.id))
     if (otro === enc) continue
     const cb = otro?.combatientes.find((c) => c.characterId === ch.id)
-    if (cb) moverCombatiente(b, cb.id, enc.id)
-    else enc.combatientes.push(combatienteDePersonaje(ch, habilidades, contarBonos))
+    if (otro && cb) {
+      moverCombatiente(b, cb.id, enc.id)
+      anotar(b, { tipo: 'combate', etiqueta: 'Combate', texto: `${cb.nombre} pasa de «${otro.titulo}» a «${enc.titulo}»` }, ultimoDiario)
+    } else {
+      enc.combatientes.push(combatienteDePersonaje(ch, habilidades, contarBonos))
+    }
+    const nombres = [ch.name, cb?.nombre]
+    enc.retirados = enc.retirados.filter((r) => !nombres.includes(r.nombre))
     n++
   }
   return n
@@ -97,9 +112,10 @@ export interface DatosLibre {
   rango: Rango | null
 }
 
+/** A combatant typed by hand keeps the name as typed; at least 1 of health (at 0 it could never fall) */
 export function anadirLibre(enc: Encuentro, datos: DatosLibre, cantidad: number, nota = '') {
-  for (const n of nombrarSerie(enc, nombreBase(datos.nombre), cantidad)) {
-    const cb = combatienteLibre({ ...datos, nombre: n })
+  for (const n of nombrarSerie(enc, datos.nombre.trim() || 'Combatiente', acotar(cantidad))) {
+    const cb = combatienteLibre({ ...datos, nombre: n, salud: Math.max(1, datos.salud) })
     cb.notas = nota
     enc.combatientes.push(cb)
   }
@@ -126,7 +142,7 @@ export function anadirEnemigos(
       enlazados += e.cantidad
     } else {
       const aviso = 'Sin ficha en el catálogo: ajusta salud y defensas.'
-      anadirLibre(enc, { nombre: e.nombre, bando: 'pnj', salud: 10, defensa: 10, desvio: 0, rango: null }, e.cantidad, e.nota ? `${e.nota}\n${aviso}` : aviso)
+      anadirLibre(enc, { nombre: nombreBase(e.nombre), bando: 'pnj', salud: 10, defensa: 10, desvio: 0, rango: null }, e.cantidad, e.nota ? `${e.nota}\n${aviso}` : aviso)
       sinFicha.push(nombreBase(e.nombre))
     }
   }

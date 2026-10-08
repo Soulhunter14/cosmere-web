@@ -18,7 +18,7 @@ import type { EstadoDef } from '../../worlds/types'
 import { guardarPreferencia, leerPreferencia, usePantalla } from './contexto'
 import {
   FASES, FASE_INFO, MAX_ENCUENTROS, actuoEnFase, anotar, aplicarDano, avanzarFase, curar, dejarACero, encuentroDe, encuentroEnPantalla,
-  guardarTiradaPrivada, juegaEnFase, marcaDe, moverCombatiente, nombrarSerie, nuevoId, pasoRecurso, personajeEnCombate, registrarCambio, retirarCaidos,
+  guardarTiradaPrivada, juegaEnFase, marcaDe, moverCombatiente, nombrarSerie, nombresNuevos, nuevoId, pasoRecurso, personajeEnCombate, registrarCambio, retirarCaidos,
   sacarDelCombate, tramo,
   type AtaqueDef, type Bando, type Combatiente, type Encuentro, type Fase, type MotivoSalida, type PantallaEstado, type Rango,
 } from './estado'
@@ -70,7 +70,7 @@ export function PanelEncuentro() {
   const todoElGrupo = () =>
     actualizar((b) => {
       const libres = personajes.filter((ch) => !personajeEnCombate(b, ch.id))
-      anadirPersonajes(b, asegurarEncuentro(b, 'Encuentro', ultimoDiario), libres, cfg.habilidades, cfg.features.bonosServidor)
+      anadirPersonajes(b, asegurarEncuentro(b, 'Encuentro', ultimoDiario), libres, cfg.habilidades, cfg.features.bonosServidor, ultimoDiario)
     })
 
   if (!enc) {
@@ -123,7 +123,7 @@ export function PanelEncuentro() {
                 key={e.id}
                 type="button"
                 aria-pressed={on}
-                onClick={() => actualizar((b) => { b.encuentroActivo = e.id })}
+                onClick={() => { if (!on) actualizar((b) => { b.encuentroActivo = e.id }) }}
                 className="ui-btn"
                 style={{
                   ...buttonReset, flex: '1 1 0', minWidth: 170, display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 12px', textAlign: 'left',
@@ -136,7 +136,7 @@ export function PanelEncuentro() {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.titulo}</span>
                 </span>
                 <span style={{ fontSize: fs.xs, color: c.muted, fontVariantNumeric: 'tabular-nums' }}>
-                  Ronda {e.ronda} · {FASE_INFO[e.fase].label}{faltan ? ` · faltan ${faltan}` : ''}
+                  Ronda {e.ronda} · {FASE_INFO[e.fase].label}{faltan ? ` · falta${faltan === 1 ? '' : 'n'} ${faltan}` : ''}
                 </span>
               </button>
             )
@@ -191,10 +191,12 @@ export function PanelEncuentro() {
               {varios ? 'Resto del grupo' : 'Todo el grupo'}
             </Button>
           )}
-          {estado.encuentros.length < MAX_ENCUENTROS && (
+          {estado.encuentros.length < MAX_ENCUENTROS ? (
             <Button variant="secondary" icon={<Swords size={16} aria-hidden />} onClick={() => setSimultaneo(true)}>
               Combate simultáneo
             </Button>
+          ) : (
+            <span style={{ alignSelf: 'center', fontSize: fs.xs, color: c.subtle }}>Máximo {MAX_ENCUENTROS} combates a la vez</span>
           )}
           <Button variant="ghost" onClick={() => setTerminando(true)} style={{ marginLeft: 'auto' }}>
             Terminar combate
@@ -354,7 +356,7 @@ function HojaSimultaneo({ onClose, onCreado }: { onClose: () => void; onCreado: 
   const empezar = () => {
     actualizar((b) => {
       const enc = abrirEncuentro(b, titulo, ultimoDiario)
-      anadirPersonajes(b, enc, personajes.filter((ch) => marcados.includes(ch.id)), cfg.habilidades, cfg.features.bonosServidor)
+      anadirPersonajes(b, enc, personajes.filter((ch) => marcados.includes(ch.id)), cfg.habilidades, cfg.features.bonosServidor, ultimoDiario)
     })
     onCreado()
   }
@@ -374,7 +376,7 @@ function HojaSimultaneo({ onClose, onCreado }: { onClose: () => void; onCreado: 
       }
     >
       <div style={stack(14)}>
-        <Field label="Título" hint="Dónde o contra quién; si lo dejas vacío, «Encuentro 2».">
+        <Field label="Título" hint="Dónde o contra quién. Si lo dejas vacío, se llama «Encuentro» con su número.">
           <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="En el muelle" data-autofocus />
         </Field>
         {personajes.length > 0 && (
@@ -589,6 +591,7 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted }}>
           <CosmereIcon name="marco-desvio" size={18} style={{ color: tone.topacio.fg }} />
           Desvío <strong style={{ ...numeral, fontSize: fs.md, color: c.text }}>{cb.desvio}</strong>
+          {cb.desvioNota && <span style={{ fontSize: fs.xs, color: c.subtle }}>({cb.desvioNota})</span>}
         </span>
         {cb.inmunidades.length > 0 && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.subtle }}>
@@ -771,7 +774,7 @@ const ICONO_COSTE: Record<string, string> = { '1': 'accion-1', '2': 'accion-2', 
 function HojaFicha({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
   const { cId } = usePantalla()
   const era = eraNumero(useEra())
-  const { data: catalogo, isLoading } = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
+  const { data: catalogo, isLoading, isError } = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
   const npc = catalogo?.find((n) => n.id === cb.adversarioId)
   const ocultas = npc ? `${npc.talentos}\n${npc.notas}`.split('\n').filter((l) => deOtraEra(l, era)).length : 0
   return (
@@ -786,7 +789,9 @@ function HojaFicha({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
       {isLoading ? (
         <Spinner label="Cargando la ficha…" />
       ) : !npc ? (
-        <p style={{ fontSize: fs.sm, color: c.muted }}>Este adversario ya no está en el catálogo.</p>
+        <p style={{ fontSize: fs.sm, color: c.muted }}>
+          {isError ? 'No se pudo cargar el catálogo de adversarios. Cierra la ficha y vuelve a abrirla.' : 'Este adversario ya no está en el catálogo.'}
+        </p>
       ) : (
         <div style={stack(18)}>
           <SeccionFicha titulo="Rasgos" texto={npc.talentos} era={era} />
@@ -926,7 +931,7 @@ function HojaSalud({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
             {restar ? (
               <>
                 <span>Daño <strong style={numeral}>{n}</strong></span>
-                <span style={{ color: tone.topacio.fg, fontWeight: 650 }}>− {cb.desvio} por desvío</span>
+                <span style={{ color: tone.topacio.fg, fontWeight: 650 }}>− {cb.desvio} por desvío{cb.desvioNota ? ` (${cb.desvioNota})` : ''}</span>
                 <span>=</span>
                 <strong style={{ ...numeral, fontSize: fs.xl }}>{sufrido}</strong>
               </>
@@ -939,7 +944,7 @@ function HojaSalud({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
         {cb.desvio > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: fs.sm, color: c.text }}>
             <span>
-              Restar el desvío ({cb.desvio})
+              Restar el desvío ({cb.desvio}{cb.desvioNota ? ` · ${cb.desvioNota}` : ''})
               <span style={{ display: 'block', fontSize: fs.xs, color: c.subtle }}>
                 Energía, golpe y laceración. Quítalo para el daño espiritual o vital, o si ya lo has restado tú.
               </span>
@@ -1101,7 +1106,7 @@ function HojaEditar({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
         x.bando = f.bando
         x.rango = f.rango === 'ninguno' ? null : f.rango
         const ajusta = (r: { actual: number; max: number }, max: number) => { r.actual = Math.min(max, r.actual + Math.max(0, max - r.max)); r.max = max }
-        ajusta(x.salud, num(f.salud))
+        ajusta(x.salud, num(f.salud, 1))
         ajusta(x.concentracion, num(f.concentracion))
         ajusta(x.investidura, num(f.investidura))
         x.defensas = { fisica: num(f.fisica), cognitiva: num(f.cognitiva), espiritual: num(f.espiritual) }
@@ -1121,6 +1126,7 @@ function HojaEditar({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
       enc.combatientes.push({
         ...structuredClone(x), id: nuevoId(), nombre, characterId: null, derrotado: false, estados: [],
         salud: { ...x.salud, actual: x.salud.max }, actuoRapido: false, actuoLento: false, reaccionUsada: false,
+        concentracion: { ...x.concentracion, actual: x.concentracion.max }, investidura: { ...x.investidura, actual: x.investidura.max },
       })
     })
     onClose()
@@ -1131,7 +1137,10 @@ function HojaEditar({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
     actualizar((b) => {
       const origen = encuentroDe(b, cb.id)
       if (origen && moverCombatiente(b, cb.id, destino.id)) {
-        anotar(b, { tipo: 'combate', etiqueta: 'Combate', texto: `${cb.nombre} pasa de «${origen.titulo}» a «${destino.titulo}»` }, ultimoDiario)
+        // An enemy may join the series of its namesakes there under another number
+        const ahora = encuentroDe(b, cb.id)?.combatientes.find((y) => y.id === cb.id)?.nombre ?? cb.nombre
+        const como = ahora !== cb.nombre ? ` como ${ahora}` : ''
+        anotar(b, { tipo: 'combate', etiqueta: 'Combate', texto: `${cb.nombre} pasa de «${origen.titulo}» a «${destino.titulo}»${como}` }, ultimoDiario)
       }
     })
     onClose()
@@ -1196,7 +1205,7 @@ function HojaEditar({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
           </div>
         </div>
       </Sheet>
-      {quitando && <HojaRetirar cb={cb} onClose={() => { setQuitando(false); onClose() }} />}
+      {quitando && <HojaRetirar cb={cb} onClose={() => setQuitando(false)} onRetirado={onClose} />}
     </>
   )
 }
@@ -1211,9 +1220,13 @@ const SALIDAS: { id: Salida; titulo: string; detalle: string; t: Tone; bitacora?
   { id: 'quitar', titulo: 'Quitar sin más', detalle: 'Desaparece del encuentro sin dejar rastro, con su salud y sus estados: para quien se añadió por error.', t: tone.rubi },
 ]
 
-/** Takes a combatant out of the fight, saying why: this sheet is also the confirmation of the step */
-function HojaRetirar({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
+/**
+ * Takes a combatant out of the fight, saying why. `onClose` cancels (back to where it was opened) and `onRetirado` follows the
+ * exit; «Quitar sin más» deletes without a trace, so it asks once more
+ */
+function HojaRetirar({ cb, onClose, onRetirado = onClose }: { cb: Combatiente; onClose: () => void; onRetirado?: () => void }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
+  const [confirmando, setConfirmando] = useState(false)
   // A fallen enemy can no longer flee or surrender: it leaves as defeated (or is removed)
   const caido = cb.derrotado && cb.bando === 'pnj'
   const opciones = caido ? SALIDAS.filter((s) => s.id === 'derrotado' || s.id === 'quitar') : SALIDAS
@@ -1235,47 +1248,57 @@ function HojaRetirar({ cb, onClose }: { cb: Combatiente; onClose: () => void }) 
       sacarDelCombate(enc, cb.id, motivo)
       anotar(b, { tipo: 'combate', etiqueta: 'Combate', texto: `${elegida.bitacora?.(x.nombre) ?? x.nombre}${varios ? ` («${enc.titulo}»)` : ''}` }, ultimoDiario)
     })
-    onClose()
+    onRetirado()
   }
 
   return (
-    <Sheet
-      open
-      onClose={onClose}
-      title={`Retirar a ${cb.nombre} del combate`}
-      maxWidth={520}
-      footer={
-        <>
-          <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
-          <Button variant="danger" size="lg" style={{ flex: 2 }} onClick={retirar}>
-            {motivo === 'quitar' ? 'Quitar' : 'Retirar'}
-          </Button>
-        </>
-      }
-    >
-      <div role="radiogroup" aria-label="Por qué sale del combate" style={stack(8)}>
-        {opciones.map((s) => {
-          const on = s.id === motivo
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => setMotivo(s.id)}
-              className="ui-btn"
-              style={{
-                ...buttonReset, display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: radius.md, textAlign: 'left',
-                background: on ? s.t.bg : c.s2, border: `1px solid ${on ? s.t.border : c.border}`,
-              }}
-            >
-              <span style={{ fontSize: fs.base, fontWeight: 650, color: on ? s.t.fg : c.text }}>{s.titulo}</span>
-              <span style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.4 }}>{s.detalle}</span>
-            </button>
-          )
-        })}
-      </div>
-    </Sheet>
+    <>
+      <Sheet
+        open={!confirmando}
+        onClose={onClose}
+        title={`Retirar a ${cb.nombre} del combate`}
+        maxWidth={520}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
+            <Button variant="danger" size="lg" style={{ flex: 2 }} onClick={() => (motivo === 'quitar' ? setConfirmando(true) : retirar())}>
+              {motivo === 'quitar' ? 'Quitar' : 'Retirar'}
+            </Button>
+          </>
+        }
+      >
+        <div role="radiogroup" aria-label="Por qué sale del combate" style={stack(8)}>
+          {opciones.map((s) => {
+            const on = s.id === motivo
+            return (
+              <button
+                key={s.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setMotivo(s.id)}
+                className="ui-btn"
+                style={{
+                  ...buttonReset, display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: radius.md, textAlign: 'left',
+                  background: on ? s.t.bg : c.s2, border: `1px solid ${on ? s.t.border : c.border}`,
+                }}
+              >
+                <span style={{ fontSize: fs.base, fontWeight: 650, color: on ? s.t.fg : c.text }}>{s.titulo}</span>
+                <span style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.4 }}>{s.detalle}</span>
+              </button>
+            )
+          })}
+        </div>
+      </Sheet>
+      <ConfirmDialog
+        open={confirmando}
+        title={`¿Quitar a ${cb.nombre} sin más?`}
+        message="Desaparece del encuentro con su salud y sus estados, y ni la bitácora ni el resumen lo cuentan."
+        confirmLabel="Quitar"
+        onConfirm={retirar}
+        onCancel={() => setConfirmando(false)}
+      />
+    </>
   )
 }
 
@@ -1283,7 +1306,10 @@ function HojaTitulo({ enc, onClose }: { enc: Encuentro; onClose: () => void }) {
   const { actualizar } = usePantalla()
   const [valor, setValor] = useState(enc.titulo)
   const guardar = () => {
-    actualizar((b) => conEncuentro(b, enc.id, (e) => { e.titulo = valor.trim() || 'Encuentro' }))
+    actualizar((b) => conEncuentro(b, enc.id, (e) => {
+      const [titulo] = nombresNuevos(valor.trim() || 'Encuentro', 1, b.encuentros.filter((x) => x.id !== e.id).map((x) => x.titulo))
+      e.titulo = titulo
+    }))
     onClose()
   }
   return (
@@ -1337,7 +1363,7 @@ function HojaAnadir({ onClose }: { onClose: () => void }) {
         const npc = catalogo.data?.find((n) => n.id === elegido)
         if (npc) anadirAdversario(enc, npc, cantidad, cfg.habilidades, era)
       } else if (origen === 'personajes') {
-        anadirPersonajes(b, enc, personajes.filter((ch) => marcados.includes(ch.id)), cfg.habilidades, cfg.features.bonosServidor)
+        anadirPersonajes(b, enc, personajes.filter((ch) => marcados.includes(ch.id)), cfg.habilidades, cfg.features.bonosServidor, ultimoDiario)
       } else if (libre.nombre.trim()) {
         const n = (s: string) => Math.max(0, Math.trunc(Number(s) || 0))
         anadirLibre(enc, {
@@ -1351,8 +1377,10 @@ function HojaAnadir({ onClose }: { onClose: () => void }) {
 
   const listo =
     origen === 'catalogo' ? elegido !== null : origen === 'personajes' ? marcados.length > 0 : libre.nombre.trim().length > 0
+  const elegidoNpc = catalogo.data?.find((n) => n.id === elegido)
   const textoBoton =
-    origen !== 'personajes' ? `Añadir ${cantidad}`
+    origen === 'catalogo' ? (elegidoNpc ? `Añadir ${cantidad} × ${elegidoNpc.name}` : 'Añadir')
+      : origen === 'libre' ? `Añadir ${cantidad}`
       : marcados.length ? `Añadir ${marcados.length} personaje${marcados.length === 1 ? '' : 's'}` : 'Añadir personajes'
 
   return (
@@ -1390,6 +1418,9 @@ function HojaAnadir({ onClose }: { onClose: () => void }) {
             {catalogo.isError && <ErrorMessage message="No se pudo cargar el catálogo de adversarios." />}
             {catalogo.data?.length === 0 && (
               <p style={{ fontSize: fs.sm, color: c.muted }}>Este mundo aún no tiene adversarios en el catálogo (Director → NPCs). Usa «Libre».</p>
+            )}
+            {!!catalogo.data?.length && filtrados.length === 0 && (
+              <p style={{ fontSize: fs.sm, color: c.muted }}>Ningún adversario coincide con «{busca.trim()}».</p>
             )}
             <ul aria-label="Adversarios" style={{ ...listReset, ...stack(6), maxHeight: 320, overflowY: 'auto' }}>
               {filtrados.map((n) => {
@@ -1460,7 +1491,7 @@ function HojaAnadir({ onClose }: { onClose: () => void }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
               <Field label="Salud">
-                <Input type="number" inputMode="numeric" min={0} value={libre.salud} onChange={(e) => setLibre((p) => ({ ...p, salud: e.target.value }))} />
+                <Input type="number" inputMode="numeric" min={1} value={libre.salud} onChange={(e) => setLibre((p) => ({ ...p, salud: e.target.value }))} />
               </Field>
               <Field label="Defensas" hint="Las tres iguales; ajústalas después.">
                 <Input type="number" inputMode="numeric" min={0} value={libre.defensa} onChange={(e) => setLibre((p) => ({ ...p, defensa: e.target.value }))} />

@@ -181,6 +181,7 @@ function TiradaDirector() {
   const [privada, setPrivada] = useState(true)
   const [ultima, setUltima] = useState<AnyRollResult | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [envioFallido, setEnvioFallido] = useState(false)
 
   const quien = combatientes.find((x) => x.id === quienId) ?? null
   const nombre = quien?.nombre ?? 'Director'
@@ -224,7 +225,11 @@ function TiradaDirector() {
     } else {
       // Public: the server broadcasts it back and the log shows it like any other roll of the table
       setEnviando(true)
-      diceRollsApi.create(cId, r.type, r, etiqueta, quien ? nombre : null).catch(() => {}).finally(() => setEnviando(false))
+      // The table only sees it once the server broadcasts it: say so when it did not get there
+      setEnvioFallido(false)
+      diceRollsApi.create(cId, r.type, r, etiqueta, quien ? nombre : null)
+        .catch(() => setEnvioFallido(true))
+        .finally(() => setEnviando(false))
     }
   }
 
@@ -371,6 +376,11 @@ function TiradaDirector() {
       </div>
 
       {ultima && <Resultado r={ultima} />}
+      {envioFallido && (
+        <p role="alert" style={{ fontSize: fs.sm, color: tone.rubi.fg, fontWeight: 600 }}>
+          No se pudo enviar a la mesa: la tirada solo la ves tú. Comprueba la conexión y vuelve a tirar.
+        </p>
+      )}
     </section>
   )
 }

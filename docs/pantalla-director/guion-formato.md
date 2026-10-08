@@ -38,13 +38,14 @@ Las escenas añadidas (del libro, in situ o importadas) entran **tras la escena 
 - «Prompt de la siguiente sesión» lleva lo jugado en la última sesión cerrada (con sus resultados) y las escenas pendientes.
 
 Los avances de los personajes (nivel, metas, Ideales) solo se **recomiendan**: se aplican en la ficha de cada personaje, nunca
-desde la pantalla.
+desde la pantalla. Lo mismo vale para lo que dan las **decisiones** (ver «Decisiones» más abajo): la pantalla lo suma y lo guarda,
+y la ficha se cambia a mano.
 
 ## El ciclo
 
 1. **Borrador.** En Sesión, «Prompt de la siguiente sesión» copia un *prompt* con los PJ (caminos, propósito, obstáculo y metas
    activas), la última crónica del diario, el estado de cada escena de la sesión (jugada, en juego o sin jugar, con las pruebas
-   superadas o falladas, el empeño y los contadores) y las notas de la bitácora. Se pega en la IA, mejor con
+   superadas o falladas, lo que decidió cada personaje, el empeño y los contadores) y las notas de la bitácora. Se pega en la IA, mejor con
    el libro de la aventura a mano.
 2. **Importar.** «Importar» → pegar el Markdown o elegir el `.md`. La hoja lista las escenas del archivo con una casilla: se
    desmarcan las que no se quieran. *Añadir y actualizar* conserva lo marcado en las escenas con el mismo grupo y título;
@@ -95,6 +96,13 @@ Qué pasa y cómo dirigirlo, para el director. **Negrita** y *cursiva*.
 ### Caminos
 - **Si intentan …**: qué ocurre.
 
+### Decisión: ¿Qué hacéis con el prisionero?
+
+prueba: Persuasión CD 12 · éxito: +1 al atributo de la habilidad
+
+- Lo soltáis. **Meta** Devolverle el favor · **Eco** El prisionero vuelve en el capítulo 6
+- Lo entregáis. **Objeto** 20 marcos · **Eco** Los bandidos os buscan
+
 ### Claves de la escena
 - Lo que tiene que pasar para que la historia siga.
 
@@ -113,16 +121,65 @@ Qué pasa y cómo dirigirlo, para el director. **Negrita** y *cursiva*.
 | `enemigos:` | «2 Anguila aérea mayor, 2 Anguila aérea»: botón **Preparar encuentro** con las fichas del catálogo. El encuentro recuerda la escena y muestra sus reglas y contadores. |
 | `empeño:` | «6 éxitos antes de 4 fallos»: contador de éxitos y fallos con su resultado (se anota en la bitácora). |
 | `contadores:` | «Daño del barco, Días de más en Karanak»: contadores con +/− y «± Cantidad». |
+| `decide:` | Quién toma las decisiones de la escena: `todos` (por defecto), un legado (`convicto`) o el nombre de un PJ. |
 | `> …` | Recuadro «Leer en voz alta» con letra grande. |
 | `### Pruebas` | Cada viñeta «**Habilidad CD n**: …» o «**Habilidad contra …**: …» con su dificultad en grande y **Superada / Fallada**. |
 | `### PNJ` | Tarjetas; si el nombre o `ficha:` coincide con el catálogo, botón **Añadir al encuentro**. |
 | `### Para los PJ` | Ganchos por personaje. |
-| `### Caminos` | Ramas según lo que decidan los jugadores. |
+| `### Caminos` | Ramas según lo que decidan los jugadores (solo texto; para guardar lo elegido, `### Decisión`). |
+| `### Decisión: ¿…?` | Una pregunta con una viñeta por opción: botones que guardan lo que elige cada personaje y, si lleva `prueba:`, **Superada / Fallada**. Ver «Decisiones». |
 | `### Reglas del combate` | Efectos del campo de batalla; también se ven en el encuentro preparado desde la escena. |
 | `### Avances` | Avances recomendados (subir de nivel, un hito de meta, un Ideal). Solo se recomiendan: se aplican en la ficha. Un `- [ ]` de guiones antiguos se lee como viñeta. |
 | Otra `### Sección` | Se muestra tal cual (tablas de oportunidades, «Lo que sabe», visiones…). |
 
 Los metadatos van justo debajo del título, sin líneas en blanco. No se admite HTML, ni tablas, ni enlaces.
+
+## Decisiones
+
+Una sección `### Decisión: <pregunta>` es una elección que la pantalla **guarda por personaje**: sirve para sesiones guiadas como
+la sesión 0 de *El primer paso*, donde lo que se decide construye la hoja, y para cualquier elección que la historia tenga que
+recordar.
+
+```markdown
+### Decisión: El carcelero golpea a Pella. ¿Qué haces?
+
+Texto para el director (opcional). Un recuadro `>` también vale.
+
+prueba: CD 10 · éxito: +1 al atributo de la habilidad
+
+- Te interpones entre los dos. **Habilidad** +2 Atletismo · **Camino** Guerrero · **Metal** Peltre · **Eco** El carcelero le recuerda
+- Le paras la sangre con la manga. **Habilidad** +1 Medicina y +1 Disciplina · **Camino** Erudito · **Metal** Bronce
+```
+
+- **Opciones.** Una viñeta por opción. El texto hasta la primera clave en negrita es la opción; después, sus efectos, separados
+  por « · ». Todas las claves son opcionales:
+  - Para la ficha: `**Atributo** +1 Fuerza`, `**Habilidad** +2 Atletismo` (o «+1 Medicina y +1 Disciplina»), `**Pericia** …`,
+    `**Meta** …`, `**Objeto** …`.
+  - Marcas secretas del director: `**Camino** Guerrero`, `**Metal** Peltre` (varios con «y» o comas).
+  - Para la historia: `**Eco** …`, lo que volverá más adelante.
+- **Líneas de la decisión**, en su propio párrafo (con una línea en blanco antes y después): `decide:` (como el de la escena, que
+  sustituye para esta pregunta), `prueba: CD 10` (con la habilidad que da la opción elegida) o `prueba: Atletismo CD 12`, y
+  `éxito: …`. Si el éxito dice «+1 al atributo de la habilidad», el registro suma 1 al atributo de esa habilidad (Atletismo →
+  Fuerza); cualquier otro texto se apunta como premio.
+- **Quién decide.** `decide:` en la escena o en la sección: `todos` (o nada) son todos los personajes de la campaña; un legado
+  (`convicto`) o un nombre, los personajes que encajan. Con uno solo, cada opción es un botón; con varios, cada opción lleva una
+  ficha con el nombre de cada uno. Si ningún personaje encaja (una campaña sin legados, un invitado), se guarda con ese nombre y sin
+  personaje, y la pantalla lo avisa.
+- **En la mesa.** Tocar una opción la marca para ese personaje (tocarla otra vez la desmarca; tocar otra la cambia). Si la decisión
+  lleva prueba, aparece debajo con **Superada / Fallada**. Las dos cosas se anotan en la bitácora («Decisión», «Prueba»). En el
+  Libro original, las decisiones se leen pero no se marcan.
+- **Caminos y metales ocultos.** El ojo de cada decisión, y el interruptor del registro, muestran u ocultan las marcas secretas en
+  ese dispositivo (la tableta puede estar mirando a los jugadores). Están ocultas por defecto.
+
+**Dónde se guarda.** En el documento de la pantalla (`decisiones`, desde la versión 4 del estado), con la clave grupo + título de
+la escena + pregunta + personaje. Por eso sobrevive a **Terminar sesión**, a reimportar la escena y a borrarla: lo decidido sigue
+disponible en los capítulos siguientes. Cambiar el grupo, el título o la pregunta en el Markdown rompe el enlace con lo ya marcado
+(el registro lo conserva igual). Lo decidido en cada escena también va con ella al archivarse y en los *prompts*.
+
+**Registro de decisiones** (panel Grupo). Por personaje: lo que va a la ficha sumado (atributos, habilidades, pericias, metas y
+objetos), las marcas de camino y de metal contadas (la más marcada destaca: es la recomendación del final de la sesión 0), los ecos
+y cada decisión con su prueba. Una decisión mal marcada se quita desde aquí, con confirmación. La pantalla no cambia la ficha: el
+tope de 3 por atributo y los puntos de control se comprueban al pasarlo a mano.
 
 ## Imágenes
 

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowDown, ArrowUp, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Plus,
-  ScrollText, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
+  ScrollText, Signpost, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { diaryApi } from '../../api/diary'
@@ -27,6 +27,7 @@ import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, de
 import { copiarTexto, descargarTexto, promptSiguienteGuion, type EscenaJugada } from './exportar'
 import { ESCENA_META } from './meta'
 import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, NavegadorEscenas, TecladoNumerico, Tesela } from './piezas'
+import { DecisionGuion } from './DecisionGuion'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -39,6 +40,7 @@ const SECCION_META: Record<ClaseSeccion, { tone: Tone; icon: LucideIcon }> = {
   pnj: { tone: tone.esmeralda, icon: Users },
   pj: { tone: tone.gold, icon: UserRound },
   caminos: { tone: tone.topacio, icon: GitFork },
+  decision: { tone: tone.topacio, icon: Signpost },
   reglas: { tone: tone.rubi, icon: Swords },
   avances: { tone: tone.esmeralda, icon: TrendingUp },
   otra: { tone: tone.cuarzo, icon: Info },
@@ -137,7 +139,7 @@ function BorrarEscena({ escena, onCerrar }: { escena: EscenaPropia | null; onCer
     <ConfirmDialog
       open={!!escena}
       title={`¿Eliminar «${escena ? tituloDe(escena) : ''}»?`}
-      message="Se borra la escena de la sesión con sus pruebas marcadas, contadores y empeño. Esta acción no se puede deshacer."
+      message="Se borra la escena de la sesión con sus pruebas marcadas, contadores y empeño (lo que decidieron los personajes se queda en el registro). Esta acción no se puede deshacer."
       onConfirm={() => {
         if (escena) actualizar((b) => quitarEscena(b, escena.id))
         onCerrar()
@@ -375,7 +377,7 @@ function DetalleGuion({
       {e.imagenes.length > 0 && <Galeria imagenes={e.imagenes} />}
       {e.empeno && <TrackerEmpeno escenaId={esc.id} titulo={e.titulo} objetivo={e.empeno} />}
       {e.contadores.length > 0 && <Contadores key={esc.id} escenaId={esc.id} nombres={e.contadores} />}
-      {e.secciones.map((s, k) => <SeccionGuion key={`${s.titulo}-${k}`} seccion={s} escenaId={esc.id} titulo={e.titulo} escala={escala} />)}
+      {e.secciones.map((s, k) => <SeccionGuion key={`${s.titulo}-${k}`} seccion={s} escenaId={esc.id} e={e} escala={escala} />)}
       {e.enemigos.length > 0 && <EnemigosEscena esc={esc} e={e} />}
 
       <nav aria-label="Escenas vecinas" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingTop: 12, borderTop: `1px solid ${c.border}` }}>
@@ -419,7 +421,7 @@ export function DetalleEscenaLibro({ esc, escala, onEscala }: { esc: EscenaPropi
       )}
       <Bloques bloques={e.cuerpo} escala={escala} />
       {e.imagenes.length > 0 && <Galeria imagenes={e.imagenes} />}
-      {e.secciones.map((s, k) => <SeccionGuion key={`${s.titulo}-${k}`} seccion={s} escenaId={esc.id} titulo={e.titulo} escala={escala} soloLectura />)}
+      {e.secciones.map((s, k) => <SeccionGuion key={`${s.titulo}-${k}`} seccion={s} escenaId={esc.id} e={e} escala={escala} soloLectura />)}
       {e.enemigos.length > 0 && <EnemigosEscena esc={esc} e={e} />}
     </article>
   )
@@ -451,8 +453,12 @@ function Bloques({ bloques, escala }: { bloques: Bloque[]; escala: number }) {
 }
 
 function SeccionGuion({
-  seccion, escenaId, titulo, escala, soloLectura = false,
-}: { seccion: Seccion; escenaId: string; titulo: string; escala: number; soloLectura?: boolean }) {
+  seccion, escenaId, e, escala, soloLectura = false,
+}: { seccion: Seccion; escenaId: string; e: EscenaGuion; escala: number; soloLectura?: boolean }) {
+  const titulo = e.titulo
+  if (seccion.clase === 'decision') {
+    return <DecisionGuion seccion={seccion} grupo={e.grupo} titulo={e.titulo} decide={e.decide} escala={escala} soloLectura={soloLectura} />
+  }
   const meta = SECCION_META[seccion.clase]
   const Icon = meta.icon
   return (
@@ -752,10 +758,13 @@ export function ReglasDeEscena({ escenaId }: { escenaId: string }) {
 function resumenEscena(e: EscenaGuion): string {
   const pruebas = e.secciones.filter((s) => s.clase === 'pruebas').flatMap((s) => s.bloques).reduce((n, b) => n + (b.tipo === 'lista' ? b.items.length : 0), 0)
   const lecturas = [...e.cuerpo, ...e.secciones.flatMap((s) => s.bloques)].filter((b) => b.tipo === 'cita').length
+  const decisiones = e.secciones.filter((s) => s.clase === 'decision').length
   return [
     e.grupo && `Grupo: ${e.grupo}`,
+    e.decide && `decide: ${e.decide}`,
     lecturas && `${lecturas} lectura${lecturas === 1 ? '' : 's'} en voz alta`,
     pruebas && `${pruebas} prueba${pruebas === 1 ? '' : 's'}`,
+    decisiones && `${decisiones} decisi${decisiones === 1 ? 'ón' : 'ones'}`,
     e.imagenes.length && `${e.imagenes.length} imagen${e.imagenes.length === 1 ? '' : 'es'}`,
     e.enemigos.length && `enemigos: ${e.enemigos.map((x) => `${x.cantidad} ${x.nombre}`).join(', ')}`,
     e.empeno && `empeño ${e.empeno.exitos}/${e.empeno.fallos}`,

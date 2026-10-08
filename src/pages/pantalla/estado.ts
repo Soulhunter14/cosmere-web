@@ -7,7 +7,11 @@
 import type { AnyRollResult } from '../../utils/dice'
 import { foldText } from '../../lib/catalogo'
 
-export const VERSION_ESTADO = 3
+/**
+ * 4: `decisiones`. A release that does not know a field would drop it when it saves, so a newer document opens read only
+ * in an older release (`PantallaProvider`) instead of losing what the table decided.
+ */
+export const VERSION_ESTADO = 4
 /** Closed sessions kept in the document (the oldest ones are dropped) */
 const MAX_HISTORIAL = 30
 /** Closed sessions that keep the Markdown of their scenes; older ones keep only the titles and what the table noted (1 MB cap) */
@@ -128,6 +132,35 @@ export type ResultadoPrueba = 'exito' | 'fallo'
 
 export interface Trama { id: string; titulo: string; detalle: string; estado: EstadoTrama }
 
+/** What an option of a decision gives («**Atributo** +1 Fuerza», «**Camino** Guerrero», «**Eco** …») */
+export const CLAVES_EFECTO = ['atributo', 'habilidad', 'pericia', 'meta', 'objeto', 'camino', 'metal', 'eco'] as const
+export type ClaveEfecto = (typeof CLAVES_EFECTO)[number]
+export interface Efecto { clave: ClaveEfecto; valor: string }
+
+/**
+ * The option a character picked in a decision of the script (`### Decisión: …`). It is a copy of the option, not a reference:
+ * it reads the same after its scene is edited, played or gone, so what the table decided outlives the session (echoes).
+ */
+export interface Eleccion {
+  /** Title and group of the scene it was made in */
+  escena: string
+  grupo: string
+  pregunta: string
+  /** Campaign character who picked it, or null («Sin personaje») */
+  characterId: number | null
+  personaje: string
+  /** Text of the chosen option and what it gives */
+  opcion: string
+  efectos: Efecto[]
+  /** Test that comes with the choice («Atletismo CD 10»), '' = none; how it went (null = not marked) */
+  prueba: string
+  resultado: ResultadoPrueba | null
+  /** What a passed test gives («+1 al atributo de la habilidad») */
+  exito: string
+  /** ISO date when it was picked */
+  en: string
+}
+
 export interface EventoBitacora {
   id: string
   /** ISO date */
@@ -209,6 +242,11 @@ export interface PantallaEstado {
   empenos: Record<string, ProgresoEmpeno>
   contadores: Record<string, number>
   resultados: Record<string, ResultadoPrueba>
+  /**
+   * What each character picked in the decisions of the script, by `claveDecision` (scene group and title, question, character).
+   * Unlike the rest of the table state it is not removed with its scene: it is the record of what the table decided
+   */
+  decisiones: Record<string, Eleccion>
   /** Progress marks of the session: key (`claveEscenaPropia`) → ISO date when it was marked (older documents may keep marks of
    * the book, `aventura:…`, which nothing shows any more) */
   marcas: Record<string, string>
@@ -243,6 +281,7 @@ export const estadoVacio = (): PantallaEstado => ({
   empenos: {},
   contadores: {},
   resultados: {},
+  decisiones: {},
   marcas: {},
   tramas: [],
   encuentros: [],
@@ -380,6 +419,25 @@ function mapa<T>(v: unknown, f: (x: unknown) => T | null): Record<string, T> {
   return r
 }
 
+const eleccion = (v: unknown): Eleccion | null =>
+  esObj(v) && texto(v.pregunta) && texto(v.opcion)
+    ? {
+        escena: texto(v.escena),
+        grupo: texto(v.grupo),
+        pregunta: texto(v.pregunta),
+        characterId: typeof v.characterId === 'number' && Number.isFinite(v.characterId) ? Math.trunc(v.characterId) : null,
+        personaje: texto(v.personaje, 'Sin personaje') || 'Sin personaje',
+        opcion: texto(v.opcion),
+        efectos: lista(v.efectos, (x) => (esObj(x) && CLAVES_EFECTO.includes(x.clave as ClaveEfecto) && texto(x.valor)
+          ? { clave: x.clave as ClaveEfecto, valor: texto(x.valor) }
+          : null)),
+        prueba: texto(v.prueba),
+        resultado: v.resultado === 'exito' || v.resultado === 'fallo' ? v.resultado : null,
+        exito: texto(v.exito),
+        en: texto(v.en, ahoraIso()),
+      }
+    : null
+
 const evento = (v: unknown): EventoBitacora | null =>
   esObj(v) && texto(v.texto)
     ? { id: idDe(v.id), en: texto(v.en, ahoraIso()), tipo: una(v.tipo, TIPOS_EVENTO, 'apunte'), etiqueta: texto(v.etiqueta), texto: texto(v.texto) }
@@ -466,6 +524,7 @@ export function normalizarEstado(raw: unknown): PantallaEstado {
     empenos: mapa(o.empenos, (x) => (esObj(x) ? { exitos: Math.max(0, entero(x.exitos)), fallos: Math.max(0, entero(x.fallos)) } : null)),
     contadores: mapa(o.contadores, (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.trunc(x) : null)),
     resultados: mapa(o.resultados, (x) => (x === 'exito' || x === 'fallo' ? x : null)),
+    decisiones: mapa(o.decisiones, eleccion),
     marcas,
     tramas: lista(o.tramas, (t) =>
       esObj(t) && texto(t.titulo) ? { id: idDe(t.id), titulo: texto(t.titulo), detalle: texto(t.detalle), estado: una(t.estado, ESTADOS_TRAMA, 'abierta') } : null),
@@ -489,7 +548,18 @@ export const claveResultado = (escenaId: string, texto: string) => `${escenaId}:
 /** Counter of a script scene (in `contadores`) */
 export const claveContador = (escenaId: string, nombre: string) => `${escenaId}:${corta(nombre)}`
 
-/** Removes a script scene and everything the table noted on it (marks, test results, counters, endeavour) */
+/**
+ * Decision of a script scene (in `decisiones`). It goes by the scene's group and title, not its id, like the import does
+ * (`fusionarGuion`): the same scene imported again, or archived and imported back, finds what was decided in it
+ */
+export const prefijoDecision = (grupo: string, escena: string, pregunta: string) => `${corta(grupo)}|${corta(escena)}|${corta(pregunta)}|`
+export const claveDecision = (grupo: string, escena: string, pregunta: string, characterId: number | null) =>
+  `${prefijoDecision(grupo, escena, pregunta)}${characterId ?? '-'}`
+
+/**
+ * Removes a script scene and everything the table noted on it (marks, test results, counters, endeavour). What the characters
+ * decided in it stays (`decisiones`): it is the record of the story, not table state
+ */
 export function quitarEscena(b: PantallaEstado, id: string) {
   b.escenasPropias = b.escenasPropias.filter((e) => e.id !== id)
   if (b.escenaActual?.origen === 'propia' && b.escenaActual.escenaId === id) b.escenaActual = null

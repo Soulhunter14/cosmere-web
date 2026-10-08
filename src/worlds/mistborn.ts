@@ -11,6 +11,7 @@ import type { WorldConfig } from './types'
 import { HABILIDADES_COSMERE } from './skills'
 import { iconoCaminoMetal, iconoHumano, iconoKandra, iconoSangreKoloss } from './mistborn.icons'
 import { MISTBORN_TOPICS } from './mistborn.topics'
+import { conEstadosDelMundo } from './estados'
 
 export const MISTBORN: WorldConfig = {
   id: 'mistborn',
@@ -121,4 +122,9 @@ export const MISTBORN: WorldConfig = {
   tema: { dataWorld: 'mistborn', themeBg: { light: '#ebe8e6', dark: '#0c0b0d' } },
   iconos: { investidura: Flame, caminoInvestido: iconoCaminoMetal },
   loadData: () => import('./mistborn.data').then((m) => m.DATA),
+  // The Cosmere conditions plus Desprovisto and Mermado (L.310-311 / PDF 316-317)
+  estados: conEstadosDelMundo([
+    { id: 'desprovisto', nombre: 'Desprovisto', resumen: 'No puede usar el poder indicado ni sus talentos. Se elimina con «Beber vial».', valor: 'Poder, p. ej. Oro' },
+    { id: 'mermado', nombre: 'Mermado', resumen: 'Un atributo baja lo indicado; no cambia defensas ni máximos. Se acumula.', valor: 'Atributo, p. ej. Fuerza −1' },
+  ]),
 }

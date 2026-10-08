@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid } from 'lucide-react'
+import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid, Columns3 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useCampaignStore } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
@@ -52,6 +52,9 @@ export function Sidebar() {
   const gmNavItems = [
     { to: 'personajes', label: 'Personajes', icon: Users },
     { to: 'gm', label: 'Director', icon: Sword },
+    // «Pantalla del director» (a three-panel screen glyph): only on the desktop sidebar and the tablet rail; the phone bottom bar
+    // already has five items and reaches it from Director
+    { to: 'pantalla', label: 'Pantalla', icon: Columns3, soloAncho: true },
   ]
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
@@ -475,7 +478,7 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {isGm && gmNavItems.map(({ to, label, icon: Icon }) => (
+        {isGm && gmNavItems.filter((item) => !item.soloAncho).map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={linkTo(to)} className="tab-link tab-link--gm">
             <span className="tab-icon"><Icon size={20} aria-hidden /></span>
             <span>{label}</span>

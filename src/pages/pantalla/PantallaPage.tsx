@@ -10,7 +10,6 @@ import type { DiceRollResponse } from '../../api/diceRolls'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { Button, ConfirmDialog, ErrorMessage, IconButton, Spinner, Tabs, type TabItem } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
-import { CHAPTERS } from '../../data/caminapiedras'
 import { buttonReset, c, fs, radius, titleText, tone, type Tone } from '../../theme'
 import { PantallaProvider } from './PantallaProvider'
 import {
@@ -25,6 +24,8 @@ import { PanelGrupo } from './PanelGrupo'
 import { PanelTiradas } from './PanelTiradas'
 import { PanelBitacora } from './PanelBitacora'
 import { tituloDe } from './guion'
+import { useLibro } from './libro'
+import type { LibroAventura } from '../../data/libros/tipos'
 
 const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => ReactNode }> = {
   escena: { label: 'Escena', icon: BookOpen, render: () => <PanelEscena /> },
@@ -281,14 +282,15 @@ function Panel({
 
 // ── Top bar ──────────────────────────────────────────────────────────────────
 
-function tituloEscenaActual(estado: PantallaEstado): string | null {
+/** Title of the current scene: one of the session, or one of the book (documents saved before the book became a static reference) */
+function tituloEscenaActual(estado: PantallaEstado, libro: LibroAventura | null): string | null {
   const ref = estado.escenaActual
   if (!ref) return null
   if (ref.origen === 'propia') {
     const esc = estado.escenasPropias.find((e) => e.id === ref.escenaId)
     return esc ? tituloDe(esc) : null
   }
-  return CHAPTERS.find((ch) => ch.id === ref.capituloId)?.scenes.find((s) => s.id === ref.escenaId)?.title ?? null
+  return libro?.capitulos.find((ch) => ch.id === ref.capituloId)?.scenes.find((s) => s.id === ref.escenaId)?.title ?? null
 }
 
 function BarraSuperior() {
@@ -299,7 +301,8 @@ function BarraSuperior() {
   const cfg = useWorldConfig()
   const campana = useCampaignStore((s) => s.currentCampaign)
   const ahora = useAhora()
-  const escena = tituloEscenaActual(estado)
+  const libro = useLibro()
+  const escena = tituloEscenaActual(estado, libro)
   const varios = estado.encuentros.length > 1
   const activo = estado.encuentros.find((e) => e.id === estado.encuentroActivo) ?? estado.encuentros[0]
   const sesion = estado.sesion

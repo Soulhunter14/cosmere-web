@@ -34,7 +34,8 @@ export const MISTBORN: WorldConfig = {
     artesMetalicas: true,
     arquillas: true,
     mencionSpren: false,
-    pestanaAventura: false, // Q10: the adventure registry per world comes later (§13)
+    // Q10: the director's «Aventura» tab stays Stormlight-only; El legado is the «Libro» of the director's screen (`libro` below)
+    pestanaAventura: false,
     eras: true,
     bonosServidor: true,
     equipoInicial: true,
@@ -122,6 +123,8 @@ export const MISTBORN: WorldConfig = {
   tema: { dataWorld: 'mistborn', themeBg: { light: '#ebe8e6', dark: '#0c0b0d' } },
   iconos: { investidura: Flame, caminoInvestido: iconoCaminoMetal },
   loadData: () => import('./mistborn.data').then((m) => m.DATA),
+  // El legado de los nacidos de la bruma: chapters 1-4 in Era 1 and 5-9 in Era 2 (L.2 / PDF 5)
+  libro: { id: 'legado', titulo: 'El legado de los nacidos de la bruma', cargar: () => import('../data/mistborn/legado').then((m) => m.CAPITULOS) },
   // The Cosmere conditions plus Desprovisto and Mermado (L.310-311 / PDF 316-317)
   estados: conEstadosDelMundo([
     { id: 'desprovisto', nombre: 'Desprovisto', resumen: 'No puede usar el poder indicado ni sus talentos. Se elimina con «Beber vial».', valor: 'Poder, p. ej. Oro' },

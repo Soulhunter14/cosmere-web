@@ -408,10 +408,22 @@ imágenes. Lo jugado manda: al subir la crónica, el siguiente borrador parte de
   - Bitácora: la confirmación cuenta las que se van y las que pasan; el historial muestra las escenas jugadas y «Copiar escenas».
     «Prompt de la siguiente sesión» lee las de la última sesión cerrada si no hay ninguna abierta.
 - **Encontrar el libro** (Xavi no lo veía en una campaña de Mistborn, que no tiene Libro): «Del libro» en la barra y en el estado
-  vacío de Sesión (`onLibro`, solo con `pestanaAventura`); «A la sesión» pasa de la cabecera de la escena a la fila fija del índice
+  vacío de Sesión (`onLibro`, solo si hay libro); «A la sesión» pasa de la cabecera de la escena a la fila fija del índice
   (`NavegadorEscenas.accion`, `BotonAnadirASesion compacto`: el título del botón dice dónde entró). En el móvil la fila muestra solo
-  iconos y el número del índice, para dejar sitio al título. Pendiente, a petición de Xavi: el Libro de Nacidos de la Bruma (*El
-  legado*), con las aventuras por mundo y era en la configuración del mundo.
+  iconos y el número del índice, para dejar sitio al título.
+- **Un libro por mundo, filtrado por era** (a petición de Xavi).
+  - `WorldConfig.libro: { id, titulo, cargar }`: *Caminapiedras* en Archivo de las Tormentas y *El legado de los nacidos de la
+    bruma* en Nacidos de la Bruma, cargados con `import()` (cada uno en su *chunk*; los scripts iniciales pasan de 1.408.747 a
+    1.409.126 B). `useLibro()` (`libro.ts`) devuelve el libro con los capítulos de la era de la campaña (`AdventureChapter.eras`,
+    `isAvailable`), o null. `PanelEscena`, la barra superior y `mdDesdeEscenaLibro` / `mdDesdeCombateLibro` (la `fuente:` lleva el
+    título del libro) ya no importan *Caminapiedras*. Los tipos comunes están en `src/data/libros/tipos.ts`.
+  - *El legado*: los 9 capítulos en `src/data/mistborn/legado/cap1.ts`…`cap9.ts` (1-4 en la Era 1, 5-9 en la Era 2), con 309
+    escenas en el orden del libro y con su apartado, 36 combates con los enemigos del catálogo de su era, PNJ, tablas, sucesos,
+    empeños, momentos de legado y niveles de la tabla del libro (L.2 / PDF 5). Los redactaron 9 agentes desde el texto extraído
+    (`pdfextract/mistborn_legado_flow.txt`, fuera de git): solape con el libro del 1 al 10 % por capítulo y ningún texto por encima
+    del 40 % (`solape.py`); 305 pruebas con CD que la app reconoce. Dudas del libro señaladas en el texto; lo deducido, `[inferido]`.
+  - 21 mapas en `public/maps/legado/` (2,4 MB), recortados del PDF a solo el mapa, sin texto del libro; el 7.1 une las dos páginas
+    del tren y el 1.3 incluye el plano de la barcaza.
 - **Índice en hoja** (`NavegadorEscenas`, en `piezas.tsx`, para las dos fuentes): fila fija con «Índice», ◀, título y ▶; la hoja
   agrupa por `grupo` (sesión) o por `section` (libro, nuevo campo de `Scene`) y tiene «Ir a la escena actual». Sustituye a la nube
   de 25 botones.

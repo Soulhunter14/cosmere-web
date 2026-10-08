@@ -74,6 +74,7 @@ export const STORMLIGHT: WorldConfig = {
   // imports statically splits nothing and makes the build warn INEFFECTIVE_DYNAMIC_IMPORT.)
   loadData: () => Promise.resolve(DATA),
   syncData: DATA,
+  libro: { id: 'caminapiedras', titulo: 'Caminapiedras', cargar: () => import('../data/caminapiedras').then((m) => m.CHAPTERS) },
   // The Cosmere conditions plus Empoderado (Puente Nueve, conditions table; Ylt's Third Ideal in Caminapiedras)
   estados: conEstadosDelMundo([
     { id: 'empoderado', nombre: 'Empoderado', resumen: 'Hasta el final de la escena: ventaja en todas las pruebas y recupera la Investidura al máximo.' },

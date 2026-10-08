@@ -6,7 +6,7 @@
  * Pure functions, no React.
  */
 import { foldText as normalizar } from '../../lib/catalogo'
-import type { AdventureChapter, Combat, Scene, SceneTable } from '../../data/caminapiedras'
+import type { AdventureChapter, Combat, Scene, SceneTable } from '../../data/libros/tipos'
 import {
   claveContador, claveResultado, type EnemigoEscena, type EscenaArchivada, type EscenaPropia, type ImagenEscena, type PantallaEstado,
   type ProgresoEmpeno, type TipoEscena,
@@ -510,12 +510,13 @@ function tablaMd(t: SceneTable): string[] {
 }
 
 const grupoLibro = (cap: AdventureChapter) => `Capítulo ${cap.number} · ${cap.title}`
-const fuenteLibro = (cap: AdventureChapter, apartado?: string) =>
-  `Caminapiedras · capítulo ${cap.number}${apartado ? ` · ${apartado}` : ''} (PDF ${cap.pdfPages.from}-${cap.pdfPages.to})`
+/** «Caminapiedras · capítulo 3 · Localizaciones de Rathalas (PDF 57-80)» */
+const fuenteLibro = (libro: string, cap: AdventureChapter, apartado?: string) =>
+  `${libro} · capítulo ${cap.number}${apartado ? ` · ${apartado}` : ''} (PDF ${cap.pdfPages.from}-${cap.pdfPages.to})`
 
-/** A scene of the book as a scene of the session (read-aloud, text, tests, paths, tips and tables) */
-export function mdDesdeEscenaLibro(cap: AdventureChapter, escena: Scene): string {
-  const ls = [`## ${escena.title}`, `tipo: ${NOMBRE_TIPO[escena.type]}`, `grupo: ${grupoLibro(cap)}`, `fuente: ${fuenteLibro(cap, escena.section)}`]
+/** A scene of the book (`libro`: its title) as a scene of the session (read-aloud, text, tests, paths, tips and tables) */
+export function mdDesdeEscenaLibro(libro: string, cap: AdventureChapter, escena: Scene): string {
+  const ls = [`## ${escena.title}`, `tipo: ${NOMBRE_TIPO[escena.type]}`, `grupo: ${grupoLibro(cap)}`, `fuente: ${fuenteLibro(libro, cap, escena.section)}`]
   if (escena.readAloud) ls.push('', ...citaMd(escena.readAloud))
   for (const p of escena.content) ls.push('', enLinea(p))
   const pruebas = pruebasDe(escena.content)
@@ -527,9 +528,9 @@ export function mdDesdeEscenaLibro(cap: AdventureChapter, escena: Scene): string
 }
 
 /** A combat of the book as a scene of the session: enemies (to prepare the encounter), rules, map and tables */
-export function mdDesdeCombateLibro(cap: AdventureChapter, combate: Combat): string {
+export function mdDesdeCombateLibro(libro: string, cap: AdventureChapter, combate: Combat): string {
   const mapa = combate.mapRef ? cap.maps.find((m) => m.id === combate.mapRef || m.id.endsWith(combate.mapRef ?? '')) : undefined
-  const ls = [`## ${combate.title}`, 'tipo: combate', `grupo: ${grupoLibro(cap)}`, `fuente: ${fuenteLibro(cap)}`]
+  const ls = [`## ${combate.title}`, 'tipo: combate', `grupo: ${grupoLibro(cap)}`, `fuente: ${fuenteLibro(libro, cap)}`]
   if (mapa?.imagePath) ls.push(`imagen: ${mapa.imagePath} | Mapa ${mapa.id}: ${mapa.title}`)
   ls.push(`enemigos: ${combate.enemies.map((e) => `${cantidadDe(e.count)} ${e.name}`).join(', ')}`)
   if (combate.duration) ls.push('', `Duración: ${enLinea(combate.duration)}`)

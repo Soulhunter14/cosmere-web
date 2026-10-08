@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { BookOpen, Check, Clock, Heart, Info, MapPin, Pin, ScrollText, Shield, Star, Swords, UserPlus, Users, Zap, type LucideIcon } from 'lucide-react'
-import { CHAPTERS, type AdventureChapter, type Combat, type Npc, type NpcRole, type Scene } from '../../data/caminapiedras'
+import type { AdventureChapter, Combat, LibroAventura, Npc, NpcRole, Scene } from '../../data/libros/tipos'
 import { RollTable } from '../gm/CaminapiedrasPage'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
 import { Button, Disclosure, Segmented, Select } from '../../components/ui'
@@ -13,6 +13,7 @@ import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, de
 import { Apartado, CabeceraEscena, Galeria, LeerEnVozAlta, NavegadorEscenas, Parrafos, Tesela } from './piezas'
 import { BotonAnadirASesion, PanelGuion } from './PanelGuion'
 import { mdDesdeCombateLibro, mdDesdeEscenaLibro } from './guion'
+import { useLibro } from './libro'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -52,8 +53,10 @@ const PROGRESION: Record<'key' | 'spren' | 'info', { label: string; tone: Tone }
 
 export function PanelEscena() {
   const { cId, estado } = usePantalla()
-  const cfg = useWorldConfig()
-  const conAventura = cfg.features.pestanaAventura && CHAPTERS.length > 0
+  // The book of the world, with the chapters of the campaign's era (null while it loads or when there is none)
+  const libro = useLibro()
+  const capitulos = libro?.capitulos ?? []
+  const conAventura = !!libro
   const clave = `cosmere-pantalla-escena-${cId}`
 
   const [pref, setPrefEstado] = useState<PrefEscena>(() => {
@@ -61,7 +64,7 @@ export function PanelEscena() {
     const porDefecto: PrefEscena = {
       // The script when it is where the story is, or when there is one and the story is not in the book
       fuente: !conAventura || ref?.origen === 'propia' || (!ref && estado.escenasPropias.length > 0) ? 'propias' : 'aventura',
-      capituloId: ref?.capituloId ?? CHAPTERS[0]?.id ?? '',
+      capituloId: ref?.capituloId ?? '',
       vista: 'escenas',
       escenaId: ref?.origen === 'aventura' ? ref.escenaId : null,
       propiaId: ref?.origen === 'propia' ? ref.escenaId : null,
@@ -82,7 +85,7 @@ export function PanelEscena() {
     (ref.origen === 'aventura'
       ? fuente === 'aventura' && pref.capituloId === ref.capituloId && pref.vista === 'escenas' &&
         // With nothing picked yet the chapter shows its first scene
-        (pref.escenaId ?? CHAPTERS.find((ch) => ch.id === pref.capituloId)?.scenes[0]?.id) === ref.escenaId
+        (pref.escenaId ?? capitulos.find((ch) => ch.id === pref.capituloId)?.scenes[0]?.id) === ref.escenaId
       : fuente === 'propias' && (pref.propiaId ?? estado.escenasPropias[0]?.id) === ref.escenaId)
   const irAActual = () => {
     if (!ref) return
@@ -108,8 +111,8 @@ export function PanelEscena() {
           Ir a la escena actual
         </Button>
       )}
-      {fuente === 'aventura' ? (
-        <GuiaAventura pref={pref} setPref={setPref} />
+      {fuente === 'aventura' && libro ? (
+        <GuiaAventura libro={libro} pref={pref} setPref={setPref} />
       ) : (
         <PanelGuion
           seleccion={pref.propiaId}
@@ -125,24 +128,25 @@ export function PanelEscena() {
 
 // ── Book adventure ───────────────────────────────────────────────────────────
 
-function GuiaAventura({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partial<PrefEscena>) => void }) {
-  const cap =CHAPTERS.find((ch) => ch.id === pref.capituloId) ?? CHAPTERS[0]
+function GuiaAventura({ libro, pref, setPref }: { libro: LibroAventura; pref: PrefEscena; setPref: (p: Partial<PrefEscena>) => void }) {
+  const cap = libro.capitulos.find((ch) => ch.id === pref.capituloId) ?? libro.capitulos[0]
   const escena = cap.scenes.find((s) => s.id === pref.escenaId) ?? cap.scenes[0]
 
   return (
     <div style={stack(14)}>
+      <p style={{ ...eyebrow, color: tone.gold.fg, marginBottom: -6 }}>{libro.titulo}</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <Select
-          aria-label="Capítulo"
+          aria-label={`Capítulo de ${libro.titulo}`}
           value={cap.id}
           onChange={(e) => setPref({ capituloId: e.target.value, escenaId: null })}
           style={{ flex: '1 1 240px', minWidth: 0, fontWeight: 650 }}
         >
-          {CHAPTERS.map((ch) => (
+          {libro.capitulos.map((ch) => (
             <option key={ch.id} value={ch.id}>Capítulo {ch.number} · {ch.title}</option>
           ))}
         </Select>
-        <span style={pill(tone.gold)}>Nv. {cap.levelFrom}–{cap.levelTo}</span>
+        <span style={pill(tone.gold)}>Nv. {cap.levelFrom}{cap.levelTo !== cap.levelFrom ? `–${cap.levelTo}` : ''}</span>
       </div>
 
       <Segmented<Vista>
@@ -168,13 +172,13 @@ function GuiaAventura({ pref, setPref }: { pref: PrefEscena; setPref: (p: Partia
             escenas={cap.scenes.map((s) => ({ id: s.id, titulo: s.title, tipo: s.type, grupo: s.section ?? '', jugada: false, actual: false }))}
             seleccion={escena.id}
             onElegir={(id) => setPref({ escenaId: id })}
-            accion={<BotonAnadirASesion md={mdDesdeEscenaLibro(cap, escena)} compacto />}
+            accion={<BotonAnadirASesion md={mdDesdeEscenaLibro(libro.titulo, cap, escena)} compacto />}
           />
           <DetalleEscenaAventura cap={cap} escena={escena} escala={pref.escala} onEscala={(v) => setPref({ escala: v })} />
         </>
       )}
       {pref.vista === 'pnj' && <PnjCapitulo cap={cap} />}
-      {pref.vista === 'combates' && <CombatesCapitulo cap={cap} />}
+      {pref.vista === 'combates' && <CombatesCapitulo libro={libro.titulo} cap={cap} />}
       {pref.vista === 'mapas' && <MapasCapitulo cap={cap} />}
       {pref.vista === 'resumen' && <ResumenCapitulo cap={cap} escala={pref.escala} />}
     </div>
@@ -283,16 +287,16 @@ function TarjetaPnj({ npc, adversario }: { npc: Npc; adversario: GlobalNpc | nul
   )
 }
 
-function CombatesCapitulo({ cap }: { cap: AdventureChapter }) {
+function CombatesCapitulo({ libro, cap }: { libro: string; cap: AdventureChapter }) {
   if (cap.combats.length === 0) return <p style={{ color: c.muted }}>Este capítulo no tiene combates.</p>
   return (
     <ul style={{ ...listReset, ...stack(10) }}>
-      {cap.combats.map((cb) => <li key={cb.id}><TarjetaCombate cap={cap} combate={cb} /></li>)}
+      {cap.combats.map((cb) => <li key={cb.id}><TarjetaCombate libro={libro} cap={cap} combate={cb} /></li>)}
     </ul>
   )
 }
 
-function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Combat }) {
+function TarjetaCombate({ libro, cap, combate }: { libro: string; cap: AdventureChapter; combate: Combat }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
   const { irA } = usePaneles()
   const cfg = useWorldConfig()
@@ -359,7 +363,7 @@ function TarjetaCombate({ cap, combate }: { cap: AdventureChapter; combate: Comb
             {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para preparar el encuentro con sus fichas.' : 'Cargando el catálogo de adversarios…'}
           </p>
         )}
-        <BotonAnadirASesion md={mdDesdeCombateLibro(cap, combate)} />
+        <BotonAnadirASesion md={mdDesdeCombateLibro(libro, cap, combate)} />
       </div>
     </article>
   )

@@ -2,8 +2,10 @@
 
 El panel Escena de la pantalla del director tiene dos fuentes:
 
-- **Libro**: la aventura tal como la cuenta el libro (`src/data/caminapiedras/`). Es una referencia fija: se lee y se consulta,
-  pero no guarda progreso (ni escena actual, ni jugadas).
+- **Libro**: la aventura del mundo de la campaña tal como la cuenta el libro (`WorldConfig.libro`): *Caminapiedras* en Archivo
+  de las Tormentas (`src/data/caminapiedras/`) y *El legado de los nacidos de la bruma* en Nacidos de la Bruma
+  (`src/data/mistborn/legado/`), solo con los capítulos de la era de la campaña (1-4 en la Era 1, 5-9 en la Era 2). Se carga bajo
+  demanda. Es una referencia fija: se lee y se consulta, pero no guarda progreso (ni escena actual, ni jugadas).
 - **Sesión**: el guion de lo que debería pasar a partir de ahora, el esqueleto de la partida. Aquí vive todo el progreso: escena
   actual, escenas jugadas, pruebas superadas o falladas, empeños y contadores. Todo lo que se marca se anota en la bitácora.
 
@@ -14,8 +16,7 @@ Markdown. En la mesa se completa de dos formas:
   índice, siempre a mano mientras se lee (solo el icono en el móvil), y cada combate, **Añadir a la sesión** junto a «Preparar
   encuentro». La copia va en este formato (lectura en voz alta, texto, pruebas con su CD, caminos, consejos y tablas; en los
   combates, el mapa, los enemigos, las reglas y las recompensas). Si ya hay una escena con ese título, el botón dice «En la sesión».
-  El Libro solo existe en los mundos con una aventura en la app (`features.pestanaAventura`: hoy, *Caminapiedras* en Archivo de
-  las Tormentas); en Nacidos de la Bruma no se muestran ni el Libro ni «Del libro».
+  En un mundo sin libro, o sin capítulos para la era de la campaña, no se muestran ni el Libro ni «Del libro».
 - **In situ.** **Nueva escena** pide título, tipo, texto para leer en voz alta y qué pasa; hereda el grupo de la escena actual y
   pasa a ser la actual. «Escribirla completa en Markdown» abre el editor con todo el formato.
 
@@ -153,6 +154,8 @@ python -I scripts/aventura/parsear_caminapiedras.py "<ruta>/ARTO007_Caminapiedra
 ```
 
 Las dos salidas son texto literal del libro, que tiene derechos de autor: se quedan en local y fuera de git (las dos carpetas están
-ignoradas). En el repositorio solo está el script. Los datos de la fuente Libro (`src/data/caminapiedras/`, un archivo por
-capítulo) sí se versionan: son fieles al libro en todo dato, con redacción propia y la página para leer el original. Cada escena
-lleva su `section` (el apartado del libro), que agrupa el índice del Libro y va en la `fuente:` de la escena añadida a la sesión.
+ignoradas). En el repositorio solo está el script. Los datos de la fuente Libro (`src/data/caminapiedras/` y
+`src/data/mistborn/legado/`, un archivo por capítulo, con los tipos comunes en `src/data/libros/tipos.ts`) sí se versionan: son
+fieles al libro en todo dato, con redacción propia y la página para leer el original. Cada escena lleva su `section` (el apartado
+del libro), que agrupa el índice del Libro y va en la `fuente:` de la escena añadida a la sesión. Los mapas de *El legado* están
+en `public/maps/legado/` (21 WebP recortados del PDF, solo el mapa, sin texto del libro).

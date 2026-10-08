@@ -61,6 +61,17 @@ export interface HabilidadDef {
 
 /** The two attributes that head each column of a skills page: the two tiles of its card and the two terms of its defense (10 + attribute + attribute) */
 export type AtributosColumna = Record<HabilidadDef['columna'], [AttrField, AttrField]>
+
+/** A condition of the rules («Agotado», «Desprovisto»…) as the «Pantalla del director» applies it to a combatant */
+export interface EstadoDef {
+  id: string
+  /** Visible name, as the book writes it */
+  nombre: string
+  /** Short paraphrase of its effect for the director (never a quotation of the book) */
+  resumen: string
+  /** The condition carries a value between brackets («Agotado [−2]», «Desprovisto [Oro]»): hint of the input */
+  valor?: string
+}
 /**
  * Light summary of one Investida path of a world (a radiant order, a metalborn path): what a pill or a chip needs to name and
  * colour it. The heavy definition (talent tree, texts) lives in the lazy data of the world / TalentRules (T34a), never in the config.
@@ -163,6 +174,8 @@ export interface WorldConfig {
   loadData: () => Promise<WorldData>
   /** Stormlight: its data already travel in the main bundle (same object `loadData` resolves to). Mistborn: undefined */
   syncData?: WorldData
+  /** Conditions of the world: the Cosmere ones (`ESTADOS_COSMERE`, src/worlds/estados.ts) plus its own, alphabetical; read by the «Pantalla del director» */
+  estados: EstadoDef[]
 }
 
 export interface WorldData {

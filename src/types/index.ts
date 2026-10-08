@@ -344,6 +344,11 @@ export interface GlobalNpc {
   updatedAt: string
   /** World of the adversary: the server fixes it from the campaign it is created in and returns it; it never travels in a request body (§5.2) */
   world: WorldId
+  /**
+   * Era (1 | 2) of an adversary the book tags «ERA 1» / «ERA 2», null = both eras. The server sets it (the book's tag, or the era of
+   * the campaign it is created in) and lists only those of the campaign's era plus the ones of both
+   */
+  era: 1 | 2 | null
 }
 
 // Sessions
@@ -515,4 +520,22 @@ export interface LockedDay {
 export interface CreateLockedDayRequest {
   date: string
   note: string
+}
+
+// Pantalla del director (GM screen): ONE JSON document per campaign, director only (`GmScreenResponse` / `SaveGmScreenRequest`).
+// The web owns the shape of `state` (src/pages/pantalla/estado.ts); the server only stores it with optimistic concurrency.
+export interface GmScreen {
+  /** The stored document (`{}` when the campaign has none yet): read it through `normalizarEstado` */
+  state: unknown
+  /** Send it back with the next save; 0 = never saved. A save with another version answers 409 with the stored GmScreen */
+  version: number
+  /** null = never saved */
+  updatedAt: string | null
+}
+
+export interface SaveGmScreenRequest {
+  /** The whole document (a JSON object, at most 1 MB of text) */
+  state: object
+  /** The version the client read */
+  version: number
 }

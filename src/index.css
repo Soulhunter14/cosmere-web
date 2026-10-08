@@ -612,6 +612,11 @@ input[type='number'] { font-variant-numeric: tabular-nums; }
   .above-bottomnav { bottom: 24px; }
 }
 
+/* «Pantalla del director»: the page takes the whole screen and pads the safe areas itself (no navigation bars to clear),
+   and the dice FAB, a sibling of <main>, drops to the corner */
+.app-main.app-main--inmersiva { padding: 0; }
+.app-main--inmersiva ~ .above-bottomnav { bottom: calc(var(--sab) + 16px); }
+
 /* Frosted bars (top bar, bottom nav, sticky page bars). Nearly opaque on purpose: where backdrop-filter
    is not composited (some Safari/WebKit builds, no GPU acceleration) content must never read through. */
 .glass {

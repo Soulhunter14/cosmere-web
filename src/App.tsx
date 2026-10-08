@@ -33,6 +33,8 @@ const OrigenesPage = lazy(() => import('./pages/encyclopedia/mistborn/OrigenesPa
 const CaminosMetalPage = lazy(() => import('./pages/encyclopedia/mistborn/CaminosMetalPage').then((m) => ({ default: m.CaminosMetalPage })))
 const ArtesMetalicasPage = lazy(() => import('./pages/encyclopedia/mistborn/ArtesMetalicasPage').then((m) => ({ default: m.ArtesMetalicasPage })))
 const PoderMetalPage = lazy(() => import('./pages/encyclopedia/mistborn/PoderMetalPage').then((m) => ({ default: m.PoderMetalPage })))
+// «Pantalla del director»: director only and for the table, so it never weighs on the start of the app (own chunk)
+const PantallaPage = lazy(() => import('./pages/pantalla/PantallaPage').then((m) => ({ default: m.PantallaPage })))
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -70,6 +72,7 @@ export default function App() {
               <Route path="encyclopedia/artes-metalicas" element={<WorldGate feature="artesMetalicas"><Suspense fallback={<Spinner />}><ArtesMetalicasPage /></Suspense></WorldGate>} />
               <Route path="encyclopedia/artes-metalicas/:arte/:metal" element={<WorldGate feature="artesMetalicas"><Suspense fallback={<Spinner />}><PoderMetalPage /></Suspense></WorldGate>} />
               <Route path="gm" element={<GmPage />} />
+              <Route path="pantalla" element={<Suspense fallback={<Spinner />}><PantallaPage /></Suspense>} />
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />

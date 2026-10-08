@@ -128,8 +128,8 @@ function Callout({ t, children, style }: { t: Tone; children: ReactNode; style?:
   )
 }
 
-/** Roll table: a real <table>; the roll is the row header. Plot results use the official plot-die symbols. */
-function RollTable({ table, t }: { table: SceneTable; t: Tone }) {
+/** Roll table: a real <table>; the roll is the row header. Plot results use the official plot-die symbols. Also read by the «Pantalla del director» */
+export function RollTable({ table, t }: { table: SceneTable; t: Tone }) {
   const hasRoll = table.entries.some((e) => e.roll)
   const cell: CSSProperties = { padding: '10px 12px', verticalAlign: 'top', textAlign: 'left' }
   return (

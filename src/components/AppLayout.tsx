@@ -1,5 +1,5 @@
 import { useLayoutEffect } from 'react'
-import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Outlet, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { Sidebar } from './Sidebar'
@@ -16,6 +16,8 @@ export function AppLayout() {
   const { pathname } = useLocation()
   const id = Number(campaignId)
   const validId = Number.isFinite(id) && id > 0
+  // «Pantalla del director»: the whole screen for the table, without sidebar, top bar or bottom nav (the dice FAB stays)
+  const inmersiva = useMatch('/campaigns/:campaignId/pantalla') !== null
 
   const currentCampaign = useCampaignStore((s) => s.currentCampaign)
   const setCurrentCampaign = useCampaignStore((s) => s.setCurrentCampaign)
@@ -62,9 +64,9 @@ export function AppLayout() {
     <div style={{ display: 'flex', minHeight: '100dvh' }}>
       <a href="#main" className="skip-link">Saltar al contenido</a>
       {/* Sidebar and DiceRoller read `isGm` and the campaign from the store: not before the gate opens */}
-      {ready && <Sidebar />}
-      {/* .app-main clears the fixed mobile top bar / bottom nav (+ safe areas); no offsets from 640px */}
-      <main id="main" tabIndex={-1} className="app-main" style={{ flex: 1, minWidth: 0, outline: 'none' }}>
+      {ready && !inmersiva && <Sidebar />}
+      {/* .app-main clears the fixed mobile top bar / bottom nav (+ safe areas); no offsets from 640px. Immersive: no bars to clear */}
+      <main id="main" tabIndex={-1} className={inmersiva ? 'app-main app-main--inmersiva' : 'app-main'} style={{ flex: 1, minWidth: 0, outline: 'none' }}>
         {ready ? (
           /* key: replays the entrance animation on every route change */
           <div key={pathname} className="fade-in">

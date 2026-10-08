@@ -12,6 +12,7 @@ import { HABILIDADES_COSMERE } from './skills'
 import { iconoHumano, iconoOrden, iconoOyente } from './stormlight.icons'
 import { STORMLIGHT_TOPICS } from './stormlight.topics'
 import { DATA } from './stormlight.data'
+import { conEstadosDelMundo } from './estados'
 
 export const STORMLIGHT: WorldConfig = {
   id: 'stormlight',
@@ -73,4 +74,8 @@ export const STORMLIGHT: WorldConfig = {
   // imports statically splits nothing and makes the build warn INEFFECTIVE_DYNAMIC_IMPORT.)
   loadData: () => Promise.resolve(DATA),
   syncData: DATA,
+  // The Cosmere conditions plus Empoderado (Puente Nueve, conditions table; Ylt's Third Ideal in Caminapiedras)
+  estados: conEstadosDelMundo([
+    { id: 'empoderado', nombre: 'Empoderado', resumen: 'Hasta el final de la escena: ventaja en todas las pruebas y recupera la Investidura al máximo.' },
+  ]),
 }

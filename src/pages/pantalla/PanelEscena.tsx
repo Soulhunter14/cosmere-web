@@ -13,7 +13,8 @@ import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, de
 import { Apartado, CabeceraEscena, Galeria, LeerEnVozAlta, NavegadorEscenas, Parrafos, Tesela } from './piezas'
 import { BotonAnadirASesion, PanelGuion } from './PanelGuion'
 import { mdDesdeCombateLibro, mdDesdeEscenaLibro } from './guion'
-import { useLibro } from './libro'
+import { useLibro, useLibroOriginal } from './libro'
+import { BotonSubirLibro, GuiaOriginal } from './PanelLibroOriginal'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -30,6 +31,9 @@ interface PrefEscena {
   escenaId: string | null
   propiaId: string | null
   escala: number
+  /** Chapter and scene of the original book uploaded to the Libro (absent in preferences saved before it existed) */
+  originalNum?: number | null
+  originalEscena?: string | null
 }
 
 const esPref = (v: unknown): v is PrefEscena =>
@@ -56,7 +60,10 @@ export function PanelEscena() {
   // The book of the world, with the chapters of the campaign's era (null while it loads or when there is none)
   const libro = useLibro()
   const capitulos = libro?.capitulos ?? []
-  const conAventura = !!libro
+  // The original book uploaded by the director replaces the summary in the Libro
+  const original = useLibroOriginal()
+  const conOriginal = original.capitulos.length > 0
+  const conAventura = !!libro || conOriginal
   const clave = `cosmere-pantalla-escena-${cId}`
 
   const [pref, setPrefEstado] = useState<PrefEscena>(() => {
@@ -111,7 +118,17 @@ export function PanelEscena() {
           Ir a la escena actual
         </Button>
       )}
-      {fuente === 'aventura' && libro ? (
+      {fuente === 'aventura' && conOriginal ? (
+        <GuiaOriginal
+          capitulos={original.capitulos}
+          numero={pref.originalNum ?? null}
+          escenaId={pref.originalEscena ?? null}
+          escala={pref.escala}
+          onCapitulo={(n) => setPref({ originalNum: n, originalEscena: null })}
+          onEscena={(id) => setPref({ originalEscena: id })}
+          onEscala={(v) => setPref({ escala: v })}
+        />
+      ) : fuente === 'aventura' && libro ? (
         <GuiaAventura libro={libro} pref={pref} setPref={setPref} />
       ) : (
         <PanelGuion
@@ -134,7 +151,10 @@ function GuiaAventura({ libro, pref, setPref }: { libro: LibroAventura; pref: Pr
 
   return (
     <div style={stack(14)}>
-      <p style={{ ...eyebrow, color: tone.gold.fg, marginBottom: -6 }}>{libro.titulo}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: -6 }}>
+        <p style={{ ...eyebrow, color: tone.gold.fg, flex: 1, minWidth: 0 }}>{libro.titulo} · resumen</p>
+        <BotonSubirLibro />
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <Select
           aria-label={`Capítulo de ${libro.titulo}`}

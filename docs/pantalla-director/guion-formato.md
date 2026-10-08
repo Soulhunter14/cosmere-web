@@ -5,7 +5,8 @@ El panel Escena de la pantalla del director tiene dos fuentes:
 - **Libro**: la aventura del mundo de la campaña tal como la cuenta el libro (`WorldConfig.libro`): *Caminapiedras* en Archivo
   de las Tormentas (`src/data/caminapiedras/`) y *El legado de los nacidos de la bruma* en Nacidos de la Bruma
   (`src/data/mistborn/legado/`), solo con los capítulos de la era de la campaña (1-4 en la Era 1, 5-9 en la Era 2). Se carga bajo
-  demanda. Es una referencia fija: se lee y se consulta, pero no guarda progreso (ni escena actual, ni jugadas).
+  demanda. Es una referencia fija: se lee y se consulta, pero no guarda progreso (ni escena actual, ni jugadas). Si el director
+  sube el **texto original** del libro (ver «El libro original» al final), el Libro muestra ese texto en lugar del resumen.
 - **Sesión**: el guion de lo que debería pasar a partir de ahora, el esqueleto de la partida. Aquí vive todo el progreso: escena
   actual, escenas jugadas, pruebas superadas o falladas, empeños y contadores. Todo lo que se marca se anota en la bitácora.
 
@@ -136,25 +137,44 @@ Nocturna, el valle, una vacíospren, un oyente pasando por parshmenio y la angui
 Los guiones de cada campaña son contenido de la mesa y de la aventura: viven en `docs/pantalla-director/guiones/`, que está en
 `.gitignore`, y se cargan en la pantalla importándolos.
 
-## El libro de la aventura, listo para importar
+## El libro original: generarlo y subirlo
 
-`scripts/aventura/parsear_caminapiedras.py` lee el PDF de *Caminapiedras* entero (introducción, capítulos 1-7 y apéndices A y B) y
-genera, por partes:
+El Libro de la app es un resumen fiel con redacción propia. Para tener el **texto del libro**, el director lo genera desde su PDF
+y lo sube a su campaña: el Libro lo muestra entonces en lugar del resumen, y la Sesión sigue siendo su versión adaptada.
 
-- `cosmere-api/Resources/pdfextract/caminapiedras_libro/<parte>.json`: el texto en orden de lectura como lista de nodos (títulos,
-  párrafos, recuadros de lectura, listas, cuadros laterales, tablas y mapas), cada uno con su página PDF. Es la base para futuras
-  funciones sobre la aventura.
-- `docs/pantalla-director/guiones/libro/<parte>.md`: el mismo texto en este formato, con una escena `##` por apartado del libro,
-  `>` para los recuadros «Lee lo siguiente», `### PNJ` para los «Cómo interpretar a…», las tablas como listas y los mapas publicados
-  como imágenes. Se importa en Sesión → Importar (mejor un capítulo cada vez, desmarcando lo que no se vaya a jugar: el documento
-  de la pantalla admite hasta 1 MB).
+**1. Generar.** `scripts/aventura/parsear_libro.py` lee el PDF con un perfil por libro (`caminapiedras` o `legado`: tipografías,
+colores de los títulos, desfase de páginas, partes y mapas) y genera, por parte:
+
+- `<json dir>/<parte>.json`: el texto en orden de lectura como lista de nodos (títulos, párrafos, recuadros de lectura, listas,
+  cuadros laterales, tablas y mapas), cada uno con su página PDF.
+- `<markdown dir>/<parte>.md`: el capítulo en este formato, con la cabecera `capitulo:` y `titulo:`, una escena `##` por apartado del
+  libro (con `apartado:`, su título de primer nivel, y `fuente:` con la página), `>` para los recuadros «Lee lo siguiente»,
+  `### Pruebas` con las frases del libro que llevan CD, `### PNJ` para los «Cómo interpretar a…», las tablas como listas y los mapas
+  como imágenes. Con el `combates.json` exportado de `src/data/<libro>` (título, mapa y enemigos con los nombres del catálogo), las
+  escenas de combate llevan `enemigos:` para «Preparar encuentro»; un combate que no es un título del libro va como escena propia
+  detrás de la más parecida.
 
 ```bash
-python -I scripts/aventura/parsear_caminapiedras.py "<ruta>/ARTO007_Caminapiedras aventura_high.pdf" ../cosmere-api/Resources/pdfextract/caminapiedras_libro docs/pantalla-director/guiones/libro
+node --experimental-strip-types --no-warnings scripts/aventura/exportar_combates.mjs src/data/mistborn/legado <combates.json>
 ```
 
-Las dos salidas son texto literal del libro, que tiene derechos de autor: se quedan en local y fuera de git (las dos carpetas están
-ignoradas). En el repositorio solo está el script. Los datos de la fuente Libro (`src/data/caminapiedras/` y
+```bash
+python -I scripts/aventura/parsear_libro.py legado "<ruta>/SPA_NacidosBruma_Legado.pdf" ../cosmere-api/Resources/pdfextract/legado_libro docs/pantalla-director/guiones/libro/legado <combates.json>
+```
+
+```bash
+python -I scripts/aventura/parsear_libro.py caminapiedras "<ruta>/ARTO007_Caminapiedras aventura_high.pdf" ../cosmere-api/Resources/pdfextract/caminapiedras_libro docs/pantalla-director/guiones/libro
+```
+
+**2. Subir.** En Libro → «Subir el libro original» (o «Subir capítulos» si ya hay alguno) se eligen los `.md`; cada uno sustituye
+al capítulo de su número. Se guardan en la API (`BookChapters`, `/campaigns/{id}/book`, solo el director de la campaña, hasta
+500 000 caracteres por capítulo), no en el documento de la pantalla. El Libro original se lee como la sesión pero en solo lectura
+(las pruebas no se marcan), con el índice agrupado por `apartado:`; «A la sesión» copia la escena tal cual a la Sesión para
+adaptarla, y sus enemigos preparan el encuentro. «Quitar el original» (con confirmación) borra los capítulos subidos y vuelve al
+resumen. También se puede importar un capítulo directamente en Sesión → Importar.
+
+Las salidas del script son texto literal del libro, que tiene derechos de autor: se quedan en local y fuera de git (las carpetas
+están ignoradas) y solo las sube el director a su campaña. En el repositorio solo está el script. Los datos de la fuente Libro (`src/data/caminapiedras/` y
 `src/data/mistborn/legado/`, un archivo por capítulo, con los tipos comunes en `src/data/libros/tipos.ts`) sí se versionan: son
 fieles al libro en todo dato, con redacción propia y la página para leer el original. Cada escena lleva su `section` (el apartado
 del libro), que agrupa el índice del Libro y va en la `fuente:` de la escena añadida a la sesión. Los mapas de *El legado* están

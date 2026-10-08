@@ -395,6 +395,36 @@ function DetalleGuion({
   )
 }
 
+/**
+ * A scene of the original book uploaded to the Libro (scripts/aventura/parsear_libro.py): read only, as the book is a static
+ * reference. Tests are shown but marked in the session; its enemies can still prepare the encounter. «A la sesión» lives in the
+ * fixed row of the index.
+ */
+export function DetalleEscenaLibro({ esc, escala, onEscala }: { esc: EscenaPropia; escala: number; onEscala: (v: number) => void }) {
+  const e = leerEscena(esc.md)
+  return (
+    <article id="escena-aventura" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: 76 }}>
+      <CabeceraEscena
+        titulo={e.titulo}
+        tipo={e.tipo}
+        kicker={(e.apartado && e.apartado !== e.titulo ? e.apartado : e.grupo) || undefined}
+        escala={escala}
+        onEscala={onEscala}
+      />
+      {e.fuente && (
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: -6 }}>
+          <BookMarked size={14} aria-hidden style={{ color: tone.gold.fg, flexShrink: 0 }} />
+          {e.fuente}
+        </p>
+      )}
+      <Bloques bloques={e.cuerpo} escala={escala} />
+      {e.imagenes.length > 0 && <Galeria imagenes={e.imagenes} />}
+      {e.secciones.map((s, k) => <SeccionGuion key={`${s.titulo}-${k}`} seccion={s} escenaId={esc.id} titulo={e.titulo} escala={escala} soloLectura />)}
+      {e.enemigos.length > 0 && <EnemigosEscena esc={esc} e={e} />}
+    </article>
+  )
+}
+
 /** Paragraphs, read-aloud boxes, lists and checklists of the script's Markdown */
 function Bloques({ bloques, escala }: { bloques: Bloque[]; escala: number }) {
   if (bloques.length === 0) return null
@@ -420,7 +450,9 @@ function Bloques({ bloques, escala }: { bloques: Bloque[]; escala: number }) {
   )
 }
 
-function SeccionGuion({ seccion, escenaId, titulo, escala }: { seccion: Seccion; escenaId: string; titulo: string; escala: number }) {
+function SeccionGuion({
+  seccion, escenaId, titulo, escala, soloLectura = false,
+}: { seccion: Seccion; escenaId: string; titulo: string; escala: number; soloLectura?: boolean }) {
   const meta = SECCION_META[seccion.clase]
   const Icon = meta.icon
   return (
@@ -428,7 +460,7 @@ function SeccionGuion({ seccion, escenaId, titulo, escala }: { seccion: Seccion;
       <div style={stack(8)}>
         {seccion.bloques.map((b, i) => {
           if (b.tipo !== 'lista' || seccion.clase === 'otra') return <Bloques key={i} bloques={[b]} escala={escala} />
-          if (seccion.clase === 'pruebas') return <Pruebas key={i} items={b.items} escenaId={escenaId} titulo={titulo} />
+          if (seccion.clase === 'pruebas') return <Pruebas key={i} items={b.items} escenaId={escenaId} titulo={titulo} soloLectura={soloLectura} />
           if (seccion.clase === 'pnj') return <ListaPnj key={i} items={b.items} />
           return (
             <ul key={i} style={{ ...listReset, ...stack(6) }}>
@@ -450,8 +482,11 @@ function SeccionGuion({ seccion, escenaId, titulo, escala }: { seccion: Seccion;
   )
 }
 
-/** Tests: the difficulty in big, the skill, what it is for; the director marks how it went (and the log keeps it) */
-function Pruebas({ items, escenaId, titulo }: { items: string[]; escenaId: string; titulo: string }) {
+/**
+ * Tests: the difficulty in big, the skill, what it is for; in the session the director marks how it went (and the log keeps it),
+ * in the book they are only read
+ */
+function Pruebas({ items, escenaId, titulo, soloLectura }: { items: string[]; escenaId: string; titulo: string; soloLectura: boolean }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
   const marcarResultado = (item: string, r: ResultadoPrueba) =>
     actualizar((b) => {
@@ -471,7 +506,7 @@ function Pruebas({ items, escenaId, titulo }: { items: string[]; escenaId: strin
     <ul style={{ ...listReset, ...stack(8) }}>
       {items.map((item, i) => {
         const p = leerPrueba(item)
-        const r = estado.resultados[claveResultado(escenaId, item)]
+        const r = soloLectura ? undefined : estado.resultados[claveResultado(escenaId, item)]
         const t = r === 'exito' ? tone.esmeralda : r === 'fallo' ? tone.rubi : tone.zafiro
         return (
           <li key={i} style={{ ...fila(t), display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
@@ -491,10 +526,12 @@ function Pruebas({ items, escenaId, titulo }: { items: string[]; escenaId: strin
               {p.habilidad && <p style={{ fontWeight: 700, color: t.fg, fontSize: fs.base }}>{p.habilidad}</p>}
               <p style={{ fontSize: fs.sm + 1, lineHeight: 1.5, color: c.text }}><EnLinea texto={p.texto} /></p>
             </div>
-            <div role="group" aria-label={`Resultado: ${etiquetaPrueba(p)}`} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <Conmutador compacto activo={r === 'exito'} t={tone.esmeralda} icono={<Check size={15} aria-hidden />} etiqueta="Superada" onClick={() => marcarResultado(item, 'exito')} />
-              <Conmutador compacto activo={r === 'fallo'} t={tone.rubi} icono={<X size={15} aria-hidden />} etiqueta="Fallada" onClick={() => marcarResultado(item, 'fallo')} />
-            </div>
+            {!soloLectura && (
+              <div role="group" aria-label={`Resultado: ${etiquetaPrueba(p)}`} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <Conmutador compacto activo={r === 'exito'} t={tone.esmeralda} icono={<Check size={15} aria-hidden />} etiqueta="Superada" onClick={() => marcarResultado(item, 'exito')} />
+                <Conmutador compacto activo={r === 'fallo'} t={tone.rubi} icono={<X size={15} aria-hidden />} etiqueta="Fallada" onClick={() => marcarResultado(item, 'fallo')} />
+              </div>
+            )}
           </li>
         )
       })}

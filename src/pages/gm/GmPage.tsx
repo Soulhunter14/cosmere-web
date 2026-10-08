@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronRight, Columns3, MapIcon, MessageSquare, Users } from 'lucide-react'
 import { GmMessagesPage } from './GmMessagesPage'
-import { CaminapiedrasPage } from './CaminapiedrasPage'
 import { GlobalNpcListPage } from './GlobalNpcListPage'
-import { Tabs, TabPanel } from '../../components/ui'
+import { Spinner, Tabs, TabPanel } from '../../components/ui'
 import { useWorldConfig } from '../../store/campaignStore'
 import { c, font, fs, radius, shadow } from '../../theme'
 import type { WorldConfig } from '../../worlds/types'
+
+/** The book's adventure (its data is large): loaded only when the director opens the tab */
+const CaminapiedrasPage = lazy(() => import('./CaminapiedrasPage').then((m) => ({ default: m.CaminapiedrasPage })))
 
 type Tab = 'npcs' | 'messages' | 'caminapiedras'
 
@@ -86,7 +88,7 @@ export function GmPage() {
       <TabPanel idPrefix={ID_PREFIX} id={activeTab}>
         {activeTab === 'npcs' && <GlobalNpcListPage />}
         {activeTab === 'messages' && <GmMessagesPage />}
-        {activeTab === 'caminapiedras' && <CaminapiedrasPage />}
+        {activeTab === 'caminapiedras' && <Suspense fallback={<Spinner />}><CaminapiedrasPage /></Suspense>}
       </TabPanel>
     </div>
   )

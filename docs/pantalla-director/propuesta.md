@@ -355,6 +355,63 @@ Revisión de código en tres partes (API y datos, estado y lógica, paneles), co
   - `GET /global-npcs/{id}` sin filtrar por mundo y era.
   - Respuesta del PUT más ligera y atributos de Swagger.
 
+### Iteración 3: Guion de la partida (8 oct 2026, rama `feature/guion-director`, solo web)
+Xavi quiere un **borrador de lo que debería pasar a partir de ahora** para usarlo en la mesa: historia, pruebas, explicaciones e
+imágenes. Lo jugado manda: al subir la crónica, el siguiente borrador parte de ella. Formato y ciclo: `guion-formato.md`.
+
+- **Qué no permitía la pantalla.**
+  - Las escenas propias eran planas: sin pruebas con CD, empeños, contadores, ganchos por PJ, caminos, casillas, orden, grupos ni
+    «escena siguiente».
+  - Las reglas de un combate no se veían en el encuentro.
+  - No había forma de preparar el guion fuera de la mesa e importarlo.
+  - Además, los datos de la aventura no coincidían con el libro, sobre todo en el capítulo 3 (el Resto Gris es un spren y Código
+    une críptique; Teryn es «ella»; Ylt huye con la hoja). Corregidos los cuatro capítulos: ver «Datos de la aventura» más abajo.
+- **Documento versión 3** (`estado.ts`).
+  - `EscenaPropia` pasa a ser `{ id, md }`; las de la versión 2 se convierten solas a Markdown.
+  - Nuevos campos `guionTitulo`, `empenos`, `contadores` y `resultados` (estado de mesa por escena), y `Encuentro.escenaId`.
+  - `quitarEscena` limpia todo lo de una escena; las claves salen de `claveCasilla`, `claveResultado` y `claveContador`.
+- **`guion.ts`** (puro). Lee una escena (metadatos, cuerpo, secciones con clase y pruebas «CD» o «contra»). Divide un archivo en
+  escenas por `# Grupo` / `## Escena`, fusiona por grupo y título conservando los ids, y escribe el guion de vuelta (ida y vuelta
+  idéntica). `FORMATO_GUION` va dentro del *prompt*.
+- **`PanelGuion.tsx`** (fuente «Guion» del panel Escena).
+  - Índice por grupos con lo jugado; detalle con lectura en voz alta, imágenes, empeño, contadores y secciones.
+  - Pruebas con Superada/Fallada; PNJ con «Añadir al encuentro» (por nombre o `ficha:`); preparar encuentro.
+  - «Jugada · pasar a…»; subir y bajar escenas; editar en Markdown con resumen en vivo; importar (pegar o `.md`) y exportar
+    (copiar o descargar).
+  - «Prompt del siguiente guion». El encuentro muestra «Reglas de «escena»» y sus contadores (`ReglasDeEscena`).
+- **Avances.** A petición de Xavi se retira la pestaña Avances (marcaba hitos de metas por la API): la pantalla solo **recomienda**
+  avances (`### Avances` del guion, sin casillas, con el aviso de que se aplican en la ficha). Los `- [ ]` de guiones antiguos se
+  leen como viñetas.
+- **Datos de la aventura** (`src/data/caminapiedras/`, ahora una carpeta: `tipos.ts`, `cap1.ts`…`cap4.ts`, `index.ts`; las
+  importaciones no cambian). Los cuatro capítulos se contrastaron con el libro, extraído de nuevo por columnas en
+  `pdfextract/caminapiedras_capitulos/`. Quedan en el orden y con los títulos del libro, y se conservan los `id` (las marcas de la
+  pantalla siguen valiendo). PNJ, pruebas y CD, enemigos con el nombre exacto de su ficha, reglas, tablas, mapas, niveles y páginas
+  coinciden con el libro; la redacción es propia y los recuadros de lectura citan la página. El mapa 1.3 era una ilustración de la
+  PDF 34: ahora es el mapa real (`public/maps/map_p35.webp`).
+- **Libro completo para importar**: `scripts/aventura/parsear_caminapiedras.py` (ver `guion-formato.md`). Salidas en local, fuera
+  de git.
+- **Piezas compartidas** movidas a `piezas.tsx` (`CabeceraEscena`, `Apartado`, `Parrafos`, `SelectorEscenas`, `EnLinea`);
+  `useCatalogo` va en `contexto.ts`.
+- **Imágenes oficiales**: 12 WebP en `public/aventura/caminapiedras/` (1,5 MB, se cargan bajo demanda; la PWA no las precachea).
+- **Datos DEV.**
+  - Campaña **40 «Caminapiedras (copia 8 oct)»**: los 6 PJ y sus metas copiados de producción, sin diario ni sesiones.
+  - Directores: albert, soul y el usuario de pruebas; jugadores emparejados por nombre; Oden sin asignar (no hay SupaHotFire en
+    local).
+  - Su pantalla tiene importado `guiones/caminapiedras-tras-la-batalla-del-salon.md` (16 escenas, del final de Rathalas al
+    valle de la Vigilante Nocturna), sin nada marcado.
+  - Backup previo: `personal/backups/cosmere-dev-2026-10-08-pre-copia-caminapiedras.dump`. Deshacer: borrar la campaña 40
+    (en cascada).
+- **Verificado** (1180×820 oscuro y claro, 375×812):
+  - importar 16 escenas y reimportar (16 actualizadas, conserva marcas);
+  - prueba superada a la bitácora; escena actual y «Jugada · pasar»;
+  - encuentro de anguilas con 4 fichas del catálogo, reglas y «Daño del barco» compartido; empeño 6/4 superado a la bitácora;
+  - *prompt* con PJ, metas y estado del guion; editor; sin desbordes en móvil.
+  - `npx tsc -b`, `npm run lint` y `npm run build` limpios; ninguna comparación de ids de mundo. La pantalla sigue siendo un
+    *chunk* propio.
+- **Al desplegar.** No hay migraciones. Una web anterior abre un documento de versión 3 en solo lectura, con el aviso «Esta pantalla
+  se guardó con una versión más nueva…» (protección de la revisión), así que no se pierde el guion. Se ve en DEV si se abre la
+  campaña 40 en el 5173, que sirve `main`.
+
 ### Datos de prueba creados en DEV (campaña 3 «Regresión Stormlight», usuario de pruebas)
 Documento de la pantalla (encuentro, sesión 1, una escena propia, una trama «Trama creada en otro dispositivo»), la meta de prueba
 «Proteger a los suyos (prueba pantalla)» (id 80, personaje 9) y una tirada pública de prueba en el registro de dados.

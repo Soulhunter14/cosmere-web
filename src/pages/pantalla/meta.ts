@@ -1,6 +1,6 @@
 import { BookOpen, Compass, Flag, GitBranch, GitFork, MessageCircle, StickyNote, Swords, Target, type LucideIcon } from 'lucide-react'
 import { tone, type Tone } from '../../theme'
-import type { EstadoTrama, Rango, TipoEscena, TipoEvento } from './estado'
+import type { Rango, TipoEscena, TipoEvento } from './estado'
 
 /** Scene types of the adventure data (same labels, tones and glyphs as the «Aventura» tab of the Director area) */
 export const ESCENA_META: Record<TipoEscena, { label: string; tone: Tone; icon: LucideIcon }> = {
@@ -16,12 +16,6 @@ export const RANGO_META: Record<Rango, { label: string; tone: Tone }> = {
   secuaz: { label: 'Secuaz', tone: tone.cuarzo },
   rival: { label: 'Rival', tone: tone.topacio },
   jefe: { label: 'Jefe', tone: tone.rubi },
-}
-
-export const TRAMA_META: Record<EstadoTrama, { label: string; tone: Tone }> = {
-  abierta: { label: 'Abierta', tone: tone.zafiro },
-  'en-curso': { label: 'En curso', tone: tone.topacio },
-  resuelta: { label: 'Resuelta', tone: tone.esmeralda },
 }
 
 export const EVENTO_META: Record<TipoEvento, { tone: Tone; icon: LucideIcon }> = {

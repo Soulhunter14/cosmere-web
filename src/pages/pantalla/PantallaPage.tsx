@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, Check, ChevronLeft, CloudOff, Dices, Flag, LoaderCircle, Maximize2, Minimize2, NotebookPen, RefreshCw, Sun, SunDim, Swords,
+  BookOpen, Check, ChevronLeft, CloudOff, Dices, LoaderCircle, Maximize2, Minimize2, NotebookPen, RefreshCw, Sun, SunDim, Swords,
   Timer, TriangleAlert, Users, type LucideIcon,
 } from 'lucide-react'
 import { gmScreenApi } from '../../api/gmScreen'
@@ -24,7 +24,7 @@ import { PanelEncuentro } from './PanelEncuentro'
 import { PanelGrupo } from './PanelGrupo'
 import { PanelTiradas } from './PanelTiradas'
 import { PanelBitacora } from './PanelBitacora'
-import { PanelAvances } from './PanelAvances'
+import { tituloDe } from './guion'
 
 const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => ReactNode }> = {
   escena: { label: 'Escena', icon: BookOpen, render: () => <PanelEscena /> },
@@ -32,11 +32,10 @@ const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => 
   grupo: { label: 'Grupo', icon: Users, render: () => <PanelGrupo /> },
   tiradas: { label: 'Tiradas', icon: Dices, render: () => <PanelTiradas /> },
   bitacora: { label: 'Bitácora', icon: NotebookPen, render: () => <PanelBitacora /> },
-  avances: { label: 'Avances', icon: Flag, render: () => <PanelAvances /> },
 }
 /** Left pane: what is happening (story, fight, party); right pane: what comes in and what is noted */
 const PANEL_A: PanelId[] = ['escena', 'encuentro', 'grupo']
-const PANEL_B: PanelId[] = ['tiradas', 'bitacora', 'avances']
+const PANEL_B: PanelId[] = ['tiradas', 'bitacora']
 const TODOS: PanelId[] = [...PANEL_A, ...PANEL_B]
 
 const esDe = (ids: PanelId[]) => (v: unknown): v is PanelId => typeof v === 'string' && ids.includes(v as PanelId)
@@ -285,7 +284,10 @@ function Panel({
 function tituloEscenaActual(estado: PantallaEstado): string | null {
   const ref = estado.escenaActual
   if (!ref) return null
-  if (ref.origen === 'propia') return estado.escenasPropias.find((e) => e.id === ref.escenaId)?.titulo ?? null
+  if (ref.origen === 'propia') {
+    const esc = estado.escenasPropias.find((e) => e.id === ref.escenaId)
+    return esc ? tituloDe(esc) : null
+  }
   return CHAPTERS.find((ch) => ch.id === ref.capituloId)?.scenes.find((s) => s.id === ref.escenaId)?.title ?? null
 }
 

@@ -1,4 +1,6 @@
 import { createContext, useContext, useSyncExternalStore } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { globalNpcsApi } from '../../api/global-npcs'
 import type { GmScreen } from '../../types'
 import { anotar, marcar, type PantallaEstado, type TipoEvento } from './estado'
 
@@ -41,6 +43,16 @@ export function usePantalla(): PantallaCtx {
   return ctx
 }
 
+/**
+ * Adversaries of the campaign's world and era (`/global-npcs`): to link enemies and NPCs by name. `catalogoListo` is false while
+ * it loads or if it failed, so an encounter is never prepared with every enemy as a free one by mistake
+ */
+export function useCatalogo() {
+  const { cId } = usePantalla()
+  const q = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
+  return { catalogo: q.data ?? [], catalogoListo: q.isSuccess, catalogoFallo: q.isError }
+}
+
 /** Toggles a progress mark; marking it (not unmarking) also writes the log line «{etiqueta}: {texto}» */
 export function useAlternarMarca() {
   const { estado, actualizar, ultimoDiario } = usePantalla()
@@ -53,7 +65,7 @@ export function useAlternarMarca() {
   }
 }
 
-export type PanelId = 'escena' | 'encuentro' | 'grupo' | 'tiradas' | 'bitacora' | 'avances'
+export type PanelId = 'escena' | 'encuentro' | 'grupo' | 'tiradas' | 'bitacora'
 
 export interface PanelesCtx {
   /** Shows a panel: in two panes it selects the tab of its pane, in one pane the only tab strip */

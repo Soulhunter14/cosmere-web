@@ -1,0 +1,916 @@
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  ArrowDown, ArrowUp, BookMarked, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, Pencil, Plus,
+  ScrollText, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
+} from 'lucide-react'
+import { charactersApi } from '../../api/characters'
+import { diaryApi } from '../../api/diary'
+import { useCampaignStore, useEra, useWorldConfig, useWorldData } from '../../store/campaignStore'
+import { Button, ConfirmDialog, Disclosure, EmptyState, IconButton, Segmented, Sheet, Stepper, Textarea } from '../../components/ui'
+import { c, eyebrow, font, fs, numeral, pill, radius, shadow, tone, type Tone } from '../../theme'
+import type { HeroicPath } from '../../data/heroicPaths'
+import type { Character } from '../../types'
+import type { WorldConfig } from '../../worlds/types'
+import { useCatalogo, usePaneles, usePantalla } from './contexto'
+import {
+  MAX_ENCUENTROS, anotar, claveContador, claveEscenaPropia, claveResultado, encuentroEnPantalla, marcar, nuevoId, quitarEscena,
+  type EscenaPropia, type PantallaEstado, type ProgresoEmpeno, type ResultadoPrueba,
+} from './estado'
+import {
+  FORMATO_GUION, PLANTILLA_ESCENA, dividirGuion, escribirGuion, fusionarGuion, leerEscena, leerPrueba, tituloDe,
+  type Bloque, type ClaseSeccion, type Empeno, type EscenaGuion, type ModoImportar, type Prueba, type Seccion,
+} from './guion'
+import { buscarAdversario, eraNumero } from './adversarios'
+import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, destinoAnadir } from './encuentro'
+import { copiarTexto, descargarTexto, promptSiguienteGuion, type EscenaJugada } from './exportar'
+import { ESCENA_META } from './meta'
+import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, SelectorEscenas, TecladoNumerico, Tesela } from './piezas'
+
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
+const tarjeta: CSSProperties = { padding: 14, borderRadius: radius.lg, background: c.s1, border: `1px solid ${c.border}`, boxShadow: shadow[1] }
+const fila = (t: Tone): CSSProperties => ({ padding: '10px 12px', borderRadius: radius.md, background: t.bg, border: `1px solid ${t.border}` })
+
+/** Look of the sections the screen gives a behaviour to */
+const SECCION_META: Record<ClaseSeccion, { tone: Tone; icon: LucideIcon }> = {
+  pruebas: { tone: tone.zafiro, icon: Dices },
+  pnj: { tone: tone.esmeralda, icon: Users },
+  pj: { tone: tone.gold, icon: UserRound },
+  caminos: { tone: tone.topacio, icon: GitFork },
+  reglas: { tone: tone.rubi, icon: Swords },
+  avances: { tone: tone.esmeralda, icon: TrendingUp },
+  otra: { tone: tone.cuarzo, icon: Info },
+}
+
+/** The first bold text of an item («**Axies** (él): …» → «Axies»), or its text up to the colon */
+const nombreDeItem = (item: string) => /\*\*([^*]+)\*\*/.exec(item)?.[1].trim() ?? item.split(':')[0].trim()
+
+/** The catalog stat block an NPC item points to: «(él · ficha: Bandido)», or its own name («**Kaiana**») */
+const fichaDeItem = (item: string) => /ficha:\s*([^)·;,]+)/i.exec(item)?.[1].trim() ?? nombreDeItem(item)
+
+/** «Supervivencia CD 14» */
+const etiquetaPrueba = (p: Prueba) => `${p.habilidad || 'Prueba'}${p.cd !== null ? ` CD ${p.cd}` : p.contra ? ` contra ${p.contra}` : ''}`
+
+/** First sentence of a text (without its full stop), short enough for a log line */
+const resumen = (texto: string, max = 90) => {
+  const limpio = texto.replace(/\*\*/g, '').trim()
+  const frase = (/^[^.]*/.exec(limpio)?.[0] ?? limpio).trim()
+  return frase.length > max ? `${frase.slice(0, max - 1).trimEnd()}…` : frase
+}
+
+type EstadoEmpeno = 'en curso' | 'superado' | 'fracasado'
+/** «6 éxitos, 1 fallo» */
+const cuentaEmpeno = (p: ProgresoEmpeno) => `${p.exitos} éxito${p.exitos === 1 ? '' : 's'}, ${p.fallos} fallo${p.fallos === 1 ? '' : 's'}`
+
+const estadoEmpeno = (p: ProgresoEmpeno, objetivo: Empeno): EstadoEmpeno =>
+  p.exitos >= objetivo.exitos ? 'superado' : p.fallos >= objetivo.fallos ? 'fracasado' : 'en curso'
+
+// ── Panel ────────────────────────────────────────────────────────────────────
+
+/**
+ * «Guion»: the scenes prepared for the next sessions, in order and grouped (chapter, act…), each written in Markdown (`guion.ts`).
+ * The director plays it from here: reads aloud, shows images, marks tests, endeavours, counters and progress, prepares the
+ * fights, and goes on to the next scene. Scripts are imported (drafted with AI) and the prompt for the next one is exported.
+ */
+export function PanelGuion({
+  seleccion, onElegir, escala, onEscala,
+}: { seleccion: string | null; onElegir: (id: string) => void; escala: number; onEscala: (v: number) => void }) {
+  const { estado } = usePantalla()
+  const [editando, setEditando] = useState<EscenaPropia | 'nueva' | null>(null)
+  const [borrando, setBorrando] = useState<EscenaPropia | null>(null)
+  const [importando, setImportando] = useState(false)
+  const lista = estado.escenasPropias
+  const ref = estado.escenaActual
+  const sel = lista.find((e) => e.id === seleccion) ?? lista.find((e) => ref?.origen === 'propia' && e.id === ref.escenaId) ?? lista[0] ?? null
+
+  return (
+    <div style={stack(16)}>
+      <BarraGuion onNueva={() => setEditando('nueva')} onImportar={() => setImportando(true)} />
+
+      {lista.length === 0 ? (
+        <EmptyState
+          icon={<ScrollText size={22} aria-hidden />}
+          title="Aún no hay guion"
+          description="Importa el borrador de las próximas sesiones (un .md generado con IA desde el libro y vuestra historia) o escribe una escena. Cada escena reúne lo que lees en voz alta, las pruebas, los PNJ, las imágenes y los enemigos."
+          action={
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Button icon={<Upload size={16} aria-hidden />} onClick={() => setImportando(true)}>Importar guion</Button>
+              <Button variant="secondary" icon={<Plus size={16} aria-hidden />} onClick={() => setEditando('nueva')}>Nueva escena</Button>
+            </div>
+          }
+        />
+      ) : (
+        <>
+          <IndiceGuion seleccion={sel?.id ?? null} onElegir={onElegir} />
+          {sel && (
+            <DetalleGuion
+              esc={sel}
+              escala={escala}
+              onEscala={onEscala}
+              onElegir={onElegir}
+              onEditar={() => setEditando(sel)}
+              onBorrar={() => setBorrando(sel)}
+            />
+          )}
+        </>
+      )}
+
+      {editando && (
+        <HojaEditarEscena escena={editando === 'nueva' ? null : editando} onClose={() => setEditando(null)} onGuardada={onElegir} />
+      )}
+      {importando && <HojaImportar onClose={() => setImportando(false)} onHecho={(id) => id && onElegir(id)} />}
+      <BorrarEscena escena={borrando} onCerrar={() => setBorrando(null)} />
+    </div>
+  )
+}
+
+function BorrarEscena({ escena, onCerrar }: { escena: EscenaPropia | null; onCerrar: () => void }) {
+  const { actualizar } = usePantalla()
+  return (
+    <ConfirmDialog
+      open={!!escena}
+      title={`¿Eliminar «${escena ? tituloDe(escena) : ''}»?`}
+      message="Se borra la escena del guion con sus pruebas marcadas, contadores y empeño. Esta acción no se puede deshacer."
+      onConfirm={() => {
+        if (escena) actualizar((b) => quitarEscena(b, escena.id))
+        onCerrar()
+      }}
+      onCancel={onCerrar}
+    />
+  )
+}
+
+// ── Toolbar: title, import, export, prompt for the next draft ────────────────
+
+/** One line per PJ for the prompt: ancestry, level, paths, purpose, obstacle and active goals with their milestones */
+function describirPj(p: Character, cfg: WorldConfig, heroicos: HeroicPath[]): string {
+  const heroico = heroicos.find((h) => h.id === p.caminoHeroico)?.name ?? p.caminoHeroico
+  const ci = cfg.caminoInvestido
+  const valorInvestido = ci ? (ci.field === 'caminoRadiante' ? p.caminoRadiante : p.caminoMetal) : ''
+  const investido = ci?.caminos.find((x) => x.id === valorInvestido)?.nombre ?? valorInvestido
+  const caminos = [heroico, investido].filter(Boolean).join(' y ')
+  const metas = (p.metas ?? []).filter((m) => m.estado === 'activa').map((m) => `${m.titulo.trim()} (${m.hitos}/3 hitos)`)
+  return [
+    `${p.name} (${p.ascendencia || 'sin ascendencia'}, nivel ${p.level}${caminos ? `, ${caminos}` : ''})`,
+    p.proposito && `Propósito: ${p.proposito}`,
+    p.obstaculo && `Obstáculo: ${p.obstaculo}`,
+    metas.length > 0 && `Metas: ${metas.join(', ')}`,
+  ].filter(Boolean).join('. ')
+}
+
+/** How each scene went (played, tests, endeavour, ticked items, counters), for the prompt of the next draft */
+function escenasJugadas(estado: PantallaEstado): EscenaJugada[] {
+  return estado.escenasPropias.map((esc) => {
+    const e = leerEscena(esc.md)
+    const actual = estado.escenaActual?.origen === 'propia' && estado.escenaActual.escenaId === esc.id
+    const detalles: string[] = []
+    for (const s of e.secciones.filter((x) => x.clase === 'pruebas')) {
+      for (const item of s.bloques.flatMap((b) => (b.tipo === 'lista' ? b.items : []))) {
+        const r = estado.resultados[claveResultado(esc.id, item)]
+        if (r) {
+          const p = leerPrueba(item)
+          detalles.push(`${etiquetaPrueba(p)} ${r === 'exito' ? 'superada' : 'fallada'} (${resumen(p.texto, 60)})`)
+        }
+      }
+    }
+    const prog = estado.empenos[esc.id]
+    if (e.empeno && prog) detalles.push(`Empeño ${estadoEmpeno(prog, e.empeno)} (${cuentaEmpeno(prog)})`)
+    for (const n of e.contadores) {
+      const v = estado.contadores[claveContador(esc.id, n)]
+      if (v) detalles.push(`${n}: ${v}`)
+    }
+    return {
+      grupo: e.grupo,
+      titulo: e.titulo,
+      estado: actual ? 'actual' : estado.marcas[claveEscenaPropia(esc.id)] ? 'jugada' : 'pendiente',
+      detalles,
+    }
+  })
+}
+
+function BarraGuion({ onNueva, onImportar }: { onNueva: () => void; onImportar: () => void }) {
+  const { cId, estado } = usePantalla()
+  const cfg = useWorldConfig()
+  const campana = useCampaignStore((s) => s.currentCampaign)
+  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId) })
+  const { data: diario } = useQuery({ queryKey: ['diary', cId], queryFn: () => diaryApi.getAll(cId) })
+  const { data: datosMundo } = useWorldData()
+  const [aviso, setAviso] = useState<string | null>(null)
+  const lista = estado.escenasPropias
+  const jugadas = lista.filter((e) => estado.marcas[claveEscenaPropia(e.id)]).length
+  const titulo = estado.guionTitulo || 'Guion de la partida'
+  const archivo = `${(estado.guionTitulo || 'Guion').replace(/[\\/:*?"<>|]/g, '')}.md`
+
+  const copiarGuion = async () => {
+    const ok = await copiarTexto(escribirGuion(estado.guionTitulo, lista))
+    setAviso(ok ? 'Guion copiado en Markdown.' : 'No se pudo copiar. Descárgalo en su lugar.')
+  }
+
+  const copiarPrompt = async () => {
+    const ultima = diario?.length ? diario.reduce((a, b) => (b.number > a.number ? b : a)) : null
+    const texto = promptSiguienteGuion({
+      campana: campana?.name ?? 'Campaña',
+      mundo: cfg.nombre,
+      pjs: personajes.map((p) => describirPj(p, cfg, datosMundo?.caminosHeroicos ?? [])),
+      cronica: ultima ? { numero: ultima.number, titulo: ultima.title, texto: ultima.body } : null,
+      guionTitulo: estado.guionTitulo,
+      escenas: escenasJugadas(estado),
+      notas: estado.sesion?.eventos ?? estado.historial[0]?.eventos ?? [],
+      formato: FORMATO_GUION,
+    })
+    const ok = await copiarTexto(texto)
+    setAviso(ok
+      ? 'Prompt copiado: pégalo en tu IA (mejor con el libro a mano) e importa aquí el guion que te devuelva.'
+      : 'No se pudo copiar el prompt.')
+  }
+
+  return (
+    <header style={{ ...stack(10), paddingBottom: 12, borderBottom: '1px solid var(--gold-rule)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+          <p style={{ ...eyebrow, color: tone.gold.fg }}>Guion</p>
+          <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, lineHeight: 1.2, color: c.text }}>{titulo}</h2>
+          {lista.length > 0 && (
+            <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2 }}>
+              {lista.length} escena{lista.length === 1 ? '' : 's'} · {jugadas} jugada{jugadas === 1 ? '' : 's'}
+            </p>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button size="sm" variant="secondary" icon={<Upload size={15} aria-hidden />} onClick={onImportar}>Importar</Button>
+          <Button size="sm" variant="secondary" icon={<Plus size={15} aria-hidden />} onClick={onNueva}>Nueva escena</Button>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Button size="sm" variant="gold" icon={<Lightbulb size={15} aria-hidden />} onClick={copiarPrompt}>Prompt del siguiente guion</Button>
+        {lista.length > 0 && (
+          <>
+            <Button size="sm" variant="ghost" icon={<ClipboardCopy size={15} aria-hidden />} onClick={copiarGuion}>Copiar guion</Button>
+            <Button size="sm" variant="ghost" icon={<Download size={15} aria-hidden />} onClick={() => descargarTexto(archivo, escribirGuion(estado.guionTitulo, lista))}>
+              Descargar .md
+            </Button>
+          </>
+        )}
+      </div>
+      <p role="status" className={aviso ? undefined : 'sr-only'} style={{ fontSize: fs.sm, color: c.muted }}>{aviso}</p>
+    </header>
+  )
+}
+
+// ── Index: the scenes by group, with what has been played ────────────────────
+
+function IndiceGuion({ seleccion, onElegir }: { seleccion: string | null; onElegir: (id: string) => void }) {
+  const { estado } = usePantalla()
+  const ref = estado.escenaActual
+  // Consecutive scenes of the same group go under one heading (a group can appear twice if the director reorders them)
+  const grupos: { grupo: string; escenas: { esc: EscenaPropia; e: EscenaGuion }[] }[] = []
+  for (const esc of estado.escenasPropias) {
+    const e = leerEscena(esc.md)
+    const ultimo = grupos[grupos.length - 1]
+    if (ultimo && ultimo.grupo === e.grupo) ultimo.escenas.push({ esc, e })
+    else grupos.push({ grupo: e.grupo, escenas: [{ esc, e }] })
+  }
+  return (
+    <nav aria-label="Escenas del guion" style={stack(12)}>
+      {grupos.map((g, i) => {
+        const jugadas = g.escenas.filter(({ esc }) => estado.marcas[claveEscenaPropia(esc.id)]).length
+        return (
+          <section key={`${g.grupo}-${i}`} style={stack(6)}>
+            {(g.grupo || grupos.length > 1) && (
+              <h3 style={{ ...eyebrow, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {g.grupo || 'Sin grupo'}
+                <span style={{ fontVariantNumeric: 'tabular-nums', color: jugadas === g.escenas.length ? tone.esmeralda.fg : c.subtle }}>
+                  {jugadas}/{g.escenas.length}
+                </span>
+              </h3>
+            )}
+            <SelectorEscenas
+              escenas={g.escenas.map(({ esc, e }) => ({
+                id: esc.id, titulo: e.titulo, tipo: e.tipo,
+                jugada: !!estado.marcas[claveEscenaPropia(esc.id)],
+                actual: ref?.origen === 'propia' && ref.escenaId === esc.id,
+              }))}
+              seleccion={seleccion}
+              onElegir={onElegir}
+            />
+          </section>
+        )
+      })}
+    </nav>
+  )
+}
+
+// ── One scene ────────────────────────────────────────────────────────────────
+
+function DetalleGuion({
+  esc, escala, onEscala, onElegir, onEditar, onBorrar,
+}: {
+  esc: EscenaPropia
+  escala: number
+  onEscala: (v: number) => void
+  onElegir: (id: string) => void
+  onEditar: () => void
+  onBorrar: () => void
+}) {
+  const { estado, actualizar, ultimoDiario } = usePantalla()
+  const e = leerEscena(esc.md)
+  const lista = estado.escenasPropias
+  const i = lista.findIndex((x) => x.id === esc.id)
+  const anterior = lista[i - 1] ?? null
+  const siguiente = lista[i + 1] ?? null
+  const clave = claveEscenaPropia(esc.id)
+  const jugada = !!estado.marcas[clave]
+  const actual = estado.escenaActual?.origen === 'propia' && estado.escenaActual.escenaId === esc.id
+  const articulo = useRef<HTMLElement>(null)
+  /** To a neighbouring scene from the bottom of this one: the new scene is read from its top */
+  const ir = (id: string) => {
+    onElegir(id)
+    requestAnimationFrame(() => articulo.current?.scrollIntoView({ block: 'start' }))
+  }
+
+  const fijarActual = (b: PantallaEstado, x: EscenaPropia) => {
+    b.escenaActual = { origen: 'propia', capituloId: null, escenaId: x.id }
+    anotar(b, { tipo: 'escena', etiqueta: 'Escena', texto: tituloDe(x) }, ultimoDiario)
+  }
+  /** The table moves on: this scene is played and the next one becomes the current one */
+  const pasarALaSiguiente = () => {
+    actualizar((b) => {
+      if (!b.marcas[clave]) {
+        marcar(b, clave, true)
+        anotar(b, { tipo: 'avance', etiqueta: 'Escena jugada', texto: e.titulo }, ultimoDiario)
+      }
+      if (siguiente) fijarActual(b, siguiente)
+      else b.escenaActual = null
+    })
+    if (siguiente) ir(siguiente.id)
+  }
+  const mover = (d: -1 | 1) =>
+    actualizar((b) => {
+      const a = b.escenasPropias
+      const j = a.findIndex((x) => x.id === esc.id)
+      const k = j + d
+      if (j < 0 || k < 0 || k >= a.length) return
+      ;[a[j], a[k]] = [a[k], a[j]]
+    })
+
+  return (
+    <article ref={articulo} style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: 12 }}>
+      <CabeceraEscena
+        titulo={e.titulo}
+        tipo={e.tipo}
+        kicker={e.grupo || undefined}
+        actual={actual}
+        jugada={jugada}
+        escala={escala}
+        onEscala={onEscala}
+        onActual={() => actualizar((b) => {
+          if (actual) { b.escenaActual = null; return }
+          fijarActual(b, esc)
+        })}
+        onJugada={() => actualizar((b) => {
+          marcar(b, clave, !jugada)
+          if (!jugada) anotar(b, { tipo: 'avance', etiqueta: 'Escena jugada', texto: e.titulo }, ultimoDiario)
+        })}
+        acciones={
+          <>
+            <IconButton label={`Editar ${e.titulo}`} variant="surface" size={36} onClick={onEditar}><Pencil size={15} aria-hidden /></IconButton>
+            <IconButton label="Subir en el guion" variant="surface" size={36} disabled={!anterior} onClick={() => mover(-1)}><ArrowUp size={15} aria-hidden /></IconButton>
+            <IconButton label="Bajar en el guion" variant="surface" size={36} disabled={!siguiente} onClick={() => mover(1)}><ArrowDown size={15} aria-hidden /></IconButton>
+            <IconButton label={`Eliminar ${e.titulo}`} variant="danger" size={36} onClick={onBorrar}><Trash2 size={15} aria-hidden /></IconButton>
+          </>
+        }
+      />
+      {e.fuente && (
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: -6 }}>
+          <BookMarked size={14} aria-hidden style={{ color: tone.gold.fg, flexShrink: 0 }} />
+          {e.fuente}
+        </p>
+      )}
+
+      <Bloques bloques={e.cuerpo} escala={escala} />
+      {e.imagenes.length > 0 && <Galeria imagenes={e.imagenes} />}
+      {e.empeno && <TrackerEmpeno escenaId={esc.id} titulo={e.titulo} objetivo={e.empeno} />}
+      {e.contadores.length > 0 && <Contadores key={esc.id} escenaId={esc.id} nombres={e.contadores} />}
+      {e.secciones.map((s, k) => <SeccionGuion key={`${s.titulo}-${k}`} seccion={s} escenaId={esc.id} titulo={e.titulo} escala={escala} />)}
+      {e.enemigos.length > 0 && <EnemigosEscena esc={esc} e={e} />}
+
+      <nav aria-label="Escenas vecinas" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingTop: 12, borderTop: `1px solid ${c.border}` }}>
+        <Button size="sm" variant="ghost" icon={<ChevronLeft size={16} aria-hidden />} disabled={!anterior} onClick={() => anterior && ir(anterior.id)}>
+          Anterior
+        </Button>
+        <Button size="sm" variant="ghost" disabled={!siguiente} onClick={() => siguiente && ir(siguiente.id)}>
+          Siguiente <ChevronRight size={16} aria-hidden />
+        </Button>
+        {actual && (
+          <Button variant="gold" icon={<Check size={16} aria-hidden />} onClick={pasarALaSiguiente} style={{ marginLeft: 'auto' }}>
+            {siguiente ? `Jugada · pasar a «${tituloDe(siguiente)}»` : 'Jugada · fin del guion'}
+          </Button>
+        )}
+      </nav>
+    </article>
+  )
+}
+
+/** Paragraphs, read-aloud boxes, lists and checklists of the script's Markdown */
+function Bloques({ bloques, escala }: { bloques: Bloque[]; escala: number }) {
+  if (bloques.length === 0) return null
+  return (
+    <div style={stack(12)}>
+      {bloques.map((b, i) => {
+        if (b.tipo === 'cita') return <LeerEnVozAlta key={i} texto={b.texto} escala={escala} />
+        if (b.tipo === 'lista') {
+          return (
+            <ul key={i} style={{ ...listReset, ...stack(6) }}>
+              {b.items.map((t, j) => (
+                <li key={j} style={{ display: 'flex', gap: 8, fontSize: Math.round(15 * escala), lineHeight: 1.55, color: c.text }}>
+                  <span aria-hidden style={{ color: tone.gold.fg, flexShrink: 0 }}>•</span>
+                  <span><EnLinea texto={t} /></span>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        return <p key={i} style={{ fontSize: Math.round(16 * escala), lineHeight: 1.6, color: c.text }}><EnLinea texto={b.texto} /></p>
+      })}
+    </div>
+  )
+}
+
+function SeccionGuion({ seccion, escenaId, titulo, escala }: { seccion: Seccion; escenaId: string; titulo: string; escala: number }) {
+  const meta = SECCION_META[seccion.clase]
+  const Icon = meta.icon
+  return (
+    <Apartado titulo={seccion.titulo} icono={<Icon size={13} aria-hidden />} color={seccion.clase === 'otra' ? c.subtle : meta.tone.fg}>
+      <div style={stack(8)}>
+        {seccion.bloques.map((b, i) => {
+          if (b.tipo !== 'lista' || seccion.clase === 'otra') return <Bloques key={i} bloques={[b]} escala={escala} />
+          if (seccion.clase === 'pruebas') return <Pruebas key={i} items={b.items} escenaId={escenaId} titulo={titulo} />
+          if (seccion.clase === 'pnj') return <ListaPnj key={i} items={b.items} />
+          return (
+            <ul key={i} style={{ ...listReset, ...stack(6) }}>
+              {b.items.map((t, j) => (
+                <li key={j} style={{ ...fila(meta.tone), fontSize: Math.round(15 * escala), lineHeight: 1.5, color: c.text }}>
+                  <EnLinea texto={t} />
+                </li>
+              ))}
+            </ul>
+          )
+        })}
+        {seccion.clase === 'avances' && (
+          <p style={{ fontSize: fs.xs, color: c.subtle, lineHeight: 1.45 }}>
+            Recomendaciones: se aplican en la ficha de cada personaje; la pantalla no cambia niveles, metas ni Ideales.
+          </p>
+        )}
+      </div>
+    </Apartado>
+  )
+}
+
+/** Tests: the difficulty in big, the skill, what it is for; the director marks how it went (and the log keeps it) */
+function Pruebas({ items, escenaId, titulo }: { items: string[]; escenaId: string; titulo: string }) {
+  const { estado, actualizar, ultimoDiario } = usePantalla()
+  const marcarResultado = (item: string, r: ResultadoPrueba) =>
+    actualizar((b) => {
+      const k = claveResultado(escenaId, item)
+      if (b.resultados[k] === r) {
+        delete b.resultados[k]
+        return
+      }
+      b.resultados[k] = r
+      const p = leerPrueba(item)
+      anotar(b, {
+        tipo: 'avance', etiqueta: 'Prueba',
+        texto: `${etiquetaPrueba(p)} ${r === 'exito' ? 'superada' : 'fallada'} en «${titulo}»${p.texto ? `: ${resumen(p.texto)}` : ''}`,
+      }, ultimoDiario)
+    })
+  return (
+    <ul style={{ ...listReset, ...stack(8) }}>
+      {items.map((item, i) => {
+        const p = leerPrueba(item)
+        const r = estado.resultados[claveResultado(escenaId, item)]
+        const t = r === 'exito' ? tone.esmeralda : r === 'fallo' ? tone.rubi : tone.zafiro
+        return (
+          <li key={i} style={{ ...fila(t), display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+            {p.cd !== null && (
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 46, flexShrink: 0 }}>
+                <span style={{ ...eyebrow, fontSize: 10, color: t.fg }}>CD</span>
+                <span style={{ ...numeral, fontSize: fs['2xl'], lineHeight: 1, color: c.text }}>{p.cd}</span>
+              </span>
+            )}
+            {p.cd === null && p.contra && (
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 74, flexShrink: 0, textAlign: 'center' }}>
+                <span style={{ ...eyebrow, fontSize: 10, color: t.fg }}>contra</span>
+                <span style={{ fontSize: fs.xs, fontWeight: 700, lineHeight: 1.25, color: c.text }}>{p.contra}</span>
+              </span>
+            )}
+            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+              {p.habilidad && <p style={{ fontWeight: 700, color: t.fg, fontSize: fs.base }}>{p.habilidad}</p>}
+              <p style={{ fontSize: fs.sm + 1, lineHeight: 1.5, color: c.text }}><EnLinea texto={p.texto} /></p>
+            </div>
+            <div role="group" aria-label={`Resultado: ${etiquetaPrueba(p)}`} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <Conmutador compacto activo={r === 'exito'} t={tone.esmeralda} icono={<Check size={15} aria-hidden />} etiqueta="Superada" onClick={() => marcarResultado(item, 'exito')} />
+              <Conmutador compacto activo={r === 'fallo'} t={tone.rubi} icono={<X size={15} aria-hidden />} etiqueta="Fallada" onClick={() => marcarResultado(item, 'fallo')} />
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** NPCs of the scene; one with a stat block in the catalog can join the fight */
+function ListaPnj({ items }: { items: string[] }) {
+  const { estado, actualizar, ultimoDiario } = usePantalla()
+  const { irA } = usePaneles()
+  const cfg = useWorldConfig()
+  const { catalogo } = useCatalogo()
+  const era = eraNumero(useEra())
+  return (
+    <ul style={{ ...listReset, ...stack(8) }}>
+      {items.map((item, i) => {
+        const nombre = nombreDeItem(item)
+        const ficha = buscarAdversario(fichaDeItem(item), catalogo)
+        return (
+          <li key={i} style={{ ...fila(tone.esmeralda), ...stack(8) }}>
+            <p style={{ fontSize: fs.sm + 1, lineHeight: 1.5, color: c.text }}><EnLinea texto={item} /></p>
+            {ficha && (
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<UserPlus size={15} aria-hidden />}
+                style={{ alignSelf: 'flex-start' }}
+                onClick={() => {
+                  actualizar((b) => anadirAdversario(asegurarEncuentro(b, 'Encuentro', ultimoDiario), ficha, 1, cfg.habilidades, era, nombre))
+                  irA('encuentro')
+                }}
+              >
+                Añadir {destinoAnadir(estado)} ({ficha.name})
+              </Button>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Successes before failures («6 éxitos antes de 4 fallos»): dots, steppers and the outcome, which goes to the log */
+function TrackerEmpeno({ escenaId, titulo, objetivo }: { escenaId: string; titulo: string; objetivo: Empeno }) {
+  const { estado, actualizar, ultimoDiario } = usePantalla()
+  const prog = estado.empenos[escenaId] ?? { exitos: 0, fallos: 0 }
+  const resultado = estadoEmpeno(prog, objetivo)
+  const t = resultado === 'superado' ? tone.esmeralda : resultado === 'fracasado' ? tone.rubi : tone.topacio
+  const cambiar = (campo: keyof ProgresoEmpeno, valor: number) =>
+    actualizar((b) => {
+      const p = { ...(b.empenos[escenaId] ?? { exitos: 0, fallos: 0 }) }
+      const antes = estadoEmpeno(p, objetivo)
+      p[campo] = Math.max(0, Math.min(99, valor))
+      b.empenos[escenaId] = p
+      const despues = estadoEmpeno(p, objetivo)
+      if (despues !== 'en curso' && despues !== antes) {
+        anotar(b, { tipo: 'avance', etiqueta: 'Empeño', texto: `«${titulo}» ${despues} (${cuentaEmpeno(p)})` }, ultimoDiario)
+      }
+    })
+  const linea = (campo: keyof ProgresoEmpeno, etiqueta: string, max: number, tt: Tone) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <span style={{ ...eyebrow, color: tt.fg, minWidth: 54 }}>{etiqueta}</span>
+      <span aria-hidden style={{ display: 'flex', gap: 5, flex: '1 1 120px', flexWrap: 'wrap' }}>
+        {Array.from({ length: Math.max(max, prog[campo]) }, (_, k) => (
+          <span key={k} style={{ width: 16, height: 16, borderRadius: 999, border: `1.5px solid ${tt.fg}`, background: k < prog[campo] ? tt.fg : 'transparent' }} />
+        ))}
+      </span>
+      <Stepper size="sm" label={`${etiqueta} del empeño`} value={prog[campo]} min={0} max={99} onChange={(v) => cambiar(campo, v)} format={(v) => `${v}/${max}`} />
+    </div>
+  )
+  return (
+    <section aria-label={`Empeño: ${objetivo.exitos} éxitos antes de ${objetivo.fallos} fallos`} style={{ ...fila(t), ...stack(10), padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Tesela t={t} tam={32}><Dices size={16} /></Tesela>
+        <p style={{ flex: 1, fontWeight: 650, color: c.text }}>
+          Empeño · {objetivo.exitos} éxitos antes de {objetivo.fallos} fallos
+        </p>
+        <span style={pill(t)}>{resultado === 'en curso' ? 'En curso' : resultado === 'superado' ? 'Superado' : 'Fracasado'}</span>
+      </div>
+      {linea('exitos', 'Éxitos', objetivo.exitos, tone.esmeralda)}
+      {linea('fallos', 'Fallos', objetivo.fallos, tone.rubi)}
+    </section>
+  )
+}
+
+/** Counters of a scene (the ship's damage, days lost…): also shown in the fight prepared from it */
+function Contadores({ escenaId, nombres }: { escenaId: string; nombres: string[] }) {
+  const { estado, actualizar } = usePantalla()
+  const [cantidad, setCantidad] = useState<string | null>(null)
+  const poner = (nombre: string, valor: number) =>
+    actualizar((b) => { b.contadores[claveContador(escenaId, nombre)] = Math.max(0, Math.min(9999, valor)) })
+  return (
+    <ul aria-label="Contadores" style={{ ...listReset, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      {nombres.map((n) => {
+        const v = estado.contadores[claveContador(escenaId, n)] ?? 0
+        return (
+          <li key={n} style={{ ...fila(tone.cuarzo), display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: '1 1 260px' }}>
+            <span style={{ flex: 1, minWidth: 0, fontWeight: 650, color: c.text }}>{n}</span>
+            <Stepper size="sm" label={n} value={v} min={0} max={9999} onChange={(x) => poner(n, x)} />
+            <Button size="sm" variant="secondary" onClick={() => setCantidad(n)}>± Cantidad</Button>
+          </li>
+        )
+      })}
+      {cantidad !== null && (
+        <HojaCantidad
+          nombre={cantidad}
+          onClose={() => setCantidad(null)}
+          onAplicar={(d) => poner(cantidad, (estado.contadores[claveContador(escenaId, cantidad)] ?? 0) + d)}
+        />
+      )}
+    </ul>
+  )
+}
+
+function HojaCantidad({ nombre, onClose, onAplicar }: { nombre: string; onClose: () => void; onAplicar: (delta: number) => void }) {
+  const [valor, setValor] = useState('')
+  const n = Number(valor) || 0
+  const aplicar = (signo: 1 | -1) => {
+    onAplicar(signo * n)
+    onClose()
+  }
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={nombre}
+      footer={
+        <>
+          <Button variant="secondary" size="lg" style={{ flex: 1 }} disabled={!n} onClick={() => aplicar(-1)}>Restar {n || ''}</Button>
+          <Button size="lg" style={{ flex: 1 }} disabled={!n} onClick={() => aplicar(1)}>Sumar {n || ''}</Button>
+        </>
+      }
+    >
+      <div style={stack(12)}>
+        <output style={{ ...numeral, fontSize: fs['3xl'], textAlign: 'center', color: c.text }}>{valor || '0'}</output>
+        <TecladoNumerico valor={valor} onChange={setValor} etiqueta={`Cantidad para ${nombre}`} />
+      </div>
+    </Sheet>
+  )
+}
+
+/** The enemies of the scene and «Preparar encuentro»: the fight remembers the scene, so its rules and counters go with it */
+function EnemigosEscena({ esc, e }: { esc: EscenaPropia; e: EscenaGuion }) {
+  const { estado, actualizar, ultimoDiario } = usePantalla()
+  const { irA } = usePaneles()
+  const cfg = useWorldConfig()
+  const { catalogo, catalogoListo, catalogoFallo } = useCatalogo()
+  const era = eraNumero(useEra())
+  const hayEncuentro = encuentroEnPantalla(estado) !== null
+  const preparar = (simultaneo: boolean) => {
+    actualizar((b) => {
+      const enc = simultaneo ? abrirEncuentro(b, e.titulo, ultimoDiario) : asegurarEncuentro(b, e.titulo, ultimoDiario)
+      enc.escenaId ??= esc.id
+      anadirEnemigos(enc, e.enemigos, catalogo, cfg.habilidades, era)
+    })
+    irA('encuentro')
+  }
+  return (
+    <Apartado titulo="Enemigos" icono={<Swords size={13} aria-hidden />} color={tone.rubi.fg}>
+      <ul style={{ ...listReset, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {e.enemigos.map((x, i) => {
+          const ficha = buscarAdversario(x.nombre, catalogo)
+          return (
+            <li key={i} style={{ ...pill(ficha ? tone.rubi : tone.cuarzo), borderRadius: radius.sm }} title={ficha ? `Ficha: ${ficha.name}` : 'Sin ficha en el catálogo'}>
+              {x.cantidad} {x.nombre}
+            </li>
+          )
+        })}
+      </ul>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Button icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(false)}>
+          {hayEncuentro ? `Añadir ${destinoAnadir(estado)}` : 'Preparar encuentro'}
+        </Button>
+        {hayEncuentro && estado.encuentros.length < MAX_ENCUENTROS && (
+          <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(true)}>
+            Como combate simultáneo
+          </Button>
+        )}
+        {!catalogoListo && (
+          <p style={{ width: '100%', fontSize: fs.xs, color: catalogoFallo ? tone.rubi.fg : c.subtle }}>
+            {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para preparar el encuentro con sus fichas.' : 'Cargando el catálogo de adversarios…'}
+          </p>
+        )}
+      </div>
+    </Apartado>
+  )
+}
+
+/** In the Encuentro panel: the combat rules and counters of the script scene the fight was prepared from */
+export function ReglasDeEscena({ escenaId }: { escenaId: string }) {
+  const { estado } = usePantalla()
+  const esc = estado.escenasPropias.find((x) => x.id === escenaId)
+  if (!esc) return null
+  const e = leerEscena(esc.md)
+  const reglas = e.secciones.filter((s) => s.clase === 'reglas').flatMap((s) => s.bloques)
+  if (reglas.length === 0 && e.contadores.length === 0) return null
+  return (
+    <Disclosure
+      defaultOpen
+      headingLevel={3}
+      accent={tone.rubi.fg}
+      icon={<ScrollText size={18} aria-hidden />}
+      title={`Reglas de «${e.titulo}»`}
+      summary="Del guion: efectos del campo de batalla y contadores de la escena."
+    >
+      <div style={stack(12)}>
+        {reglas.length > 0 && <Bloques bloques={reglas} escala={1} />}
+        {e.contadores.length > 0 && <Contadores escenaId={esc.id} nombres={e.contadores} />}
+      </div>
+    </Disclosure>
+  )
+}
+
+// ── Editing (the scene's Markdown) and importing ─────────────────────────────
+
+/** What the parser understood, under the text being edited */
+function resumenEscena(e: EscenaGuion): string {
+  const pruebas = e.secciones.filter((s) => s.clase === 'pruebas').flatMap((s) => s.bloques).reduce((n, b) => n + (b.tipo === 'lista' ? b.items.length : 0), 0)
+  const lecturas = [...e.cuerpo, ...e.secciones.flatMap((s) => s.bloques)].filter((b) => b.tipo === 'cita').length
+  return [
+    e.grupo && `Grupo: ${e.grupo}`,
+    lecturas && `${lecturas} lectura${lecturas === 1 ? '' : 's'} en voz alta`,
+    pruebas && `${pruebas} prueba${pruebas === 1 ? '' : 's'}`,
+    e.imagenes.length && `${e.imagenes.length} imagen${e.imagenes.length === 1 ? '' : 'es'}`,
+    e.enemigos.length && `enemigos: ${e.enemigos.map((x) => `${x.cantidad} ${x.nombre}`).join(', ')}`,
+    e.empeno && `empeño ${e.empeno.exitos}/${e.empeno.fallos}`,
+    e.contadores.length && `contadores: ${e.contadores.join(', ')}`,
+    e.secciones.length && `secciones: ${e.secciones.map((s) => s.titulo).join(', ')}`,
+  ].filter(Boolean).join(' · ')
+}
+
+function FormatoGuion() {
+  return (
+    <Disclosure headingLevel={3} icon={<Info size={18} aria-hidden />} title="Formato del guion" summary="Cómo escribir las escenas para que la pantalla las entienda.">
+      <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: font.mono, fontSize: fs.xs + 1, lineHeight: 1.55, color: c.muted }}>{FORMATO_GUION}</pre>
+    </Disclosure>
+  )
+}
+
+function HojaEditarEscena({ escena, onClose, onGuardada }: { escena: EscenaPropia | null; onClose: () => void; onGuardada: (id: string) => void }) {
+  const { actualizar } = usePantalla()
+  const [md, setMd] = useState(escena?.md ?? PLANTILLA_ESCENA)
+  const e = leerEscena(md)
+  const guardar = () => {
+    const id = escena?.id ?? nuevoId()
+    actualizar((b) => {
+      const i = b.escenasPropias.findIndex((x) => x.id === id)
+      if (i >= 0) b.escenasPropias[i] = { id, md: md.trim() }
+      else b.escenasPropias.push({ id, md: md.trim() })
+    })
+    onGuardada(id)
+    onClose()
+  }
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={escena ? `Editar «${tituloDe(escena)}»` : 'Nueva escena'}
+      description="La escena es texto en Markdown: el mismo formato que importas."
+      maxWidth={860}
+      footer={
+        <>
+          <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
+          <Button size="lg" style={{ flex: 2 }} disabled={!md.trim()} onClick={guardar}>Guardar</Button>
+        </>
+      }
+    >
+      <div style={stack(12)}>
+        <Textarea
+          aria-label="Texto de la escena"
+          rows={18}
+          value={md}
+          onChange={(ev) => setMd(ev.target.value)}
+          spellCheck={false}
+          data-autofocus
+          style={{ fontFamily: font.mono, fontSize: fs.sm, lineHeight: 1.55 }}
+        />
+        <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>
+          <strong style={{ color: c.text }}>{e.titulo}</strong> · {ESCENA_META[e.tipo].label}{resumenEscena(e) ? ` · ${resumenEscena(e)}` : ''}
+        </p>
+        <FormatoGuion />
+      </div>
+    </Sheet>
+  )
+}
+
+function HojaImportar({ onClose, onHecho }: { onClose: () => void; onHecho: (primeraId: string | null) => void }) {
+  const { estado, actualizar } = usePantalla()
+  const [texto, setTexto] = useState('')
+  const [modo, setModo] = useState<ModoImportar>('fusionar')
+  const [confirmando, setConfirmando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const archivo = useRef<HTMLInputElement>(null)
+  const leido = useMemo(() => dividirGuion(texto), [texto])
+  // Dry run with placeholder ids: what the import would do
+  const previa = useMemo(() => fusionarGuion(estado.escenasPropias, leido.escenas, modo, () => ''), [estado.escenasPropias, leido, modo])
+
+  const leerArchivo = async (f: File | undefined) => {
+    if (!f) return
+    try {
+      setTexto(await f.text())
+      setError(null)
+    } catch {
+      setError('No se pudo leer el archivo.')
+    }
+  }
+
+  const aplicar = () => {
+    let primera: string | null = null
+    actualizar((b) => {
+      const r = fusionarGuion(b.escenasPropias, leido.escenas, modo, nuevoId)
+      for (const q of r.quitadas) quitarEscena(b, q.id)
+      b.escenasPropias = r.escenas
+      if (leido.titulo) b.guionTitulo = leido.titulo
+      primera = r.escenas.find((x) => leerEscena(x.md).titulo === leerEscena(leido.escenas[0] ?? '').titulo)?.id ?? null
+    })
+    onHecho(primera)
+    onClose()
+  }
+
+  const hay = leido.escenas.length > 0
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Importar guion"
+      description="Pega el Markdown que te ha dado la IA o elige el archivo .md. Las escenas con el mismo título conservan lo que ya marcaste."
+      maxWidth={860}
+      footer={
+        <>
+          <Button variant="secondary" size="lg" style={{ flex: 1 }} onClick={onClose}>Cancelar</Button>
+          <Button
+            size="lg"
+            style={{ flex: 2 }}
+            disabled={!hay}
+            onClick={() => (modo === 'reemplazar' && previa.quitadas.length > 0 ? setConfirmando(true) : aplicar())}
+          >
+            Importar {hay ? `${leido.escenas.length} escena${leido.escenas.length === 1 ? '' : 's'}` : ''}
+          </Button>
+        </>
+      }
+    >
+      <div style={stack(12)}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Button size="sm" variant="secondary" icon={<FileUp size={15} aria-hidden />} onClick={() => archivo.current?.click()}>Elegir archivo .md</Button>
+          <input
+            ref={archivo}
+            type="file"
+            accept=".md,.markdown,.txt,text/markdown,text/plain"
+            hidden
+            onChange={(ev) => { void leerArchivo(ev.target.files?.[0]); ev.target.value = '' }}
+          />
+          <Segmented<ModoImportar>
+            ariaLabel="Cómo importar"
+            size="sm"
+            value={modo}
+            onChange={setModo}
+            options={[
+              { value: 'fusionar', label: 'Añadir y actualizar' },
+              { value: 'reemplazar', label: 'Reemplazar el guion' },
+            ]}
+          />
+        </div>
+        {error && <p role="alert" style={{ fontSize: fs.sm, color: tone.rubi.fg }}>{error}</p>}
+        <Textarea
+          aria-label="Markdown del guion"
+          rows={14}
+          value={texto}
+          onChange={(ev) => setTexto(ev.target.value)}
+          spellCheck={false}
+          placeholder={'---\nguion: Tras la batalla del salón\n---\n# Capítulo 3 · La ciudad quemada\n## Repercusiones\ntipo: social\n\n> Lo que lees en voz alta…'}
+          style={{ fontFamily: font.mono, fontSize: fs.sm, lineHeight: 1.55 }}
+        />
+        {hay && (
+          <div role="status" style={{ ...fila(tone.zafiro), ...stack(6) }}>
+            <p style={{ fontWeight: 650, color: c.text }}>
+              {leido.titulo ? `«${leido.titulo}» · ` : ''}{leido.escenas.length} escena{leido.escenas.length === 1 ? '' : 's'}:{' '}
+              {previa.nuevas} nueva{previa.nuevas === 1 ? '' : 's'}, {previa.actualizadas} actualizada{previa.actualizadas === 1 ? '' : 's'}
+              {modo === 'reemplazar' && previa.quitadas.length > 0 ? `, ${previa.quitadas.length} se quitan` : ''}
+            </p>
+            <ol style={{ margin: 0, paddingLeft: 20, fontSize: fs.sm, color: c.muted, lineHeight: 1.5 }}>
+              {leido.escenas.map((md, i) => {
+                const e = leerEscena(md)
+                return <li key={i}>{e.grupo ? `${e.grupo} · ` : ''}{e.titulo}</li>
+              })}
+            </ol>
+          </div>
+        )}
+        <FormatoGuion />
+      </div>
+      <ConfirmDialog
+        open={confirmando}
+        title="¿Reemplazar el guion?"
+        message={`Se quitan ${previa.quitadas.length} escena${previa.quitadas.length === 1 ? '' : 's'} que no están en el archivo (${previa.quitadas.map(tituloDe).join(', ')}), con lo que tuvieran marcado.`}
+        confirmLabel="Reemplazar"
+        onConfirm={() => { setConfirmando(false); aplicar() }}
+        onCancel={() => setConfirmando(false)}
+      />
+    </Sheet>
+  )
+}

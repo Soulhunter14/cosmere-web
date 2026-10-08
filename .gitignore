@@ -26,3 +26,6 @@ dist-ssr
 # Nacidos de la Bruma: texto del manual y credenciales locales de prueba (nunca en git)
 docs/nacidos-de-la-bruma/fuentes/*.txt
 docs/nacidos-de-la-bruma/entorno-pruebas.md
+
+# Pantalla del director: guiones de campaña (contenido de la aventura y de la mesa, nunca en git)
+docs/pantalla-director/guiones/

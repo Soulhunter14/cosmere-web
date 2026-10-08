@@ -26,6 +26,7 @@ import { deOtraEra, eraNumero, etiquetaEra, formatoDado, type EraNum } from './a
 import { abrirEncuentro, anadirAdversario, anadirLibre, anadirPersonajes, asegurarEncuentro, cerrarEncuentro, nombreBase } from './encuentro'
 import { RANGO_META } from './meta'
 import { BarraRecurso, Conmutador, TecladoNumerico, Tesela } from './piezas'
+import { ReglasDeEscena } from './PanelGuion'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -203,6 +204,9 @@ export function PanelEncuentro() {
           </Button>
         </div>
       </section>
+
+      {/* ── Battlefield rules and counters of the script scene the fight comes from ── */}
+      {enc.escenaId && <ReglasDeEscena escenaId={enc.escenaId} />}
 
       {/* ── One lane per phase (a Jefe is in both of its side) ── */}
       {FASES.map((fase) => {

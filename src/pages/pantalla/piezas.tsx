@@ -1,12 +1,30 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Check, Delete, ExternalLink } from 'lucide-react'
+import { Check, Delete, ExternalLink, Pin, PinOff } from 'lucide-react'
 import { Button, IconButton, Sheet } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { PlotIcon } from '../../components/GameIcons'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, tone, type Tone } from '../../theme'
 import type { TramaDieResult } from '../../utils/dice'
+import type { TipoEscena } from './estado'
+import { ESCENA_META } from './meta'
 
 /* Building blocks shared by the panels of the «Pantalla del director» (big touch targets, readable at arm's length). */
+
+const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
+const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
+
+/** `**negrita**` and `*cursiva*` of the script's Markdown, as text nodes (never HTML) */
+export function EnLinea({ texto }: { texto: string }) {
+  const partes = texto.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g)
+  return (
+    <>
+      {partes.map((p, i) =>
+        p.startsWith('**') && p.endsWith('**') && p.length > 4 ? <strong key={i} style={{ fontWeight: 700, color: c.text }}>{p.slice(2, -2)}</strong>
+          : p.startsWith('*') && p.endsWith('*') && p.length > 2 ? <em key={i}>{p.slice(1, -1)}</em>
+            : p)}
+    </>
+  )
+}
 
 /** Resource bar with label and «actual / max» (salud, concentración, Investidura) */
 export function BarraRecurso({
@@ -108,7 +126,7 @@ export function LeerEnVozAlta({ texto, escala }: { texto: string; escala: number
               color: c.text, margin: i ? '12px 0 0' : 0, whiteSpace: 'pre-line',
             }}
           >
-            {p}
+            <EnLinea texto={p} />
           </p>
         ))}
       </div>
@@ -313,5 +331,115 @@ export function Conmutador({
       {icono}
       {etiqueta}
     </button>
+  )
+}
+
+// ── Shared scene header ──────────────────────────────────────────────────────
+
+export function CabeceraEscena({
+  titulo, tipo, kicker, actual, jugada, onActual, onJugada, escala, onEscala, acciones,
+}: {
+  titulo: string
+  tipo: TipoEscena
+  kicker?: string
+  actual: boolean
+  jugada: boolean
+  onActual: () => void
+  onJugada: () => void
+  escala: number
+  onEscala: (v: number) => void
+  acciones?: ReactNode
+}) {
+  const meta = ESCENA_META[tipo]
+  const Icon = meta.icon
+  return (
+    <header style={stack(10)}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <Tesela t={meta.tone} tam={40}><Icon size={19} /></Tesela>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {kicker && <p style={{ ...eyebrow, color: tone.gold.fg, marginBottom: 2 }}>{kicker}</p>}
+          <h2 style={{ fontFamily: font.display, fontSize: fs.xl + 2, fontWeight: 600, lineHeight: 1.2, color: c.text }}>{titulo}</h2>
+          <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            <span style={pill(meta.tone)}>{meta.label}</span>
+            {actual && <span style={pill(tone.gold)}><Pin size={12} aria-hidden />Escena actual</span>}
+            {jugada && <span style={pill(tone.esmeralda)}><Check size={12} aria-hidden />Jugada</span>}
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual}>
+          {actual ? 'Quitar de actual' : 'Escena actual'}
+        </Button>
+        <Button size="sm" variant="secondary" icon={<Check size={15} aria-hidden />} onClick={onJugada} aria-pressed={jugada}
+          style={jugada ? { background: tone.esmeralda.bg, borderColor: tone.esmeralda.border, color: tone.esmeralda.fg } : undefined}>
+          {jugada ? 'Jugada' : 'Marcar jugada'}
+        </Button>
+        {acciones}
+        <span style={{ marginLeft: 'auto' }}>
+          <ControlLetra escala={escala} onChange={onEscala} />
+        </span>
+      </div>
+    </header>
+  )
+}
+
+export function Apartado({ titulo, icono, color = c.subtle, children }: { titulo: string; icono?: ReactNode; color?: string; children: ReactNode }) {
+  return (
+    <section style={stack(8)}>
+      <h3 style={{ ...eyebrow, color, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {icono}
+        {titulo}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+export function Parrafos({ textos, escala }: { textos: string[]; escala: number }) {
+  return (
+    <div style={stack(10)}>
+      {textos.map((p, i) => (
+        <p key={i} style={{ fontSize: Math.round(16 * escala), color: c.text, lineHeight: 1.6, whiteSpace: 'pre-line' }}>{p}</p>
+      ))}
+    </div>
+  )
+}
+
+/** Chips to pick a scene: type glyph, title, played and current marks */
+export function SelectorEscenas({
+  escenas, seleccion, onElegir,
+}: {
+  escenas: { id: string; titulo: string; tipo: TipoEscena; jugada: boolean; actual: boolean }[]
+  seleccion: string | null
+  onElegir: (id: string) => void
+}) {
+  return (
+    <ul aria-label="Escenas" style={{ ...listReset, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {escenas.map((e) => {
+        const on = e.id === seleccion
+        const meta = ESCENA_META[e.tipo]
+        const Icon = meta.icon
+        return (
+          <li key={e.id}>
+            <button
+              type="button"
+              aria-pressed={on}
+              onClick={() => onElegir(e.id)}
+              className="ui-btn"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 12px', borderRadius: radius.full, cursor: 'pointer',
+                background: on ? meta.tone.bg : c.s2, border: `1px solid ${on ? meta.tone.border : c.border}`,
+                color: on ? c.text : c.muted, fontSize: fs.sm, fontWeight: on ? 700 : 550,
+              }}
+            >
+              <Icon size={14} aria-hidden style={{ color: meta.tone.fg }} />
+              {e.titulo}
+              {e.actual && <><Pin size={12} aria-hidden style={{ color: tone.gold.fg }} /><span className="sr-only">, escena actual</span></>}
+              {e.jugada && <><Check size={13} aria-hidden style={{ color: tone.esmeralda.fg }} /><span className="sr-only">, jugada</span></>}
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }

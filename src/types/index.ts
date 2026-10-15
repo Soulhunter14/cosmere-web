@@ -31,6 +31,11 @@ export interface Campaign {
   iniciadaEn?: string | null
   /** Character fields (camelCase) that a started campaign locks for players (`CierreCampana.Campos` in the API); always the full list */
   camposDeCierre?: string[]
+  /**
+   * Whether the viewer may open «La banda»: the director always; a player only when the director has shared the crew sheet with
+   * them. Only the campaign detail carries it; absent = hidden
+   */
+  bandaVisible?: boolean
 }
 
 export interface CampaignDetail extends Campaign {
@@ -538,6 +543,72 @@ export interface SaveGmScreenRequest {
   state: object
   /** The version the client read */
   version: number
+}
+
+// La banda: the crew sheet of a campaign (CrewController, `CrewSheetResponse` / `SaveCrewSheetRequest` / `ShareCrewSheetRequest`).
+// The web owns the shape of `state` and `gmState` (src/pages/banda/estado.ts); the server stores them with optimistic concurrency.
+// Players get it only when the director shares it with them, without `gmState` or `sharedWith`; any other player gets 403.
+export interface CrewSheet {
+  /** The crew sheet (`{}` when it has never been saved): read it through `normalizarBanda` */
+  state: unknown
+  /** The director's private part; `null` for a player */
+  gmState: unknown | null
+  /** User ids of the players who may read the sheet; `null` for a player */
+  sharedWith: number[] | null
+  /** Send it back with the next save; 0 = never saved. A save with another version answers 409 with the stored CrewSheet */
+  version: number
+  /** null = never saved */
+  updatedAt: string | null
+}
+
+export interface SaveCrewSheetRequest {
+  /** The whole sheet (a JSON object, at most 1 MB of text) */
+  state: object
+  /** The director's private part (at most 200 kB); omitted = keep the stored one */
+  gmState?: object
+  /** The version the client read */
+  version: number
+}
+
+export interface AportarCrewRequest {
+  /** The character who gives the money (their own, for a player) */
+  characterId: number
+  /** More than 0, at most 2 decimals */
+  cantidad: number
+  /** For the ledger (at most 200 characters) */
+  motivo: string
+}
+
+/** Character inventory lists (Character.weapons / armor / equipment): one entry per unit */
+export type ListaInventario = 'weapons' | 'armor' | 'equipment'
+
+/** Goods leave a character's inventory and enter the crew's store, together (POST …/crew/almacen/entradas) */
+export interface EntrarAlmacenRequest {
+  /** Their own, for a player */
+  characterId: number
+  lista: ListaInventario
+  /** As the inventory keeps it */
+  nombre: string
+  /** 1..999, and the inventory must carry that many */
+  cantidad: number
+  /** The lot as the web builds it (src/pages/banda/estado.ts, Mercancia); the server fixes who, when, name, quantity and list */
+  lote: unknown
+  /** Ledger texts (at most 200 characters each) */
+  motivo: string
+  motivoVenta?: string
+}
+
+/** A lot leaves the crew's store and its units enter a character's inventory, together (POST …/crew/almacen/{loteId}/salida) */
+export interface SacarAlmacenRequest {
+  /** Who takes it, and whose inventory it goes to: their own, for a player */
+  characterId: number
+  /** For the ledger (at most 200 characters) */
+  motivo: string
+}
+
+export interface ShareCrewSheetRequest {
+  /** Players who may read the sheet; replaces the stored list (empty = only the director) */
+  userIds: number[]
 }
 
 // Libro original: the adventure book uploaded by the director, chapter by chapter (BookController, director only). Each chapter is

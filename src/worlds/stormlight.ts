@@ -38,6 +38,7 @@ export const STORMLIGHT: WorldConfig = {
     origenes: false,
     catalogoDePrecios: false,
     legados: false,
+    banda: false,
   },
   // The book's skill table, the same one every world reads on the sheet, the dice roller and the NPC page (T50, Q3)
   habilidades: HABILIDADES_COSMERE,
@@ -75,6 +76,8 @@ export const STORMLIGHT: WorldConfig = {
   loadData: () => Promise.resolve(DATA),
   syncData: DATA,
   libro: { id: 'caminapiedras', titulo: 'Caminapiedras', cargar: () => import('../data/caminapiedras').then((m) => m.CHAPTERS) },
+  // No crew sheet in Stormlight for now (docs/banda/propuesta.md, D9)
+  banda: null,
   // The Cosmere conditions plus Empoderado (Puente Nueve, conditions table; Ylt's Third Ideal in Caminapiedras)
   estados: conEstadosDelMundo([
     { id: 'empoderado', nombre: 'Empoderado', resumen: 'Hasta el final de la escena: ventaja en todas las pruebas y recupera la Investidura al máximo.' },

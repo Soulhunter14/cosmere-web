@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ChevronRight, Columns3, MapIcon, MessageSquare, Users } from 'lucide-react'
+import { ChevronRight, Columns3, MapIcon, MessageSquare, Users, Warehouse } from 'lucide-react'
 import { GmMessagesPage } from './GmMessagesPage'
 import { GlobalNpcListPage } from './GlobalNpcListPage'
 import { Spinner, Tabs, TabPanel } from '../../components/ui'
@@ -66,6 +66,35 @@ export function GmPage() {
           </span>
           <ChevronRight size={20} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
         </Link>
+        {/* «La banda» on the phone: the director's bottom bar is full, so its entry lives here (the sidebar and the rail have it) */}
+        {features.banda && (
+          <div className="only-mobile">
+            <Link
+              to={`/campaigns/${campaignId}/banda`}
+              className="ui-card ui-card--interactive"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12, padding: '12px 16px', borderRadius: radius.lg, width: '100%',
+                background: 'linear-gradient(135deg, var(--gold-bg), var(--surface-1) 72%)', border: '1px solid var(--gold-border)',
+                boxShadow: shadow[1], color: c.text, textDecoration: 'none',
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 40, height: 40, flexShrink: 0, borderRadius: radius.md, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'var(--gold-bg)', border: '1px solid var(--gold-border)', color: 'var(--gold)',
+                }}
+              >
+                <Warehouse size={20} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontFamily: font.display, fontSize: fs.lg, fontWeight: 600, lineHeight: 1.25 }}>La banda</span>
+                <span style={{ display: 'block', fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>Refugio, trabajadores, contactos y tesorería.</span>
+              </span>
+              <ChevronRight size={20} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
+            </Link>
+          </div>
+        )}
         <Tabs<Tab>
           idPrefix={ID_PREFIX}
           ariaLabel="Secciones del director"

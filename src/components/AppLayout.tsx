@@ -8,6 +8,7 @@ import { Button, ErrorMessage, Spinner } from './ui'
 import { useCampaignStore, useWorldConfig } from '../store/campaignStore'
 import { applyTheme, useThemeStore } from '../store/themeStore'
 import { campaignsApi } from '../api/campaigns'
+import { useBandaCompartida } from '../hooks/useBandaCompartida'
 import { page } from '../theme'
 
 export function AppLayout() {
@@ -37,6 +38,9 @@ export function AppLayout() {
   useLayoutEffect(() => {
     if (data) setCurrentCampaign(data)
   }, [data, setCurrentCampaign])
+
+  // «La banda»: sharing it with a player (or no longer) refreshes the campaign, whose `bandaVisible` drives the menu
+  useBandaCompartida(id)
 
   // Gate: what the pages read (`isGm`, the world through `useWorld`) is the persisted campaign of the last session, so
   // nothing that depends on it renders until the store holds the campaign of this URL. Persisted campaign = URL

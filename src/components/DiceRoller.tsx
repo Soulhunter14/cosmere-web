@@ -1451,6 +1451,13 @@ export function DiceRoller() {
         setPendingRolls((n) => n + 1)
       }
     },
+    // «La banda»: the server only says that the crew sheet (or who may see it) changed; the page and the menu fetch it again
+    CrewSheetUpdated: (data: unknown) => {
+      window.dispatchEvent(new CustomEvent('crewSheetUpdated', { detail: data }))
+    },
+    CrewSheetShared: (data: unknown) => {
+      window.dispatchEvent(new CustomEvent('crewSheetShared', { detail: data }))
+    },
   }), [activeTab, open])
 
   useCampaignHub(campaignId, hubHandlers())

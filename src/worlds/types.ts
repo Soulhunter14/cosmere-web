@@ -22,6 +22,7 @@ import type { TalentRules } from '../lib/talentRules'
 import type { RadiantOrder } from '../data/radiantOrders'
 import type { CaminoNacidoDelMetal } from '../data/mistborn/caminosNacidosDelMetal'
 import type { AdventureChapter } from '../data/libros/tipos'
+import type { CatalogoBanda } from '../lib/banda/tipos'
 
 /** Character fields that hold an attribute value (talentGraph.ts only has `SkillField` for skills). */
 export type AttrField = 'fuerza' | 'velocidad' | 'intelecto' | 'voluntad' | 'discernimiento' | 'presencia'
@@ -123,6 +124,8 @@ export interface WorldConfig {
     catalogoDePrecios: boolean
     /** Legacy of the character (adventure «El legado de los nacidos de la bruma»): card and picker on the «Trasfondo» tab */
     legados: boolean
+    /** «La banda»: the crew sheet (refuges, upgrades, workers, contacts) as a section of the app; its catalog is `banda` below */
+    banda: boolean
   }
   /** The 18 standard skills: the character sheet, the dice roller and the NPC page all read this table */
   habilidades: HabilidadDef[]
@@ -182,6 +185,11 @@ export interface WorldConfig {
    * `cargar` is a lazy `import()`, so its chapters never travel in the main bundle; `null` = the world has no book
    */
   libro: { id: string; titulo: string; cargar: () => Promise<AdventureChapter[]> } | null
+  /**
+   * Catalog of «La banda» (organization types, refuges, upgrades, trades, factions): a lazy `import()`, so it never travels in the main
+   * bundle; `null` = the world has no crew sheet (`features.banda` false)
+   */
+  banda: { cargar: () => Promise<CatalogoBanda> } | null
 }
 
 export interface WorldData {

@@ -42,6 +42,7 @@ export const MISTBORN: WorldConfig = {
     origenes: true,
     catalogoDePrecios: true,
     legados: true,
+    banda: true,
   },
   // The book's table (T26), read on the sheet, the dice roller (from T43) and the NPC page: the same one Stormlight reads since T50
   habilidades: HABILIDADES_COSMERE,
@@ -125,6 +126,8 @@ export const MISTBORN: WorldConfig = {
   loadData: () => import('./mistborn.data').then((m) => m.DATA),
   // El legado de los nacidos de la bruma: chapters 1-4 in Era 1 and 5-9 in Era 2 (L.2 / PDF 5)
   libro: { id: 'legado', titulo: 'El legado de los nacidos de la bruma', cargar: () => import('../data/mistborn/legado').then((m) => m.CAPITULOS) },
+  // «La banda»: organizations, refuges and upgrades of cap. 8 (L.297-301 / PDF 303-307) plus our table rules (docs/banda/propuesta.md)
+  banda: { cargar: () => import('../data/mistborn/banda').then((m) => m.CATALOGO_BANDA_MISTBORN) },
   // The Cosmere conditions plus Desprovisto and Mermado (L.310-311 / PDF 316-317)
   estados: conEstadosDelMundo([
     { id: 'desprovisto', nombre: 'Desprovisto', resumen: 'No puede usar el poder indicado ni sus talentos. Se elimina con «Beber vial».', valor: 'Poder, p. ej. Oro' },

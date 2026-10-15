@@ -35,6 +35,8 @@ const ArtesMetalicasPage = lazy(() => import('./pages/encyclopedia/mistborn/Arte
 const PoderMetalPage = lazy(() => import('./pages/encyclopedia/mistborn/PoderMetalPage').then((m) => ({ default: m.PoderMetalPage })))
 // «Pantalla del director»: director only and for the table, so it never weighs on the start of the app (own chunk)
 const PantallaPage = lazy(() => import('./pages/pantalla/PantallaPage').then((m) => ({ default: m.PantallaPage })))
+// «La banda»: the crew sheet (worlds with `features.banda`); hidden from players unless the director shares it (own chunk)
+const BandaPage = lazy(() => import('./pages/banda/BandaPage').then((m) => ({ default: m.BandaPage })))
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -73,6 +75,7 @@ export default function App() {
               <Route path="encyclopedia/artes-metalicas/:arte/:metal" element={<WorldGate feature="artesMetalicas"><Suspense fallback={<Spinner />}><PoderMetalPage /></Suspense></WorldGate>} />
               <Route path="gm" element={<GmPage />} />
               <Route path="pantalla" element={<Suspense fallback={<Spinner />}><PantallaPage /></Suspense>} />
+              <Route path="banda" element={<Suspense fallback={<Spinner />}><BandaPage /></Suspense>} />
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />

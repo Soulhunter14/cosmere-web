@@ -1,8 +1,9 @@
 import { useState, type CSSProperties } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid, Columns3 } from 'lucide-react'
+import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid, Columns3, Warehouse } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { useCampaignStore } from '../store/campaignStore'
+import { useCampaignStore, useWorldConfig } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
 import { notesApi } from '../api/notes'
 import { Avatar, IconButton, Sheet } from './ui'
@@ -23,7 +24,11 @@ const SECTION_LABELS: Record<string, string> = {
   diario: 'Partida',
   catalog: 'Catálogo',
   settings: 'Ajustes',
+  banda: 'Banda',
 }
+
+/** `soloAncho`: on the desktop sidebar and the tablet rail only, not on the phone bottom bar */
+interface NavItem { to: string; label: string; icon: LucideIcon; soloAncho?: boolean }
 
 const PARENT_SECTION: Record<string, string> = {
   catalog: 'encyclopedia',
@@ -35,17 +40,27 @@ const PARENT_SECTION: Record<string, string> = {
 
 export function Sidebar() {
   const { currentCampaign, isGm } = useCampaignStore()
+  const { features } = useWorldConfig()
 
-  const navItems = isGm
+  // «La banda» (worlds with a crew sheet): the director always; a player only when the director has shared it (bandaVisible).
+  // The director's phone bar already has five items, so there it lives on the desktop sidebar and the tablet rail, and the phone
+  // reaches it from Director, like the «Pantalla»
+  const banda: NavItem[] = features.banda && (isGm || currentCampaign?.bandaVisible)
+    ? [{ to: 'banda', label: 'Banda', icon: Warehouse, soloAncho: isGm }]
+    : []
+
+  const navItems: NavItem[] = isGm
     ? [
         { to: 'home', label: 'Inicio', icon: House },
         { to: 'historia', label: 'Partida', icon: BookOpen },
+        ...banda,
         { to: 'encyclopedia', label: 'Enciclopedia', icon: Globe },
       ]
     : [
         { to: 'home', label: 'Inicio', icon: House },
         { to: 'personajes', label: 'Personaje', icon: Users },
         { to: 'historia', label: 'Partida', icon: BookOpen },
+        ...banda,
         { to: 'encyclopedia', label: 'Enciclopedia', icon: Globe },
       ]
 
@@ -471,7 +486,7 @@ export function Sidebar() {
           borderTop: `1px solid ${c.border}`,
         }}
       >
-        {navItems.map(({ to, label, icon: Icon }) => (
+        {navItems.filter((item) => !item.soloAncho).map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={linkTo(to)} className="tab-link">
             <span className="tab-icon"><Icon size={20} aria-hidden /></span>
             <span>{label}</span>

@@ -262,6 +262,25 @@ export function SemanasSheet({ onClose, doc, catalogo, era, crearCtx, dinero, ap
               )}
             </section>
 
+            {(resumen.cartel.caducados.length > 0 || resumen.cartel.fueraDePlazo.length > 0) && (
+              <section>
+                <h3 style={{ ...titulo, marginBottom: 6 }}>Cartel</h3>
+                <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+                  {resumen.cartel.caducados.map((a) => (
+                    <li key={`caducado-${a.nombre}`} style={{ fontSize: fs.sm, color: c.text }}>
+                      <Badge tone="rubi">Caduca</Badge> {a.nombre}
+                      {a.siCaduca && <span style={{ display: 'block', color: c.muted, marginTop: 2 }}>Si caduca (solo tú): {a.siCaduca}</span>}
+                    </li>
+                  ))}
+                  {resumen.cartel.fueraDePlazo.map((n) => (
+                    <li key={`plazo-${n}`} style={{ fontSize: fs.sm, color: c.text }}>
+                      <Badge tone="topacio">Fuera de plazo</Badge> {n}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             {resumen.lealtad.length > 0 && (
               <section>
                 <h3 style={{ ...titulo, marginBottom: 6 }}>Lealtad (solo tú)</h3>

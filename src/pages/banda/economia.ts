@@ -22,7 +22,8 @@ import { enEra, textoEra } from '../../lib/banda/tipos'
 import { MAX_SUCESOS, nombreLote, nuevoId, type MejoraRefugio, type Mercancia, type SucesoTirado, type TrabajadorPrivado } from './estado'
 import type { SemanaSucesos } from './sucesos'
 import {
-  ErrorBanda, anotar, capacidadUsada, danarMejoras, nombreMejora, privadoDe, type CtxBanda, type DocBanda, type OpBanda,
+  ErrorBanda, anotar, capacidadUsada, danarMejoras, nombreAviso, nombreMejora, pasarSemanasCartel, privadoDe, type CtxBanda, type DocBanda,
+  type OpBanda,
 } from './operaciones'
 import {
   probabilidadAcumulada, probabilidadVenta, puntosDeLaBanda, tieneEscondite, tirarLote, type LineaPuntos, type ResultadoLote,
@@ -60,6 +61,11 @@ export interface ResumenSemanas {
   tesoreriaAntes: number
   tesoreriaDespues: number
   avisos: string[]
+  /**
+   * The mission board (docs/banda/propuesta-cartel-misiones.md): published notices that expire, with what the director wrote would
+   * happen (private), and accepted ones that run out of time (they do not expire)
+   */
+  cartel: { caducados: { nombre: string; siCaduca: string }[]; fueraDePlazo: string[] }
 }
 
 /** Rolls of the black market by lot id: one d100 per week (made by the page, see tirarD100) */
@@ -221,13 +227,20 @@ export function simularSemanas(
     }
   })
 
+  // ── Mission board: deadlines count down ──
+  const cartelSim = pasarSemanasCartel(doc, semanas, ctx)
+  const resumenCartel: ResumenSemanas['cartel'] = {
+    caducados: cartelSim.caducados.map((a) => ({ nombre: nombreAviso(a), siCaduca: doc.secretos.cartel[a.id]?.siCaduca ?? '' })),
+    fueraDePlazo: cartelSim.fueraDePlazo.map(nombreAviso),
+  }
+
   const tesoreriaDespues = caja
   const resumen: ResumenSemanas = {
     semanas,
     contexto: ctxDef && ctxDef.multiplicador !== 1 ? { nombre: ctxDef.nombre, multiplicador: ctxDef.multiplicador } : null,
     ingresos, mantenimiento, sueldos, obras, lealtad,
     previsionMercado, puntosMercado: enVenta.length ? puntosDeLaBanda(doc, cat) : [], sinEscondite: !escondite, mercado, notoriedadSube,
-    tesoreriaAntes, tesoreriaDespues, avisos,
+    tesoreriaAntes, tesoreriaDespues, avisos, cartel: resumenCartel,
   }
 
   // ── The sheet after it ──
@@ -263,7 +276,7 @@ export function simularSemanas(
     }
   }
   if (notoriedadSube) banda = anotar(banda, ctx, { tipo: 'notoriedad', cantidad: 1, motivo: 'Un soplo en el mercado negro' })
-  return { resumen, doc: { banda, secretos: { ...doc.secretos, trabajadores: privados } } }
+  return { resumen, doc: pasarSemanasCartel({ banda, secretos: { ...doc.secretos, trabajadores: privados } }, semanas, ctx).doc }
 }
 
 /** What the events dice said while these weeks passed (only when the director rolls them) */

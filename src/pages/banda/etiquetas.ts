@@ -2,7 +2,9 @@
 import { useState } from 'react'
 import type { ToneName } from '../../theme'
 import { c, fs } from '../../theme'
-import type { Conservacion, EstadoMejora, EstadoRefugio, EstadoTrabajador, PapelContacto, Relacion, SituacionMercancia } from './estado'
+import type {
+  Conservacion, EstadoAviso, EstadoMejora, EstadoRefugio, EstadoTrabajador, PapelContacto, Relacion, SituacionMercancia, TipoAviso, VerdadRumor,
+} from './estado'
 import { ErrorBanda, type OpBanda } from './operaciones'
 
 export const ESTADO_REFUGIO: Record<EstadoRefugio, { label: string; tono: ToneName }> = {
@@ -47,6 +49,31 @@ export const SITUACION_MERCANCIA: Record<SituacionMercancia, { label: string; to
 }
 
 export const CONSERVACION: Record<Conservacion, string> = { nuevo: 'Nuevo', usado: 'Usado' }
+
+export const TIPO_AVISO: Record<TipoAviso, { label: string; tono: ToneName }> = {
+  encargo: { label: 'Encargo', tono: 'zafiro' },
+  rumor: { label: 'Rumor', tono: 'topacio' },
+  amenaza: { label: 'Amenaza', tono: 'rubi' },
+}
+
+export const ESTADO_AVISO: Record<EstadoAviso, { label: string; tono: ToneName }> = {
+  publicado: { label: 'En el cartel', tono: 'zafiro' },
+  aceptado: { label: 'En curso', tono: 'gold' },
+  cumplido: { label: 'Cumplido', tono: 'esmeralda' },
+  fallido: { label: 'Fallido', tono: 'rubi' },
+  rechazado: { label: 'Rechazado', tono: 'cuarzo' },
+  caducado: { label: 'Caducado', tono: 'cuarzo' },
+  descartado: { label: 'Retirado', tono: 'cuarzo' },
+}
+
+export const VERDAD_RUMOR: Record<VerdadRumor, { label: string; tono: ToneName }> = {
+  cierto: { label: 'Es cierto', tono: 'esmeralda' },
+  falso: { label: 'Es falso', tono: 'rubi' },
+  'a-medias': { label: 'A medias', tono: 'topacio' },
+}
+
+/** «1 semana», «3 semanas» */
+export const semanasTexto = (n: number) => `${n} ${n === 1 ? 'semana' : 'semanas'}`
 
 /** Tone of a chance of selling (only the director sees it) */
 export const tonoProbabilidad = (prob: number): ToneName => (prob >= 60 ? 'esmeralda' : prob >= 40 ? 'zafiro' : prob >= 20 ? 'topacio' : 'rubi')

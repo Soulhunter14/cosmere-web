@@ -1,13 +1,13 @@
-import { lazy, Suspense, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react'
-import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Edit2, Save, X, type LucideIcon } from 'lucide-react'
+import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { BookOpen, type LucideIcon } from 'lucide-react'
 import { globalNpcsApi } from '../../api/global-npcs'
 import { useCampaignStore, useWorld, useWorldConfig } from '../../store/campaignStore'
 import { getWorld } from '../../worlds'
 import { COLUMNAS_COSMERE } from '../../worlds/skills'
 import type { AttrField, HabilidadDef } from '../../worlds/types'
-import { Button, Card, EmptyState, ErrorMessage, Field, IconButton, Input, Spinner, TabPanel, Tabs, Textarea } from '../../components/ui'
+import { Button, Card, EmptyState, ErrorMessage, Spinner, TabPanel, Tabs } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { StatIcons } from '../../lib/gameIcons'
 import { c, eyebrow, font, fs, numeral, page, pill, radius, shadow, tint, titleText, tone, type Tone } from '../../theme'
@@ -105,18 +105,18 @@ function Paragraphs({ text, reading = false }: { text: string; reading?: boolean
   )
 }
 
+/**
+ * An adversary of the world's catalog, read-only: the adversaries are the books' (an erratum comes in a migration, like the seeds)
+ * and an enemy is adjusted on its own copy, in an encounter of the GM screen. Only the images of its book are uploaded («Libro»).
+ */
 export function GlobalNpcDetailPage() {
   const { campaignId, npcId } = useParams<{ campaignId: string; npcId: string }>()
   const id = Number(npcId)
   const cId = Number(campaignId)
-  const qc = useQueryClient()
   const navigate = useNavigate()
-  const location = useLocation()
   const { isGm } = useCampaignStore()
   const world = useWorld()
   const cfg = useWorldConfig()
-  const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
-  const [form, setForm] = useState<GlobalNpc | null>(null)
   const [tab, setTab] = useState<Tab>('stats')
 
   const { data: npc, isLoading, isError } = useQuery<GlobalNpc>({
@@ -124,23 +124,11 @@ export function GlobalNpcDetailPage() {
     queryFn: () => globalNpcsApi.getById(id),
   })
 
-  // Resync the edit form every time the loaded npc object changes (render-time sync instead of an effect)
-  const [syncedNpc, setSyncedNpc] = useState<GlobalNpc | undefined>(undefined)
-  if (npc && npc !== syncedNpc) {
-    setSyncedNpc(npc)
-    setForm({ ...npc })
-  }
-
-  const updateMutation = useMutation({
-    mutationFn: () => globalNpcsApi.update(id, form ?? {}, cId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['global-npc', id] }); qc.invalidateQueries({ queryKey: ['global-npcs', cId] }); setEditing(false) },
-  })
-
   // A failed fetch used to spin forever: say so instead
   if (isError && !npc) return <div style={page}><ErrorMessage message="No se pudo cargar el NPC. Inténtalo de nuevo." /></div>
   if (isLoading || !npc) return <Spinner />
 
-  // The route opens any adversary by id: one of another world (a saved link to a Caminapiedras adversary opened from a Mistborn campaign) is neither shown nor editable
+  // The route opens any adversary by id: one of another world (a saved link to a Caminapiedras adversary opened from a Mistborn campaign) is not shown
   if (npc.world !== world) {
     return (
       <div style={page}>
@@ -154,12 +142,6 @@ export function GlobalNpcDetailPage() {
     )
   }
 
-  const f = (editing && form ? form : npc) as GlobalNpc
-  const set = (k: keyof GlobalNpc) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((p) => p ? { ...p, [k]: e.target.type === 'number' ? Number((e.target as HTMLInputElement).value) : e.target.value } : p)
-  const setText = (k: 'name' | 'tipo' | 'source' | 'ascendencia') => (e: ChangeEvent<HTMLInputElement>) =>
-    setForm((p) => p ? { ...p, [k]: e.target.value } : p)
-
   const rubi = tone.rubi
   const avatarHero: CSSProperties = {
     width: 64, height: 64, borderRadius: radius.md, flexShrink: 0, overflow: 'hidden',
@@ -169,15 +151,14 @@ export function GlobalNpcDetailPage() {
     boxShadow: 'var(--shadow-1)',
     ...titleText, fontSize: fs['2xl'], color: rubi.fg,
   }
-  const numberInput: CSSProperties = { textAlign: 'center', ...numeral, fontSize: fs.lg, padding: '6px 8px' }
   // The table of the world, the same one the sheet and the dice roller read (no world id is compared here)
   const sections = buildSections(cfg.habilidades)
-  // Salud and Concentración are Cosmere; the Investidura icon is the world's. A world with metallic arts only shows the Investidura tile of an adversary that has one
-  // (or while the director edits it, so it can be given one): most of its adversaries are not Investidos (Q27)
+  // Salud and Concentración are Cosmere; the Investidura icon is the world's. A world with metallic arts only shows the Investidura tile of an adversary that has one:
+  // most of its adversaries are not Investidos (Q27)
   const resources: { label: string; key: NumKey; tone: Tone; Icon: LucideIcon }[] = [
     { label: 'Salud', key: 'maxHealth', tone: tone.granate, Icon: StatIcons.salud },
     { label: 'Concentración', key: 'maxConcentration', tone: tone.heliodoro, Icon: StatIcons.concentracion },
-    ...(!cfg.features.artesMetalicas || editing || (f.maxInvestiture ?? 0) > 0
+    ...(!cfg.features.artesMetalicas || (npc.maxInvestiture ?? 0) > 0
       ? [{ label: 'Investidura', key: 'maxInvestiture' as const, tone: tone.amatista, Icon: cfg.iconos.investidura }]
       : []),
   ]
@@ -227,47 +208,20 @@ export function GlobalNpcDetailPage() {
           {/* Name, tipo, source */}
           <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
             <p style={{ ...eyebrow, color: 'var(--gold)', marginBottom: 6, overflowWrap: 'anywhere' }}>
-              {f.source || 'Adversario'}
-              {f.ascendencia && ' · '}
-              {f.ascendencia}
+              {npc.source || 'Adversario'}
+              {npc.ascendencia && ' · '}
+              {npc.ascendencia}
             </p>
             <h1 id="npc-name" style={{ ...titleText, fontSize: 'clamp(22px, 6vw, 28px)', color: c.text, overflowWrap: 'anywhere' }}>
-              {f.name || npc.name}
+              {npc.name}
             </h1>
-            {f.tipo && !editing && (
+            {npc.tipo && (
               <p style={{ fontFamily: font.display, fontStyle: 'italic', fontSize: fs.md + 1, fontWeight: 600, lineHeight: 1.3, color: rubi.fg, marginTop: 6 }}>
-                {f.tipo}
+                {npc.tipo}
               </p>
             )}
           </div>
-
-          {/* GM: edit */}
-          {isGm && !editing && (
-            <IconButton label="Editar NPC" variant="surface" size={44} onClick={() => setEditing(true)}>
-              <Edit2 size={18} aria-hidden />
-            </IconButton>
-          )}
         </div>
-
-        {/* GM: edit identity fields */}
-        {editing && (
-          <div style={{ position: 'relative', marginTop: 20 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
-              <Field label="Nombre">
-                <Input value={form?.name ?? ''} onChange={setText('name')} />
-              </Field>
-              <Field label="Tipo">
-                <Input value={form?.tipo ?? ''} onChange={setText('tipo')} placeholder="Tipo..." />
-              </Field>
-              <Field label="Fuente">
-                <Input value={form?.source ?? ''} onChange={setText('source')} placeholder="Fuente..." />
-              </Field>
-              <Field label="Ascendencia">
-                <Input value={form?.ascendencia ?? ''} onChange={setText('ascendencia')} placeholder="Ascendencia..." />
-              </Field>
-            </div>
-          </div>
-        )}
 
         {/* Resources */}
         <div style={{ position: 'relative', display: 'flex', gap: 8, marginTop: 20 }}>
@@ -281,44 +235,15 @@ export function GlobalNpcDetailPage() {
                 display: 'flex', flexDirection: 'column',
               }}
             >
-              {editing ? (
-                <label htmlFor={`npc-res-${key}`} style={{ ...eyebrow, letterSpacing: '0.03em', color: t.fg, marginBottom: 6 }}>{label}</label>
-              ) : (
-                <span style={{ ...eyebrow, letterSpacing: '0.03em', color: t.fg, marginBottom: 6 }}>{label}</span>
-              )}
-              {editing
-                ? <Input id={`npc-res-${key}`} type="number" min={0} value={form?.[key] ?? 0} onChange={set(key)} style={{ ...numeral, fontSize: fs.lg, padding: '6px 8px', minHeight: 40, marginBottom: 10 }} />
-                : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                    <Icon size={16} aria-hidden style={{ color: t.fg }} />
-                    <span style={{ ...numeral, fontSize: fs.xl + 2, color: c.text }}>{f[key] ?? 0}</span>
-                  </div>
-                )
-              }
+              <span style={{ ...eyebrow, letterSpacing: '0.03em', color: t.fg, marginBottom: 6 }}>{label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <Icon size={16} aria-hidden style={{ color: t.fg }} />
+                <span style={{ ...numeral, fontSize: fs.xl + 2, color: c.text }}>{npc[key] ?? 0}</span>
+              </div>
               <div aria-hidden style={{ height: 3, margin: '0 -10px', background: `linear-gradient(90deg, ${tint(t.fg, 55)}, ${t.fg})` }} />
             </div>
           ))}
         </div>
-
-        {/* GM: cancel / save while editing */}
-        {isGm && editing && (
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <IconButton label="Cancelar edición" variant="surface" size={44} onClick={() => { setForm({ ...npc }); setEditing(false); if (updateMutation.isError) updateMutation.reset() }}>
-              <X size={18} aria-hidden />
-            </IconButton>
-            <Button
-              onClick={() => updateMutation.mutate()}
-              disabled={updateMutation.isPending}
-              icon={<Save size={16} aria-hidden />}
-              style={{ minWidth: 132 }}
-            >
-              {updateMutation.isPending ? 'Guardando...' : 'Guardar'}
-            </Button>
-          </div>
-        )}
-        {isGm && editing && updateMutation.isError && (
-          <ErrorMessage message="No se pudieron guardar los cambios. Inténtalo de nuevo." style={{ position: 'relative', marginTop: 12 }} />
-        )}
       </section>
 
       {/* ─── Tabs ─── */}
@@ -344,7 +269,7 @@ export function GlobalNpcDetailPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {sections.map((section, si) => {
               const t = section.tone
-              const defense = 10 + (f[section.attrs[0][0]] ?? 0) + (f[section.attrs[1][0]] ?? 0)
+              const defense = 10 + (npc[section.attrs[0][0]] ?? 0) + (npc[section.attrs[1][0]] ?? 0)
               const headingId = `npc-sec-${section.key}`
               return (
                 <Card
@@ -368,33 +293,21 @@ export function GlobalNpcDetailPage() {
 
                   {/* Attributes */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${t.border}` }}>
-                    {section.attrs.map(([k, label]) => {
-                      const inputId = `npc-attr-${k}`
-                      return (
-                        <div key={k} style={{ textAlign: 'center', padding: '10px 8px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}>
-                          {editing
-                            ? <Input id={inputId} type="number" min={0} max={5} value={form?.[k] ?? 0} onChange={set(k)} style={{ ...numberInput, fontSize: fs.xl }} />
-                            : <div style={{ ...numeral, fontSize: fs['2xl'], color: c.text }}>{f[k] ?? 0}</div>
-                          }
-                          {editing ? (
-                            <label htmlFor={inputId} style={{ ...eyebrow, display: 'block', color: t.fg, marginTop: 6 }}>
-                              <abbr title={ATTR_NAMES[k]} style={{ textDecoration: 'none' }}>{label}</abbr>
-                            </label>
-                          ) : (
-                            <div style={{ ...eyebrow, color: t.fg, marginTop: 6 }}>
-                              <abbr title={ATTR_NAMES[k]} style={{ textDecoration: 'none' }}>{label}</abbr>
-                            </div>
-                          )}
+                    {section.attrs.map(([k, label]) => (
+                      <div key={k} style={{ textAlign: 'center', padding: '10px 8px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}>
+                        <div style={{ ...numeral, fontSize: fs['2xl'], color: c.text }}>{npc[k] ?? 0}</div>
+                        <div style={{ ...eyebrow, color: t.fg, marginTop: 6 }}>
+                          <abbr title={ATTR_NAMES[k]} style={{ textDecoration: 'none' }}>{label}</abbr>
                         </div>
-                      )
-                    })}
+                      </div>
+                    ))}
                   </div>
 
                   {/* Skills */}
                   <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                     {section.skills.map(([k, label, attrKey, attrLabel], idx) => {
-                      const base = f[k] ?? 0
-                      const bonus = f[attrKey] ?? 0
+                      const base = npc[k] ?? 0
+                      const bonus = npc[attrKey] ?? 0
                       const total = base + bonus
                       const pct = Math.min(100, (base / 5) * 100)
                       return (
@@ -403,19 +316,13 @@ export function GlobalNpcDetailPage() {
                             <abbr title={ATTR_NAMES[attrKey]} style={{ textDecoration: 'none' }}>{attrLabel}</abbr>
                           </span>
                           <span style={{ fontSize: fs.base, color: c.text, flex: 1, minWidth: 0 }}>{label}</span>
-                          {editing
-                            ? <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                <Input type="number" min={0} max={10} value={base} onChange={set(k)} aria-label={label} style={{ ...numberInput, fontSize: fs.base, width: 64, minHeight: 40, padding: '4px 6px' }} />
-                                <span style={{ fontSize: fs.sm, color: c.muted, fontVariantNumeric: 'tabular-nums', minWidth: 24 }}>+{bonus}</span>
-                              </div>
-                            : <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                                <div aria-hidden style={{ width: 48, height: 4, borderRadius: 4, background: c.track, overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', borderRadius: 4, background: t.fg, width: `${pct}%` }} />
-                                </div>
-                                <span style={{ fontSize: fs.xs, color: c.subtle, minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{base}+{bonus}</span>
-                                <span style={{ ...numeral, fontSize: fs.lg, color: total > 0 ? c.text : c.subtle, minWidth: 22, textAlign: 'right' }}>{total}</span>
-                              </div>
-                          }
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                            <div aria-hidden style={{ width: 48, height: 4, borderRadius: 4, background: c.track, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', borderRadius: 4, background: t.fg, width: `${pct}%` }} />
+                            </div>
+                            <span style={{ fontSize: fs.xs, color: c.subtle, minWidth: 28, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{base}+{bonus}</span>
+                            <span style={{ ...numeral, fontSize: fs.lg, color: total > 0 ? c.text : c.subtle, minWidth: 22, textAlign: 'right' }}>{total}</span>
+                          </div>
                         </li>
                       )
                     })}
@@ -436,17 +343,7 @@ export function GlobalNpcDetailPage() {
                 <CardHeading id="npc-talentos" t={tone.gold}>Talentos</CardHeading>
               </div>
               <div style={{ padding: 16 }}>
-                {editing
-                  ? <Textarea
-                      aria-labelledby="npc-talentos"
-                      value={form?.talentos ?? ''}
-                      onChange={(e) => setForm((p) => p ? { ...p, talentos: e.target.value } : p)}
-                      placeholder="Rasgos especiales del adversario..."
-                      rows={4}
-                      style={{ lineHeight: 1.6 }}
-                    />
-                  : <Paragraphs text={f.talentos || ''} />
-                }
+                <Paragraphs text={npc.talentos || ''} />
               </div>
             </Card>
           </div>
@@ -471,17 +368,7 @@ export function GlobalNpcDetailPage() {
                     <CardHeading id={headingId} t={tone.gold}>{label}</CardHeading>
                     <div aria-hidden style={{ height: 1, marginTop: 6, background: 'var(--gold-rule)' }} />
                   </div>
-                  {editing
-                    ? <Textarea
-                        aria-labelledby={headingId}
-                        value={form?.[k] ?? ''}
-                        onChange={(e) => setForm((p) => p ? { ...p, [k]: e.target.value } : p)}
-                        placeholder={`${label}...`}
-                        rows={4}
-                        style={{ lineHeight: 1.6 }}
-                      />
-                    : <Paragraphs text={f[k] || ''} reading />
-                  }
+                  <Paragraphs text={npc[k] || ''} reading />
                 </Card>
               )
             })}

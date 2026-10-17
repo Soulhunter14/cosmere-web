@@ -163,8 +163,58 @@ export interface Mercancia {
   notas: string
 }
 
+export type TipoAviso = 'encargo' | 'rumor' | 'amenaza'
+/**
+ * publicado → aceptado (in progress) → cumplido | fallido; publicado → rechazado | caducado | descartado.
+ * Drafts have no public state: they live in BandaSecretos.borradores until the director publishes them
+ */
+export type EstadoAviso = 'publicado' | 'aceptado' | 'cumplido' | 'fallido' | 'rechazado' | 'caducado' | 'descartado'
+export type VerdadRumor = 'cierto' | 'falso' | 'a-medias'
+
+/**
+ * A notice of the crew's mission board («Cartel»): a job, a rumour or a threat the director publishes. The crew as a whole accepts or
+ * rejects it (no character: the ledger says which user did it). Spec: docs/banda/propuesta-cartel-misiones.md
+ */
+export interface Aviso {
+  id: string
+  tipo: TipoAviso
+  titulo: string
+  /** The hook, as whoever offers it tells it */
+  texto: string
+  /** Who offers it: a contact of the crew, or null and `origenTexto` («Un apostador del Foso») */
+  origenContacto: string | null
+  origenTexto: string
+  lugar: string
+  /** Announced reward, as text («150 ar y un favor de Hob») */
+  recompensa: string
+  /** Money paid into the treasury when it is fulfilled; null = no automatic payment */
+  pago: number | null
+  estado: EstadoAviso
+  /** What the crew has found out, in order */
+  pistas: string[]
+  /** ISO dates */
+  publicadoEn: string
+  /** When the crew accepted or rejected it */
+  decididoEn: string | null
+  cerradoEn: string | null
+  /** How it ended, seen by everyone («Brannoc pagó la mitad») */
+  desenlace: string
+}
+
+/** The private part of a notice, in BandaSecretos.cartel under the same id (like candidates) */
+export interface AvisoPrivado {
+  /** Rumours only: whether it is true; null = not decided yet */
+  verdad: VerdadRumor | null
+  /** What is really behind it, the real reward… */
+  notas: string
+  /** What happens if it expires or the crew rejects it; shown to the director when it does */
+  siCaduca: string
+  /** Weeks left before it expires, only the director knows them; null = no deadline. «Pasar semanas» counts them down */
+  semanasRestantes: number | null
+}
+
 export type TipoMovimiento = 'tesoreria' | 'notoriedad' | 'reputacion' | 'escala' | 'banda' | 'refugio' | 'mejora'
-  | 'trabajador' | 'contacto' | 'semanas' | 'almacen' | 'mercado' | 'nota'
+  | 'trabajador' | 'contacto' | 'semanas' | 'almacen' | 'mercado' | 'cartel' | 'nota'
 
 export interface Movimiento {
   id: string
@@ -208,6 +258,8 @@ export interface BandaEstado {
   ventajasUsadas: string[]
   /** What the crew keeps and puts on the black market: every open lot and the most recent closed ones */
   almacen: Mercancia[]
+  /** The mission board: every open notice and the most recent closed ones */
+  cartel: Aviso[]
   /** Scarcity context chosen the last time weeks passed (the next time starts from it, and the store's market values use it) */
   escasez: string | null
   /** Most recent first, at most MAX_REGISTRO */
@@ -272,6 +324,10 @@ export interface BandaSecretos {
   visibilidad: Record<string, VisibilidadFaccion>
   /** Movements only the director sees (changes of hidden factions), most recent first, at most MAX_REGISTRO */
   registro: Movimiento[]
+  /** Notice id → its private part (drafts and published notices) */
+  cartel: Record<string, AvisoPrivado>
+  /** Notices the director has not published yet */
+  borradores: Aviso[]
 }
 
 /** Whether the stored sheet exists: version 0 on the server = never saved */
@@ -294,8 +350,14 @@ const RANGOS = ['secuaz', 'rival', 'jefe'] as const
 const RELACIONES = ['hostil', 'tensa', 'neutral', 'aliada', 'leal'] as const
 const PAPELES = ['contacto', 'patrocinador', 'companero'] as const
 const TIPOS_MOVIMIENTO = [
-  'tesoreria', 'notoriedad', 'reputacion', 'escala', 'banda', 'refugio', 'mejora', 'trabajador', 'contacto', 'semanas', 'almacen', 'mercado', 'nota',
+  'tesoreria', 'notoriedad', 'reputacion', 'escala', 'banda', 'refugio', 'mejora', 'trabajador', 'contacto', 'semanas', 'almacen', 'mercado',
+  'cartel', 'nota',
 ] as const
+const TIPOS_AVISO = ['encargo', 'rumor', 'amenaza'] as const
+const ESTADOS_AVISO = ['publicado', 'aceptado', 'cumplido', 'fallido', 'rechazado', 'caducado', 'descartado'] as const
+const VERDADES = ['cierto', 'falso', 'a-medias'] as const
+/** Closed notices the board keeps in its archive (the open ones are always kept) */
+export const MAX_HISTORIAL_CARTEL = 100
 const SITUACIONES = ['guardada', 'en-venta', 'vendida', 'retirada', 'requisada'] as const
 const CONSERVACIONES = ['nuevo', 'usado'] as const
 const TIPOS_CATALOGO = ['arma', 'armadura', 'equipo'] as const
@@ -498,6 +560,49 @@ function recortarAlmacen(lotes: Mercancia[]): Mercancia[] {
   return lotes.filter((m) => !loteCerrado(m) || quedan.has(m.id))
 }
 
+/** The notice left the board's open part: fulfilled, failed, rejected, expired or withdrawn */
+export const avisoCerrado = (a: Pick<Aviso, 'estado'>) => a.estado !== 'publicado' && a.estado !== 'aceptado'
+
+/** Weeks left of a deadline (≥ 0), or null */
+const semanasPlazo = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.round(v)) : null)
+
+export function normalizarAviso(v: unknown): Aviso {
+  const r = obj(v)
+  return {
+    id: conId(r),
+    tipo: uno(r.tipo, TIPOS_AVISO, 'encargo'),
+    titulo: str(r.titulo),
+    texto: str(r.texto),
+    origenContacto: strONull(r.origenContacto),
+    origenTexto: str(r.origenTexto),
+    lugar: str(r.lugar),
+    recompensa: str(r.recompensa),
+    pago: importe(r.pago),
+    estado: uno(r.estado, ESTADOS_AVISO, 'publicado'),
+    pistas: arr(r.pistas).filter((p): p is string => typeof p === 'string' && !!p),
+    publicadoEn: str(r.publicadoEn, new Date().toISOString()),
+    decididoEn: strONull(r.decididoEn),
+    cerradoEn: strONull(r.cerradoEn),
+    desenlace: str(r.desenlace),
+  }
+}
+
+function normalizarAvisoPrivado(v: unknown): AvisoPrivado {
+  const r = obj(v)
+  return {
+    verdad: VERDADES.includes(r.verdad as VerdadRumor) ? (r.verdad as VerdadRumor) : null, notas: str(r.notas), siCaduca: str(r.siCaduca),
+    semanasRestantes: semanasPlazo(r.semanasRestantes),
+  }
+}
+
+/** Every open notice, and the MAX_HISTORIAL_CARTEL closed ones that closed last */
+export function recortarCartel(avisos: Aviso[]): Aviso[] {
+  const cerrados = avisos.filter(avisoCerrado)
+  if (cerrados.length <= MAX_HISTORIAL_CARTEL) return avisos
+  const quedan = new Set([...cerrados].sort((a, b) => (b.cerradoEn ?? '').localeCompare(a.cerradoEn ?? '')).slice(0, MAX_HISTORIAL_CARTEL).map((a) => a.id))
+  return avisos.filter((a) => !avisoCerrado(a) || quedan.has(a.id))
+}
+
 const normalizarReputacion = (v: unknown): Record<string, number> => {
   const reputacion: Record<string, number> = {}
   for (const [k, n] of Object.entries(obj(v))) {
@@ -539,6 +644,7 @@ export function normalizarBanda(raw: unknown): BandaEstado {
     ventajasUsadas: arr(r.ventajasUsadas).filter((v): v is string => typeof v === 'string'),
     // Lots of the same goods saved apart (before they were joined) become one
     almacen: recortarAlmacen(arr(r.almacen).map(normalizarMercancia).reduce<Mercancia[]>(juntarEnAlmacen, [])),
+    cartel: recortarCartel(arr(r.cartel).map(normalizarAviso)),
     escasez: strONull(r.escasez),
     registro: arr(r.registro).map(normalizarMovimiento).slice(0, MAX_REGISTRO),
   }
@@ -555,6 +661,16 @@ export function normalizarSecretos(raw: unknown, rawEstado?: unknown): BandaSecr
   for (const [k, v] of Object.entries(obj(r.secretos))) if (typeof v === 'string' && v) secretos[k] = v
   const trabajadores: Record<string, TrabajadorPrivado> = {}
   for (const [k, v] of Object.entries(obj(r.trabajadores))) trabajadores[k] = normalizarPrivado(v)
+  const cartel: Record<string, AvisoPrivado> = {}
+  for (const [k, v] of Object.entries(obj(r.cartel))) cartel[k] = normalizarAvisoPrivado(v)
+  // The first version kept the deadline in the public notice: it moves here (the director's next save takes it out of the public one)
+  for (const a of arr(viejo.cartel).map(obj)) {
+    const id = str(a.id)
+    const semanas = semanasPlazo(a.semanasRestantes)
+    if (id && semanas !== null && !('semanasRestantes' in obj(obj(r.cartel)[id]))) {
+      cartel[id] = { ...(cartel[id] ?? normalizarAvisoPrivado({})), semanasRestantes: semanas }
+    }
+  }
   for (const t of arr(obj(rawEstado).trabajadores).map(obj)) {
     const id = str(t.id)
     if (id && !trabajadores[id] && CAMPOS_PRIVADOS.some((c) => c in t)) trabajadores[id] = normalizarPrivado(t)
@@ -570,6 +686,9 @@ export function normalizarSecretos(raw: unknown, rawEstado?: unknown): BandaSecr
     faccionesPropias: normalizarFaccionesPropias('faccionesPropias' in r ? r.faccionesPropias : viejo.faccionesPropias),
     visibilidad: normalizarVisibilidad(r.visibilidad),
     registro: arr(r.registro).map(normalizarMovimiento).slice(0, MAX_REGISTRO),
+    cartel,
+    // A draft has no public state yet: it is always saved as 'publicado' (what it becomes when published)
+    borradores: arr(r.borradores).map(normalizarAviso).map((a) => ({ ...a, estado: 'publicado' as const })),
   }
 }
 
@@ -600,10 +719,12 @@ function normalizarSuceso(v: unknown): SucesoTirado {
 export const necesitaMigrar = (raw: unknown): boolean =>
   arr(obj(raw).trabajadores).some((t) => CAMPOS_PRIVADOS.some((c) => c in obj(t)))
   || 'reputacion' in obj(raw) || 'faccionesPropias' in obj(raw)
+  || arr(obj(raw).cartel).some((a) => 'semanasRestantes' in obj(a))
 
 /** An empty private part, for whoever cannot read the real one (a player) */
 export const secretosVacios = (): BandaSecretos => ({
   version: 1, notas: '', secretos: {}, trabajadores: {}, semanasSinSuceso: 0, sucesos: [], reputacion: {}, faccionesPropias: [], visibilidad: {}, registro: [],
+  cartel: {}, borradores: [],
 })
 
 /** Version of the stored document: a newer app saved it, so this one must not overwrite it */

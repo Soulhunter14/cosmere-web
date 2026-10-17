@@ -2,15 +2,16 @@
  * Operations on the crew sheet: pure functions `(doc, ctx) => doc` that validate (throwing `ErrorBanda` with the text the page shows) and
  * write their movement in the ledger, with who did it (`Actor`). `useBanda` applies them optimistically and, after a 409, again on the
  * sheet stored on the server, so the same operation must work on any version of the document. Operations a player may run (gastar,
- * contratar, construirMejora, cancelarObra and the store's entrarMercancia, ponerALaVenta, cambiarPrecio, retirarDeLaVenta,
- * sacarDelAlmacen) only touch the public sheet: a player never has the director's private part.
+ * contratar, construirMejora, cancelarObra, the store's entrarMercancia, ponerALaVenta, cambiarPrecio, retirarDeLaVenta,
+ * sacarDelAlmacen and the board's aceptarAviso, rechazarAviso, anadirPista) only touch the public sheet: a player never has the
+ * director's private part.
  * Spec: docs/banda/propuesta.md (§2, §4.5). The contribution of money from a character's purse is done by the server (crewApi.aportar).
  */
 import type { Era } from '../../types'
 import { enEra, type CatalogoBanda } from '../../lib/banda/tipos'
 import {
-  MAX_REGISTRO, bandaNueva, juntarEnAlmacen, loteCerrado, nombreLote, nuevoId,
-  type Actor, type BandaEstado, type BandaSecretos, type Conservacion, type Contacto, type EstadoRefugio, type MejoraRefugio, type Mercancia,
+  MAX_REGISTRO, avisoCerrado, bandaNueva, juntarEnAlmacen, loteCerrado, nombreLote, nuevoId, recortarCartel,
+  type Actor, type Aviso, type AvisoPrivado, type BandaEstado, type TipoAviso, type BandaSecretos, type Conservacion, type Contacto, type EstadoRefugio, type MejoraRefugio, type Mercancia,
   type Movimiento, type Refugio, type ReputacionConocida, type Trabajador, type TrabajadorPrivado, type VisibilidadFaccion,
 } from './estado'
 
@@ -858,4 +859,190 @@ export const borrarMercancia = (id: string): OpBanda => (doc, ctx) => {
   return conBanda(doc, anotar({ ...doc.banda, almacen: doc.banda.almacen.filter((x) => x.id !== id) }, ctx, {
     tipo: 'almacen', objetivo: m.nombre, motivo: `Lote borrado: ${nombreLote(m)}`,
   }))
+}
+
+// ─── Mission board (docs/banda/propuesta-cartel-misiones.md) ───────────────
+// The director writes notices as drafts (private) and publishes them; the crew as a whole (any player it is shared with, or the
+// director) accepts or rejects a published one and adds clues to one in progress; the director closes it (fulfilled or failed, with
+// the payment into the treasury), withdraws or deletes it. A rumour's truth, the notes and what happens if it expires stay private
+
+/** What the director writes in a notice */
+export interface DatosAviso {
+  tipo: TipoAviso
+  titulo: string
+  texto: string
+  origenContacto: string | null
+  origenTexto: string
+  lugar: string
+  recompensa: string
+  pago: number | null
+  /** Weeks before it expires (private: only the director knows it); null = no deadline */
+  semanasRestantes: number | null
+}
+
+/** What the director writes in a notice, only for him */
+export type DatosPrivadosAviso = Omit<AvisoPrivado, 'semanasRestantes'>
+
+export const ETIQUETA_AVISO: Record<TipoAviso, string> = { encargo: 'Encargo', rumor: 'Rumor', amenaza: 'Amenaza' }
+
+const limpiarAviso = (d: DatosAviso) => {
+  const titulo = exigirTexto(d.titulo, 'el título')
+  if (d.pago !== null && (!Number.isFinite(d.pago) || d.pago < 0)) throw new ErrorBanda('El pago no puede ser negativo.')
+  if (d.semanasRestantes !== null && (!Number.isInteger(d.semanasRestantes) || d.semanasRestantes < 1)) {
+    throw new ErrorBanda('El plazo es de 1 semana o más (déjalo vacío si no tiene).')
+  }
+  return {
+    tipo: d.tipo, titulo, texto: d.texto.trim(), origenContacto: d.origenContacto, origenTexto: d.origenContacto ? '' : d.origenTexto.trim(),
+    lugar: d.lugar.trim(), recompensa: d.recompensa.trim(), pago: d.pago === null || d.pago === 0 ? null : redondear(d.pago),
+  }
+}
+
+/** The private part of a notice: what only the director wrote, and the deadline */
+const limpiarPrivadoAviso = (p: DatosPrivadosAviso, d: DatosAviso): AvisoPrivado =>
+  ({ verdad: d.tipo === 'rumor' ? p.verdad : null, notas: p.notas.trim(), siCaduca: p.siCaduca.trim(), semanasRestantes: d.semanasRestantes })
+
+const conPrivado = (s: BandaSecretos, id: string, p: AvisoPrivado): BandaSecretos => ({ ...s, cartel: { ...s.cartel, [id]: p } })
+
+const cambiarAviso = (b: BandaEstado, id: string, cambio: Partial<Aviso>): BandaEstado =>
+  ({ ...b, cartel: recortarCartel(b.cartel.map((a) => (a.id === id ? { ...a, ...cambio } : a))) })
+
+/** «Encargo: Cobrar a Brannoc» */
+export const nombreAviso = (a: Pick<Aviso, 'tipo' | 'titulo'>) => `${ETIQUETA_AVISO[a.tipo]}: ${a.titulo}`
+
+/** A notice of the public board that the crew may still decide on or is working on */
+const avisoAbierto = (doc: DocBanda, id: string) => {
+  const a = doc.banda.cartel.find((x) => x.id === id)
+  if (!a || avisoCerrado(a)) throw new ErrorBanda('Ese aviso ya no está en el cartel.')
+  return a
+}
+
+/**
+ * Saves a draft and its private part: a new one when no draft has that id (the sheet fixes the id when it opens, so applying it again
+ * after a 409 saves the same draft), or the draft with that id edited
+ */
+export const guardarBorrador = (datos: DatosAviso, privado: DatosPrivadosAviso, id: string): OpBanda => (doc, ctx) => {
+  if (doc.banda.cartel.some((a) => a.id === id)) throw new ErrorBanda('Ese aviso ya está publicado.')
+  const d = limpiarAviso(datos)
+  const previo = doc.secretos.borradores.find((a) => a.id === id)
+  const aviso: Aviso = previo
+    ? { ...previo, ...d }
+    : { id, ...d, estado: 'publicado', pistas: [], publicadoEn: ctx.ahora, decididoEn: null, cerradoEn: null, desenlace: '' }
+  const borradores = previo ? doc.secretos.borradores.map((a) => (a.id === id ? aviso : a)) : [...doc.secretos.borradores, aviso]
+  return { ...doc, secretos: conPrivado({ ...doc.secretos, borradores }, id, limpiarPrivadoAviso(privado, datos)) }
+}
+
+/** A draft goes up on the board for everyone with access */
+export const publicarAviso = (id: string): OpBanda => (doc, ctx) => {
+  const borrador = doc.secretos.borradores.find((a) => a.id === id)
+  if (!borrador) {
+    if (doc.banda.cartel.some((a) => a.id === id)) return doc
+    throw new ErrorBanda('Ese borrador ya no existe.')
+  }
+  const aviso: Aviso = { ...borrador, estado: 'publicado', publicadoEn: ctx.ahora }
+  return {
+    banda: anotar({ ...doc.banda, cartel: [...doc.banda.cartel, aviso] }, ctx, {
+      tipo: 'cartel', objetivo: aviso.titulo, motivo: `Nuevo en el cartel: ${nombreAviso(aviso)}`,
+    }),
+    secretos: { ...doc.secretos, borradores: doc.secretos.borradores.filter((a) => a.id !== id) },
+  }
+}
+
+/** The director corrects a notice still on the board (published or in progress) and its private part */
+export const editarAviso = (id: string, datos: DatosAviso, privado: DatosPrivadosAviso): OpBanda => (doc) => {
+  avisoAbierto(doc, id)
+  const d = limpiarAviso(datos)
+  return { banda: cambiarAviso(doc.banda, id, d), secretos: conPrivado(doc.secretos, id, limpiarPrivadoAviso(privado, datos)) }
+}
+
+/** The crew takes it on: it is in progress until the director closes it */
+export const aceptarAviso = (id: string): OpBanda => (doc, ctx) => {
+  const a = avisoAbierto(doc, id)
+  if (a.estado === 'aceptado') throw new ErrorBanda('La banda ya lo ha aceptado.')
+  return conBanda(doc, anotar(cambiarAviso(doc.banda, id, { estado: 'aceptado', decididoEn: ctx.ahora }), ctx, {
+    tipo: 'cartel', objetivo: a.titulo, motivo: `La banda acepta: ${nombreAviso(a)}`,
+  }))
+}
+
+/** The crew turns it down: it goes to the archive */
+export const rechazarAviso = (id: string): OpBanda => (doc, ctx) => {
+  const a = avisoAbierto(doc, id)
+  if (a.estado === 'aceptado') throw new ErrorBanda('La banda ya lo ha aceptado: ahora solo el director puede cerrarlo.')
+  return conBanda(doc, anotar(cambiarAviso(doc.banda, id, { estado: 'rechazado', decididoEn: ctx.ahora, cerradoEn: ctx.ahora }), ctx, {
+    tipo: 'cartel', objetivo: a.titulo, motivo: `La banda rechaza: ${nombreAviso(a)}`,
+  }))
+}
+
+/** Something the crew found out about a notice in progress */
+export const anadirPista = (id: string, texto: string): OpBanda => (doc) => {
+  const a = avisoAbierto(doc, id)
+  if (a.estado !== 'aceptado') throw new ErrorBanda('Solo se apuntan pistas en lo que la banda tiene entre manos.')
+  const pista = exigirTexto(texto, 'la pista')
+  return conBanda(doc, cambiarAviso(doc.banda, id, { pistas: [...a.pistas, pista] }))
+}
+
+/** The director closes a notice in progress; a fulfilled one pays `pago` into the treasury */
+export const cerrarAviso = (id: string, resultado: 'cumplido' | 'fallido', desenlace: string, pago: number | null): OpBanda => (doc, ctx) => {
+  const a = avisoAbierto(doc, id)
+  if (a.estado !== 'aceptado') throw new ErrorBanda('Solo se cierra lo que la banda ha aceptado.')
+  if (pago !== null && (!Number.isFinite(pago) || pago < 0)) throw new ErrorBanda('El pago no puede ser negativo.')
+  const cobro = resultado === 'cumplido' && pago ? redondear(pago) : 0
+  const b = cambiarAviso({ ...doc.banda, tesoreria: redondear(doc.banda.tesoreria + cobro) }, id, {
+    estado: resultado, cerradoEn: ctx.ahora, desenlace: desenlace.trim(),
+  })
+  return conBanda(doc, anotar(b, ctx, {
+    tipo: 'cartel', objetivo: a.titulo, ...(cobro ? { dinero: cobro } : {}),
+    motivo: `${resultado === 'cumplido' ? 'Cumplido' : 'Fallido'}: ${nombreAviso(a)}${cobro ? ` (cobra ${ctx.dinero(cobro)})` : ''}`,
+  }))
+}
+
+/** The director takes a published notice off the board: it stays in the archive */
+export const descartarAviso = (id: string, motivo: string): OpBanda => (doc, ctx) => {
+  const a = avisoAbierto(doc, id)
+  if (a.estado !== 'publicado') throw new ErrorBanda('La banda ya lo ha aceptado: ciérralo como cumplido o fallido.')
+  return conBanda(doc, anotar(cambiarAviso(doc.banda, id, { estado: 'descartado', cerradoEn: ctx.ahora, desenlace: motivo.trim() }), ctx, {
+    tipo: 'cartel', objetivo: a.titulo, motivo: `Retirado del cartel: ${nombreAviso(a)}${motivo.trim() ? ` (${motivo.trim()})` : ''}`,
+  }))
+}
+
+/** A notice (published or a draft) disappears with its private part; no money moves */
+export const borrarAviso = (id: string): OpBanda => (doc, ctx) => {
+  const publico = doc.banda.cartel.find((a) => a.id === id)
+  const cartel = { ...doc.secretos.cartel }
+  delete cartel[id]
+  const secretos = { ...doc.secretos, cartel, borradores: doc.secretos.borradores.filter((a) => a.id !== id) }
+  if (!publico) return { ...doc, secretos }
+  return {
+    banda: anotar({ ...doc.banda, cartel: doc.banda.cartel.filter((a) => a.id !== id) }, ctx, {
+      tipo: 'cartel', objetivo: publico.titulo, motivo: `Aviso borrado: ${nombreAviso(publico)}`,
+    }),
+    secretos,
+  }
+}
+
+/**
+ * Weeks pass for the board (the director: the deadlines are in his private part): open notices with a deadline count down; a published
+ * one that reaches 0 expires (it goes to the archive and the public ledger says so), one in progress stays at 0 («Fuera de plazo», only
+ * for him). Returns the expired ones and the ones in progress that ran out of time now, for his summary
+ */
+export function pasarSemanasCartel(doc: DocBanda, semanas: number, ctx: CtxBanda): { doc: DocBanda; caducados: Aviso[]; fueraDePlazo: Aviso[] } {
+  const caducados: Aviso[] = []
+  const fueraDePlazo: Aviso[] = []
+  const privados = { ...doc.secretos.cartel }
+  const cartel = doc.banda.cartel.map((a) => {
+    const p = privados[a.id]
+    if (avisoCerrado(a) || !p || p.semanasRestantes === null) return a
+    const quedan = Math.max(0, p.semanasRestantes - semanas)
+    privados[a.id] = { ...p, semanasRestantes: quedan }
+    if (quedan > 0 || p.semanasRestantes === 0) return a
+    if (a.estado === 'aceptado') {
+      fueraDePlazo.push(a)
+      return a
+    }
+    const caducado: Aviso = { ...a, estado: 'caducado', cerradoEn: ctx.ahora }
+    caducados.push(caducado)
+    return caducado
+  })
+  let banda: BandaEstado = { ...doc.banda, cartel }
+  for (const a of caducados) banda = anotar(banda, ctx, { tipo: 'cartel', objetivo: a.titulo, motivo: `Caducado: ${nombreAviso(a)}` })
+  return { doc: { banda: { ...banda, cartel: recortarCartel(banda.cartel) }, secretos: { ...doc.secretos, cartel: privados } }, caducados, fueraDePlazo }
 }

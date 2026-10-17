@@ -5,7 +5,7 @@
  */
 import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
-import { Eye, EyeOff, Handshake, Lock, Package, Pencil, RefreshCw, ScrollText, Share2, Users, Warehouse } from 'lucide-react'
+import { ClipboardList, Eye, EyeOff, Handshake, Lock, Package, Pencil, RefreshCw, ScrollText, Share2, Users, Warehouse } from 'lucide-react'
 import { Button, EmptyState, ErrorMessage, IconButton, PageHeader, Spinner, TabPanel, Tabs } from '../../components/ui'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { formatMoneda, monedaImagen } from '../../lib/moneda'
@@ -15,6 +15,7 @@ import { CabeceraBanda } from './CabeceraBanda'
 import { AjusteSheet, CompartirSheet, DatosBandaSheet, DineroSheet, NotasSecretasSheet, type Pista } from './hojas'
 import { SemanasSheet } from './SemanasSheet'
 import { PanelRefugio } from './PanelRefugio'
+import { PanelCartel } from './PanelCartel'
 import { PanelAlmacen } from './PanelAlmacen'
 import { PanelTrabajadores } from './PanelTrabajadores'
 import { PanelContactos } from './PanelContactos'
@@ -22,10 +23,12 @@ import { PanelRegistro } from './PanelRegistro'
 import { guardarNotasSecretas } from './operaciones'
 import { textoSuave } from './etiquetas'
 
-type Tab = 'refugio' | 'almacen' | 'trabajadores' | 'contactos' | 'registro'
+type Tab = 'refugio' | 'cartel' | 'almacen' | 'trabajadores' | 'contactos' | 'registro'
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: 'refugio', label: 'Refugio', icon: Warehouse },
+  // The mission board (docs/banda/propuesta-cartel-misiones.md)
+  { id: 'cartel', label: 'Cartel', icon: ClipboardList },
   // Only in a world with a black market (CatalogoBanda.mercadoNegro)
   { id: 'almacen', label: 'Almacén', icon: Package },
   { id: 'trabajadores', label: 'Trabajadores', icon: Users },
@@ -171,6 +174,11 @@ export function BandaPage() {
             <PanelRefugio
               banda={banda} secretos={secretos} catalogo={catalogo} era={b.era} editable={b.editable} puedeActuar={b.puedeActuar}
               actores={b.actores} dinero={dinero} aplicar={b.aplicar}
+            />
+          )}
+          {tab === 'cartel' && (
+            <PanelCartel
+              banda={banda} secretos={b.esDirector ? secretos : null} editable={b.editable} puedeActuar={b.puedeActuar} dinero={dinero} aplicar={b.aplicar}
             />
           )}
           {tab === 'almacen' && catalogo.mercadoNegro && (

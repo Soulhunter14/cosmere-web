@@ -24,6 +24,7 @@ const TIPO: Record<TipoMovimiento, string> = {
   semanas: 'Semanas',
   almacen: 'Almacén',
   mercado: 'Mercado negro',
+  cartel: 'Cartel',
   nota: 'Nota',
 }
 

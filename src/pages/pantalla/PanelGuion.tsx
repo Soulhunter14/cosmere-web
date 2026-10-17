@@ -24,6 +24,7 @@ import {
 } from './guion'
 import { buscarAdversario, eraNumero } from './adversarios'
 import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, destinoAnadir } from './encuentro'
+import { HojaFichaAdversario } from './FichaAdversario'
 import { copiarTexto, descargarTexto, promptSiguienteGuion, type EscenaJugada } from './exportar'
 import { ESCENA_META } from './meta'
 import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, NavegadorEscenas, TecladoNumerico, Tesela } from './piezas'
@@ -345,6 +346,7 @@ function DetalleGuion({
         titulo={e.titulo}
         tipo={e.tipo}
         kicker={e.grupo || undefined}
+        destacado={esCombate(e) ? <AlEncuentro esc={esc} e={e} /> : undefined}
         actual={actual}
         jugada={jugada}
         escala={escala}
@@ -410,6 +412,7 @@ export function DetalleEscenaLibro({ esc, escala, onEscala }: { esc: EscenaPropi
         titulo={e.titulo}
         tipo={e.tipo}
         kicker={(e.apartado && e.apartado !== e.titulo ? e.apartado : e.grupo) || undefined}
+        destacado={esCombate(e) ? <AlEncuentro esc={esc} e={e} /> : undefined}
         escala={escala}
         onEscala={onEscala}
       />
@@ -680,17 +683,62 @@ function HojaCantidad({ nombre, onClose, onAplicar }: { nombre: string; onClose:
   )
 }
 
-/** The enemies of the scene and «Preparar encuentro»: the fight remembers the scene, so its rules and counters go with it */
-function EnemigosEscena({ esc, e }: { esc: EscenaPropia; e: EscenaGuion }) {
+/** A scene to fight: of combat type, or with enemies to bring */
+const esCombate = (e: EscenaGuion) => e.tipo === 'combat' || e.enemigos.length > 0
+
+/**
+ * «Al encuentro» of a combat scene: always a NEW fight, in round 1, with the scene's enemies and linked to the scene (its rules,
+ * counters and text go to the Encuentro panel with it), and that panel opens. Pressed again it opens another one with a number
+ * («… 2»); «Eliminar combate» undoes a mistake. With the maximum of fights open it waits for one to end.
+ */
+function AlEncuentro({ esc, e }: { esc: EscenaPropia; e: EscenaGuion }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
+  const { irA } = usePaneles()
+  const cfg = useWorldConfig()
+  const { catalogo, catalogoListo } = useCatalogo()
+  const era = eraNumero(useEra())
+  const lleno = estado.encuentros.length >= MAX_ENCUENTROS
+  const esperando = e.enemigos.length > 0 && !catalogoListo
+  const abrir = () => {
+    actualizar((b) => {
+      if (b.encuentros.length >= MAX_ENCUENTROS) return
+      const enc = abrirEncuentro(b, e.titulo, ultimoDiario)
+      enc.escenaId = esc.id
+      anadirEnemigos(enc, e.enemigos, catalogo, cfg.habilidades, era)
+    })
+    irA('encuentro')
+  }
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      icon={<Swords size={15} aria-hidden />}
+      disabled={lleno || esperando}
+      onClick={abrir}
+      title={lleno ? `Ya hay ${MAX_ENCUENTROS} combates abiertos: termina o elimina uno` : esperando ? 'Cargando el catálogo de adversarios…' : 'Empieza un combate nuevo con esta escena'}
+      style={{ background: tone.rubi.bg, border: `1px solid ${tone.rubi.border}`, color: tone.rubi.fg }}
+    >
+      Al encuentro
+    </Button>
+  )
+}
+
+/**
+ * The enemies of the scene, at its end: each one with a stat block opens it (the book page when uploaded). With a fight open,
+ * they can join it as reinforcements; a new fight starts from «Al encuentro» in the header.
+ */
+function EnemigosEscena({ esc, e }: { esc: EscenaPropia; e: EscenaGuion }) {
+  const { estado, actualizar } = usePantalla()
   const { irA } = usePaneles()
   const cfg = useWorldConfig()
   const { catalogo, catalogoListo, catalogoFallo } = useCatalogo()
   const era = eraNumero(useEra())
+  const [ficha, setFicha] = useState<{ id: number; nombre: string } | null>(null)
   const hayEncuentro = encuentroEnPantalla(estado) !== null
-  const preparar = (simultaneo: boolean) => {
+  const anadir = () => {
     actualizar((b) => {
-      const enc = simultaneo ? abrirEncuentro(b, e.titulo, ultimoDiario) : asegurarEncuentro(b, e.titulo, ultimoDiario)
+      const enc = encuentroEnPantalla(b)
+      if (!enc) return
       enc.escenaId ??= esc.id
       anadirEnemigos(enc, e.enemigos, catalogo, cfg.habilidades, era)
     })
@@ -700,29 +748,42 @@ function EnemigosEscena({ esc, e }: { esc: EscenaPropia; e: EscenaGuion }) {
     <Apartado titulo="Enemigos" icono={<Swords size={13} aria-hidden />} color={tone.rubi.fg}>
       <ul style={{ ...listReset, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {e.enemigos.map((x, i) => {
-          const ficha = buscarAdversario(x.nombre, catalogo)
+          const npc = buscarAdversario(x.nombre, catalogo)
+          const texto = `${x.cantidad} ${x.nombre}`
           return (
-            <li key={i} style={{ ...pill(ficha ? tone.rubi : tone.cuarzo), borderRadius: radius.sm }} title={ficha ? `Ficha: ${ficha.name}` : 'Sin ficha en el catálogo'}>
-              {x.cantidad} {x.nombre}
+            <li key={i}>
+              {npc ? (
+                <button
+                  type="button"
+                  className="ui-btn"
+                  onClick={() => setFicha({ id: npc.id, nombre: npc.name })}
+                  aria-haspopup="dialog"
+                  title={`Ver la ficha de ${npc.name}`}
+                  style={{ ...pill(tone.rubi), borderRadius: radius.sm, cursor: 'pointer', font: 'inherit', fontSize: fs.xs, fontWeight: 650 }}
+                >
+                  <BookOpen size={12} aria-hidden />
+                  {texto}
+                </button>
+              ) : (
+                <span style={{ ...pill(tone.cuarzo), borderRadius: radius.sm }} title="Sin ficha en el catálogo">{texto}</span>
+              )}
             </li>
           )
         })}
       </ul>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(false)}>
-          {hayEncuentro ? `Añadir ${destinoAnadir(estado)}` : 'Preparar encuentro'}
-        </Button>
-        {hayEncuentro && estado.encuentros.length < MAX_ENCUENTROS && (
-          <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(true)}>
-            Como combate simultáneo
+      {hayEncuentro && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={anadir}>
+            Añadir {destinoAnadir(estado)}
           </Button>
-        )}
-        {!catalogoListo && (
-          <p style={{ width: '100%', fontSize: fs.xs, color: catalogoFallo ? tone.rubi.fg : c.subtle }}>
-            {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para preparar el encuentro con sus fichas.' : 'Cargando el catálogo de adversarios…'}
-          </p>
-        )}
-      </div>
+        </div>
+      )}
+      {!catalogoListo && (
+        <p style={{ width: '100%', fontSize: fs.xs, color: catalogoFallo ? tone.rubi.fg : c.subtle }}>
+          {catalogoFallo ? 'No se pudo cargar el catálogo de adversarios: recarga la pantalla para usar sus fichas.' : 'Cargando el catálogo de adversarios…'}
+        </p>
+      )}
+      {ficha && <HojaFichaAdversario adversarioId={ficha.id} nombre={ficha.nombre} onClose={() => setFicha(null)} />}
     </Apartado>
   )
 }
@@ -749,6 +810,39 @@ export function ReglasDeEscena({ escenaId }: { escenaId: string }) {
         {e.contadores.length > 0 && <Contadores escenaId={esc.id} nombres={e.contadores} />}
       </div>
     </Disclosure>
+  )
+}
+
+/**
+ * In the Encuentro panel: the script scene the fight came from. Its rules and counters stay open, as before; the rest of the
+ * scene (read-aloud boxes, text, PNJ, images and decisions, which can be marked here too) folds under them.
+ */
+export function EscenaDelEncuentro({ escenaId }: { escenaId: string }) {
+  const { estado } = usePantalla()
+  const esc = estado.escenasPropias.find((x) => x.id === escenaId)
+  if (!esc) return null
+  const e = leerEscena(esc.md)
+  const resto = e.secciones.filter((s) => s.clase !== 'reglas')
+  const hayResto = e.cuerpo.length > 0 || e.imagenes.length > 0 || resto.length > 0
+  return (
+    <>
+      <ReglasDeEscena escenaId={escenaId} />
+      {hayResto && (
+        <Disclosure
+          headingLevel={3}
+          accent={tone.gold.fg}
+          icon={<BookOpen size={18} aria-hidden />}
+          title={`Escena «${e.titulo}»`}
+          summary="La escena entera: lectura en voz alta, texto, PNJ y decisiones, que también se marcan desde aquí."
+        >
+          <div style={stack(16)}>
+            <Bloques bloques={e.cuerpo} escala={1} />
+            {e.imagenes.length > 0 && <Galeria imagenes={e.imagenes} />}
+            {resto.map((s, k) => <SeccionGuion key={`${s.titulo}-${k}`} seccion={s} escenaId={esc.id} e={e} escala={1} />)}
+          </div>
+        </Disclosure>
+      )}
+    </>
   )
 }
 

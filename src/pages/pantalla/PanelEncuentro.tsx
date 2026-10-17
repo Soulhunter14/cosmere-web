@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowRightLeft, BookOpen, ChevronDown, ChevronRight, ChevronUp, CopyPlus, Dices, EyeOff, LogOut, Pencil, Plus, Search, ShieldOff, Skull, Swords, Undo2, Users,
+  ArrowRightLeft, BookOpen, ChevronDown, ChevronRight, ChevronUp, CopyPlus, Dices, EyeOff, LogOut, Pencil, Plus, Search, ShieldOff, Skull, Swords, Trash2, Undo2, Users,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { globalNpcsApi } from '../../api/global-npcs'
@@ -17,16 +17,18 @@ import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, shadow, tone,
 import type { EstadoDef } from '../../worlds/types'
 import { guardarPreferencia, leerPreferencia, usePantalla } from './contexto'
 import {
-  FASES, FASE_INFO, MAX_ENCUENTROS, actuoEnFase, anotar, aplicarDano, avanzarFase, curar, dejarACero, encuentroDe, encuentroEnPantalla,
-  guardarTiradaPrivada, juegaEnFase, marcaDe, moverCombatiente, nombrarSerie, nombresNuevos, nuevoId, pasoRecurso, personajeEnCombate, registrarCambio, retirarCaidos,
+  FASES, FASE_INFO, MAX_ENCUENTROS, actuoEnFase, anotar, aplicarDano, avanzarFase, claveEscenaPropia, curar, dejarACero, encuentroDe, encuentroEnPantalla,
+  guardarTiradaPrivada, juegaEnFase, marcaDe, marcar, moverCombatiente, nombrarSerie, nombresNuevos, nuevoId, pasoRecurso, personajeEnCombate, registrarCambio, retirarCaidos,
   sacarDelCombate, tramo,
   type AtaqueDef, type Bando, type Combatiente, type Encuentro, type Fase, type MotivoSalida, type PantallaEstado, type Rango,
 } from './estado'
-import { deOtraEra, eraNumero, etiquetaEra, formatoDado, type EraNum } from './adversarios'
-import { abrirEncuentro, anadirAdversario, anadirLibre, anadirPersonajes, asegurarEncuentro, cerrarEncuentro, nombreBase } from './encuentro'
+import { eraNumero, formatoDado } from './adversarios'
+import { abrirEncuentro, anadirAdversario, anadirLibre, anadirPersonajes, asegurarEncuentro, cerrarEncuentro, eliminarEncuentro, nombreBase } from './encuentro'
+import { tituloDe } from './guion'
 import { RANGO_META } from './meta'
 import { BarraRecurso, Conmutador, TecladoNumerico, Tesela } from './piezas'
-import { ReglasDeEscena } from './PanelGuion'
+import { EscenaDelEncuentro } from './PanelGuion'
+import { HojaFichaAdversario } from './FichaAdversario'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -63,6 +65,8 @@ export function PanelEncuentro() {
   const [renombrando, setRenombrando] = useState(false)
   const [retirandoTodos, setRetirandoTodos] = useState(false)
   const [simultaneo, setSimultaneo] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
+  const [marcarJugada, setMarcarJugada] = useState(true)
 
   const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId) })
   // The characters that fight nowhere yet (with a split party, «Todo el grupo» never pulls one out of the other fight)
@@ -106,9 +110,23 @@ export function PanelEncuentro() {
   const siguiente = estado.encuentros.find((e) => e.id !== enc.id)
   const cambiarEnc = (f: (e: Encuentro) => void) => actualizar((b) => conEncuentro(b, enc.id, f))
 
+  // The script scene the fight came from, while it is not marked as played: ending the fight can mark it
+  const escena = enc.escenaId ? estado.escenasPropias.find((x) => x.id === enc.escenaId) : undefined
+  const escenaPendiente = escena && !estado.marcas[claveEscenaPropia(escena.id)] ? escena : undefined
+
   const terminar = () => {
-    actualizar((b) => cerrarEncuentro(b, enc.id, ultimoDiario))
+    actualizar((b) => {
+      cerrarEncuentro(b, enc.id, ultimoDiario)
+      if (escenaPendiente && marcarJugada && !b.marcas[claveEscenaPropia(escenaPendiente.id)]) {
+        marcar(b, claveEscenaPropia(escenaPendiente.id), true)
+        anotar(b, { tipo: 'avance', etiqueta: 'Escena jugada', texto: tituloDe(escenaPendiente) }, ultimoDiario)
+      }
+    })
     setTerminando(false)
+  }
+  const eliminar = () => {
+    actualizar((b) => eliminarEncuentro(b, enc.id, ultimoDiario))
+    setEliminando(false)
   }
 
   return (
@@ -199,14 +217,17 @@ export function PanelEncuentro() {
           ) : (
             <span style={{ alignSelf: 'center', fontSize: fs.xs, color: c.subtle }}>Máximo {MAX_ENCUENTROS} combates a la vez</span>
           )}
-          <Button variant="ghost" onClick={() => setTerminando(true)} style={{ marginLeft: 'auto' }}>
+          <Button variant="ghost" icon={<Trash2 size={16} aria-hidden />} onClick={() => setEliminando(true)} style={{ marginLeft: 'auto', color: tone.rubi.fg }}>
+            Eliminar combate
+          </Button>
+          <Button variant="ghost" onClick={() => { setMarcarJugada(true); setTerminando(true) }}>
             Terminar combate
           </Button>
         </div>
       </section>
 
-      {/* ── Battlefield rules and counters of the script scene the fight comes from ── */}
-      {enc.escenaId && <ReglasDeEscena escenaId={enc.escenaId} />}
+      {/* ── The script scene the fight comes from: its battlefield rules and counters, and the rest of it ── */}
+      {enc.escenaId && <EscenaDelEncuentro escenaId={enc.escenaId} />}
 
       {/* ── One lane per phase (a Jefe is in both of its side) ── */}
       {FASES.map((fase) => {
@@ -301,10 +322,29 @@ export function PanelEncuentro() {
         tone="brand"
         icon="warning"
         title={varios ? `¿Terminar «${enc.titulo}»?` : '¿Terminar el combate?'}
-        message={`Se anota en la bitácora con las rondas y los derrotados, y el encuentro se vacía.${siguiente ? ` La pantalla pasa a «${siguiente.titulo}».` : ''}`}
+        message={
+          <div style={stack(14)}>
+            <span>{`Se anota en la bitácora con las rondas y los derrotados, y el encuentro se vacía.${siguiente ? ` La pantalla pasa a «${siguiente.titulo}».` : ''}`}</span>
+            {escenaPendiente && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', color: c.text, cursor: 'pointer' }}>
+                <Switch checked={marcarJugada} onChange={setMarcarJugada} label={`Marcar «${tituloDe(escenaPendiente)}» como jugada`} />
+                <span>Marcar «{tituloDe(escenaPendiente)}» como jugada</span>
+              </label>
+            )}
+          </div>
+        }
         confirmLabel="Terminar combate"
         onConfirm={terminar}
         onCancel={() => setTerminando(false)}
+      />
+      <ConfirmDialog
+        open={eliminando}
+        icon="trash"
+        title={`¿Eliminar «${enc.titulo}»?`}
+        message="Se quita sin resumen en la bitácora, como si no se hubiera abierto. Úsalo si lo abriste por error; para acabar una pelea, «Terminar combate»."
+        confirmLabel="Eliminar combate"
+        onConfirm={eliminar}
+        onCancel={() => setEliminando(false)}
       />
     </div>
   )
@@ -704,7 +744,7 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
       />
 
       {hoja === 'salud' && <HojaSalud cb={cb} onClose={() => setHoja(null)} />}
-      {hoja === 'ficha' && <HojaFicha cb={cb} onClose={() => setHoja(null)} />}
+      {hoja === 'ficha' && <HojaFichaAdversario adversarioId={cb.adversarioId} nombre={cb.nombre} onClose={() => setHoja(null)} />}
       {hoja === 'retirar' && <HojaRetirar cb={cb} onClose={() => setHoja(null)} />}
       {hoja === 'editar' && <HojaEditar cb={cb} onClose={() => setHoja(null)} />}
       {hoja === 'estado' && <HojaEstadoNuevo cb={cb} estados={cfg.estados} onClose={() => setHoja(null)} />}
@@ -767,82 +807,6 @@ function Recurso({
 }
 
 // ── Sheets ───────────────────────────────────────────────────────────────────
-
-/** Action cost written by the transcriptions at the start of a line («1 Acometida…», «r Carroñero…») → official glyph */
-const ICONO_COSTE: Record<string, string> = { '1': 'accion-1', '2': 'accion-2', '3': 'accion-3', '0': 'accion-gratuita', r: 'reaccion' }
-
-/**
- * Stat block of a catalog adversary (traits, actions, tactics) without leaving the encounter. In a campaign with an era, the lines
- * the book marks for the other era are left out and a note says how many
- */
-function HojaFicha({ cb, onClose }: { cb: Combatiente; onClose: () => void }) {
-  const { cId } = usePantalla()
-  const era = eraNumero(useEra())
-  const { data: catalogo, isLoading, isError } = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
-  const npc = catalogo?.find((n) => n.id === cb.adversarioId)
-  const ocultas = npc ? `${npc.talentos}\n${npc.notas}`.split('\n').filter((l) => deOtraEra(l, era)).length : 0
-  return (
-    <Sheet
-      open
-      onClose={onClose}
-      title={npc?.name ?? cb.nombre}
-      description={npc ? `${npc.tipo}${npc.source ? ` · ${npc.source}` : ''}` : undefined}
-      maxWidth={680}
-      footer={<Button size="lg" style={{ flex: 1 }} onClick={onClose}>Cerrar</Button>}
-    >
-      {isLoading ? (
-        <Spinner label="Cargando la ficha…" />
-      ) : !npc ? (
-        <p style={{ fontSize: fs.sm, color: c.muted }}>
-          {isError ? 'No se pudo cargar el catálogo de adversarios. Cierra la ficha y vuelve a abrirla.' : 'Este adversario ya no está en el catálogo.'}
-        </p>
-      ) : (
-        <div style={stack(18)}>
-          <SeccionFicha titulo="Rasgos" texto={npc.talentos} era={era} />
-          <SeccionFicha titulo="Acciones y notas" texto={npc.notas} era={era} />
-          {ocultas > 0 && (
-            <p style={{ fontSize: fs.xs, color: c.subtle }}>
-              {ocultas === 1 ? 'Se oculta 1 capacidad' : `Se ocultan ${ocultas} capacidades`} que el libro marca solo para la Era {era === 1 ? 2 : 1}.
-            </p>
-          )}
-        </div>
-      )}
-    </Sheet>
-  )
-}
-
-/** The world's chip of an era («Era 1» / «Era 2»), as the catalog shows the items of one era */
-function ChipEra({ era }: { era: 1 | 2 }) {
-  const { eras } = useWorldConfig()
-  const def = eras?.find((e) => e.id === `era${era}`)
-  return <span style={{ ...pill(def?.tone ?? tone.cuarzo), marginRight: 6 }}>{def?.label ?? `Era ${era}`}</span>
-}
-
-function SeccionFicha({ titulo, texto, era }: { titulo: string; texto: string; era: EraNum }) {
-  const lineas = texto.split('\n').map((l) => l.trim()).filter((l) => l && !deOtraEra(l, era))
-  if (lineas.length === 0) return null
-  return (
-    <section style={stack(8)}>
-      <h3 style={{ ...eyebrow, color: tone.rubi.fg }}>{titulo}</h3>
-      {lineas.map((linea, i) => {
-        // The book's era mark becomes the era chip, after the action's title
-        const marca = etiquetaEra(linea)
-        const limpia = marca ? linea.replace(/\s*\bERA\s*[12]\b\s*/, ' ').trim() : linea
-        const coste = /^([0-3r])\s+(.*)$/.exec(limpia)
-        const resto = coste ? coste[2] : limpia
-        // An action's title runs to its first full stop («Escoltar (Coste: 1 punto de concentración).»); other lines, to the colon
-        const m = coste ? /^(.{1,90}?\.)(\s.*)$/.exec(resto) : /^([^:]{1,60}:)(\s.*)$/.exec(resto)
-        const chip = marca ? <ChipEra era={marca} /> : null
-        return (
-          <p key={i} style={{ display: 'flex', gap: 8, fontSize: fs.sm + 1, lineHeight: 1.55, color: c.text, paddingLeft: 10, borderLeft: '2px solid var(--gold-border)' }}>
-            {coste && <CosmereIcon name={ICONO_COSTE[coste[1]]} size={16} title={coste[1] === 'r' ? 'Reacción' : coste[1] === '0' ? 'Acción gratuita' : `${coste[1]} acción${coste[1] === '1' ? '' : 'es'}`} style={{ marginTop: 3, color: tone.rubi.fg }} />}
-            <span>{m ? <><strong style={{ fontWeight: 700 }}>{m[1]}</strong> {chip}{m[2].trimStart()}</> : <>{chip}{resto}</>}</span>
-          </p>
-        )
-      })}
-    </section>
-  )
-}
 
 /**
  * «Restar el desvío» of the health keypad, remembered on the device. On by default: the number typed is the attacker's damage and

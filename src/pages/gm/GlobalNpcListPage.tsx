@@ -1,25 +1,39 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, ChevronRight, BookOpen } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, BookOpen, FileUp } from 'lucide-react'
 import { globalNpcsApi } from '../../api/global-npcs'
 import { useCampaignStore } from '../../store/campaignStore'
 import { Button, ConfirmDialog, EmptyState, ErrorMessage, Field, IconButton, Input, PageHeader, Sheet, Spinner } from '../../components/ui'
 import { buttonReset, c, card, font, fs, page, radius, tint, titleText, tone } from '../../theme'
 import type { GlobalNpc } from '../../types'
+import { RetratoAvatar } from '../../components/RetratoAvatar'
+
+// The bulk upload of book images is rare and only the GM's: it loads on demand, out of the main chunk
+const SubirFichasLibro = lazy(() => import('./SubirFichasLibro').then((m) => ({ default: m.SubirFichasLibro })))
 
 function GlobalNpcCard({
+  cId,
   npc,
   isGm,
   onOpen,
   onDelete,
 }: {
+  cId: number
   npc: GlobalNpc
   isGm: boolean
   onOpen: () => void
   onDelete: () => void
 }) {
   const rubi = tone.rubi
+  const avatar: CSSProperties = {
+    width: 48, height: 48, borderRadius: radius.md, flexShrink: 0, overflow: 'hidden',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: npc.imageUrl ? c.s2 : `radial-gradient(120% 120% at 30% 20%, ${tint(rubi.fg, 20)}, var(--surface-2))`,
+    border: `1px solid ${rubi.border}`,
+    ...titleText, fontSize: fs.xl, color: rubi.fg,
+  }
+  const inicial = npc.name[0]?.toUpperCase() ?? '?'
   return (
     <div
       className="ui-card ui-card--interactive"
@@ -35,22 +49,14 @@ function GlobalNpcCard({
           padding: '14px 12px 14px 16px', borderRadius: radius.lg,
         }}
       >
-        {/* Avatar / image */}
-        <span
-          aria-hidden
-          style={{
-            width: 48, height: 48, borderRadius: radius.md, flexShrink: 0, overflow: 'hidden',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: npc.imageUrl ? c.s2 : `radial-gradient(120% 120% at 30% 20%, ${tint(rubi.fg, 20)}, var(--surface-2))`,
-            border: `1px solid ${rubi.border}`,
-            ...titleText, fontSize: fs.xl, color: rubi.fg,
-          }}
-        >
-          {npc.imageUrl
-            ? <img src={npc.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : npc.name[0]?.toUpperCase() ?? '?'
-          }
-        </span>
+        {/* Avatar: the illustration of its book (GM), its image or its initial */}
+        {isGm && npc.bookImages.includes('retrato') ? (
+          <RetratoAvatar cId={cId} npcId={npc.id} estilo={{ ...avatar, background: c.s2 }}>{inicial}</RetratoAvatar>
+        ) : (
+          <span aria-hidden style={avatar}>
+            {npc.imageUrl ? <img src={npc.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : inicial}
+          </span>
+        )}
 
         {/* Info */}
         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -60,6 +66,12 @@ function GlobalNpcCard({
           {npc.tipo && (
             <span style={{ fontFamily: font.display, fontStyle: 'italic', fontSize: fs.md, fontWeight: 500, lineHeight: 1.3, color: c.muted }}>
               {npc.tipo}
+            </span>
+          )}
+          {isGm && npc.bookImages.length > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: fs.xs, fontWeight: 650, color: rubi.fg }}>
+              <BookOpen size={12} aria-hidden />
+              Ficha del libro
             </span>
           )}
           {(npc.source || npc.ascendencia) && (
@@ -90,6 +102,7 @@ export function GlobalNpcListPage() {
   const qc = useQueryClient()
   const { isGm } = useCampaignStore()
   const [creating, setCreating] = useState(false)
+  const [subiendoFichas, setSubiendoFichas] = useState(false)
   const [newName, setNewName] = useState('')
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
   const inputRef = useRef<HTMLInputElement>(null)
@@ -132,14 +145,26 @@ export function GlobalNpcListPage() {
           ? `${npcs.length} adversario${npcs.length !== 1 ? 's' : ''} del libro`
           : 'Sin adversarios todavía'}
         actions={isGm && (
-          <Button
-            icon={<Plus size={16} aria-hidden />}
-            onClick={() => { setCreating(true); setTimeout(() => inputRef.current?.focus(), 50) }}
-          >
-            Nuevo
-          </Button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {!!npcs?.length && (
+              <Button variant="secondary" icon={<FileUp size={16} aria-hidden />} onClick={() => setSubiendoFichas(true)}>
+                Subir fichas del libro
+              </Button>
+            )}
+            <Button
+              icon={<Plus size={16} aria-hidden />}
+              onClick={() => { setCreating(true); setTimeout(() => inputRef.current?.focus(), 50) }}
+            >
+              Nuevo
+            </Button>
+          </div>
         )}
       />
+      {subiendoFichas && npcs && (
+        <Suspense fallback={null}>
+          <SubirFichasLibro cId={cId} catalogo={npcs} onClose={() => setSubiendoFichas(false)} />
+        </Suspense>
+      )}
 
       {/* Create sheet */}
       <Sheet
@@ -195,6 +220,7 @@ export function GlobalNpcListPage() {
           {npcs.map((npc, i) => (
             <li key={npc.id} className="rise" style={{ '--i': Math.min(i, 12) } as CSSProperties}>
               <GlobalNpcCard
+                cId={cId}
                 npc={npc}
                 isGm={isGm}
                 onOpen={() => navigate(`/campaigns/${campaignId}/global-npcs/${npc.id}`)}

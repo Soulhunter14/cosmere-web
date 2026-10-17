@@ -323,12 +323,15 @@ function TarjetaCombate({ libro, cap, combate }: { libro: string; cap: Adventure
   const { catalogo, catalogoListo, catalogoFallo } = useCatalogo()
   const era = eraNumero(useEra())
   const hayEncuentro = encuentroEnPantalla(estado) !== null
+  const lleno = estado.encuentros.length >= MAX_ENCUENTROS
+  const enemigos = combate.enemies.map((e) => ({ nombre: e.name, cantidad: cantidadDe(e.count), nota: e.bonus }))
 
-  /** To the encounter on screen or, `simultaneo`, as a new fight at the same time as the open ones */
-  const preparar = (simultaneo: boolean) => {
+  /** «Al encuentro»: always a new fight in round 1, as from a combat scene of the session; else to the one on screen */
+  const preparar = (nuevo: boolean) => {
     actualizar((b) => {
-      const enc = simultaneo ? abrirEncuentro(b, combate.title, ultimoDiario) : asegurarEncuentro(b, combate.title, ultimoDiario)
-      anadirEnemigos(enc, combate.enemies.map((e) => ({ nombre: e.name, cantidad: cantidadDe(e.count), nota: e.bonus })), catalogo, cfg.habilidades, era)
+      if (nuevo && b.encuentros.length >= MAX_ENCUENTROS) return
+      const enc = nuevo ? abrirEncuentro(b, combate.title, ultimoDiario) : encuentroEnPantalla(b)
+      if (enc) anadirEnemigos(enc, enemigos, catalogo, cfg.habilidades, era)
     })
     irA('encuentro')
   }
@@ -370,12 +373,17 @@ function TarjetaCombate({ libro, cap, combate }: { libro: string; cap: Adventure
       )}
       {combate.tables?.map((t, i) => <RollTable key={i} table={t} t={tone.rubi} />)}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Button icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(false)}>
-          {hayEncuentro ? `Añadir ${destinoAnadir(estado)}` : 'Preparar encuentro'}
+        <Button
+          icon={<Swords size={16} aria-hidden />}
+          disabled={!catalogoListo || lleno}
+          onClick={() => preparar(true)}
+          title={lleno ? `Ya hay ${MAX_ENCUENTROS} combates abiertos: termina o elimina uno` : 'Empieza un combate nuevo con estos enemigos'}
+        >
+          Al encuentro
         </Button>
-        {hayEncuentro && estado.encuentros.length < MAX_ENCUENTROS && (
-          <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(true)}>
-            Como combate simultáneo
+        {hayEncuentro && (
+          <Button variant="secondary" icon={<Swords size={16} aria-hidden />} disabled={!catalogoListo} onClick={() => preparar(false)}>
+            Añadir {destinoAnadir(estado)}
           </Button>
         )}
         {!catalogoListo && (

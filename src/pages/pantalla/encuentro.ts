@@ -1,5 +1,5 @@
 /**
- * Encounter operations shared by the panels (Encuentro, Escena «Preparar encuentro», Grupo «Añadir al encuentro»).
+ * Encounter operations shared by the panels (Encuentro, Escena «Al encuentro», Grupo «Añadir al encuentro»).
  * They mutate the draft that `usePantalla().actualizar` hands over, so a whole action is ONE change (one save, one log line).
  * Several encounters can be open at once (a split party): the actions of the other panels go to the one on screen.
  */
@@ -51,6 +51,21 @@ export function cerrarEncuentro(b: PantallaEstado, id: string, ultimoDiario: num
   ] as const
   const resumen = partes.filter(([nombres]) => nombres.length).map(([nombres, titulo]) => `. ${titulo}: ${nombres.join(', ')}`).join('')
   anotar(b, { tipo: 'combate', etiqueta: 'Combate', texto: `Termina «${e.titulo}» tras ${rondas}${resumen}` }, ultimoDiario)
+  b.encuentros = b.encuentros.filter((x) => x !== e)
+  if (b.encuentroActivo === id) b.encuentroActivo = b.encuentros[0]?.id ?? null
+}
+
+/**
+ * Throws away an encounter opened by mistake, without the summary of «Terminar». If nothing of the fight reached the log after
+ * its «Empieza» line, that line goes too and no trace is left; otherwise the log says it was thrown away, so it still reads right.
+ */
+export function eliminarEncuentro(b: PantallaEstado, id: string, ultimoDiario: number | null) {
+  const e = b.encuentros.find((x) => x.id === id)
+  if (!e) return
+  const eventos = b.sesion?.eventos ?? []
+  const inicio = eventos.findLastIndex((ev) => ev.tipo === 'combate' && ev.texto.startsWith(`Empieza «${e.titulo}»`))
+  if (inicio >= 0 && !eventos.slice(inicio + 1).some((ev) => ev.tipo === 'combate')) eventos.splice(inicio, 1)
+  else anotar(b, { tipo: 'combate', etiqueta: 'Combate', texto: `Se elimina «${e.titulo}»` }, ultimoDiario)
   b.encuentros = b.encuentros.filter((x) => x !== e)
   if (b.encuentroActivo === id) b.encuentroActivo = b.encuentros[0]?.id ?? null
 }

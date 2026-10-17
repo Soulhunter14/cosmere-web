@@ -354,7 +354,12 @@ export interface GlobalNpc {
    * the campaign it is created in) and lists only those of the campaign's era plus the ones of both
    */
   era: 1 | 2 | null
+  /** Images of its page in the book uploaded to the catalog (AddGlobalNpcImages); each one comes from `globalNpcsApi.getBookImage` */
+  bookImages: BookImageKind[]
 }
+
+/** What a book image of an adversary shows: its stat block, its tactics box or its illustration */
+export type BookImageKind = 'ficha' | 'tacticas' | 'retrato'
 
 // Sessions
 export interface Session {

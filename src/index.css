@@ -749,6 +749,11 @@ input[type='number'] { font-variant-numeric: tabular-nums; }
 .ui-btn--danger:not(:disabled):hover { background: color-mix(in srgb, var(--rubi) 20%, transparent) !important; border-color: color-mix(in srgb, var(--rubi) 50%, transparent) !important; }
 .ui-btn--gold:not(:disabled):hover { background: color-mix(in srgb, var(--gold) 20%, transparent) !important; }
 
+/* The divider of the director's screen: its grip lights up under the pointer, while dragged and with the keyboard */
+.ui-divisor > span { transition: background var(--dur-1), height var(--dur-2) var(--ease-out); }
+.ui-divisor:hover > span, .ui-divisor:focus-visible > span, .ui-divisor[data-arrastrando] > span { background: var(--brand); height: 88px; }
+.ui-divisor:focus-visible { outline-offset: -2px; }
+
 .ui-icon-btn { transition: background var(--dur-1), color var(--dur-1); }
 .ui-icon-btn:not(:disabled):hover { background: var(--hover-strong) !important; color: var(--text) !important; }
 .ui-icon-btn--danger:not(:disabled):hover { background: var(--rubi-bg) !important; color: var(--rubi) !important; }

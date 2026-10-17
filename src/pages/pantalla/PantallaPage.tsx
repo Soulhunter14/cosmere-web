@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, Check, ChevronLeft, CloudOff, Dices, LoaderCircle, Maximize2, Minimize2, NotebookPen, RefreshCw, Sun, SunDim, Swords,
-  Timer, TriangleAlert, Users, type LucideIcon,
+  BookOpen, Check, ChevronLeft, CloudOff, Dices, LoaderCircle, Maximize2, Minimize2, NotebookPen, PanelRightClose, PanelRightOpen, RefreshCw,
+  Sun, SunDim, Swords, Timer, TriangleAlert, Users, type LucideIcon,
 } from 'lucide-react'
 import { gmScreenApi } from '../../api/gmScreen'
 import type { DiceRollResponse } from '../../api/diceRolls'
@@ -49,6 +49,16 @@ const suscribirAncho = (cb: () => void) => {
   return () => m.removeEventListener('change', cb)
 }
 const useDosPaneles = () => useSyncExternalStore(suscribirAncho, () => window.matchMedia(DOS_PANELES).matches, () => false)
+
+/**
+ * With two panes, the share of the width «Mesa» takes: the director drags the divider, and the device remembers it. «Registro»
+ * folds into a strip of icons, also remembered (it often goes unused).
+ */
+const REPARTO = { inicial: 0.55, min: 0.3, max: 0.8 }
+const PREF_REPARTO = 'cosmere-pantalla-reparto'
+const PREF_PLEGADO = 'cosmere-pantalla-registro-plegado'
+const esReparto = (v: unknown): v is number => typeof v === 'number' && v >= REPARTO.min && v <= REPARTO.max
+const acotarReparto = (v: number) => Math.min(REPARTO.max, Math.max(REPARTO.min, v))
 
 // ── Route ────────────────────────────────────────────────────────────────────
 
@@ -103,8 +113,15 @@ function Pantalla() {
   const [tabB, setTabB] = useState<PanelId>(() => leerPreferencia('cosmere-pantalla-b', 'tiradas', esDe(PANEL_B)))
   const [tabUnico, setTabUnico] = useState<PanelId>(() => leerPreferencia('cosmere-pantalla-unica', 'escena', esDe(TODOS)))
   const [nuevas, setNuevas] = useState(0)
+  const [reparto, setReparto] = useState(() => leerPreferencia(PREF_REPARTO, REPARTO.inicial, esReparto))
+  const [plegado, setPlegado] = useState(() => leerPreferencia(PREF_PLEGADO, false, esBool))
+  const zona = useRef<HTMLDivElement>(null)
+  const plegar = (v: boolean) => {
+    setPlegado(v)
+    guardarPreferencia(PREF_PLEGADO, v)
+  }
 
-  const tiradasVisibles = dos ? tabB === 'tiradas' : tabUnico === 'tiradas'
+  const tiradasVisibles = dos ? tabB === 'tiradas' && !plegado : tabUnico === 'tiradas'
   const visiblesRef = useRef(tiradasVisibles)
   useEffect(() => { visiblesRef.current = tiradasVisibles }, [tiradasVisibles])
 
@@ -112,7 +129,12 @@ function Pantalla() {
     if (panel === 'tiradas') setNuevas(0)
     if (dos) {
       if (PANEL_A.includes(panel)) { setTabA(panel); guardarPreferencia('cosmere-pantalla-a', panel) }
-      else { setTabB(panel); guardarPreferencia('cosmere-pantalla-b', panel) }
+      else {
+        setTabB(panel)
+        guardarPreferencia('cosmere-pantalla-b', panel)
+        // A panel of «Registro» opened from elsewhere (a chip of the top bar) unfolds it
+        if (plegado) plegar(false)
+      }
     } else {
       setTabUnico(panel)
       guardarPreferencia('cosmere-pantalla-unica', panel)
@@ -212,15 +234,39 @@ function Pantalla() {
           onCancel={() => setEligiendo(null)}
         />
         <div
-          style={{
-            flex: 1, minHeight: 0, display: 'grid', gap: 12, padding: dos ? 12 : 8,
-            gridTemplateColumns: dos ? 'minmax(0, 1.2fr) minmax(0, 1fr)' : 'minmax(0, 1fr)',
-          }}
+          ref={zona}
+          style={dos
+            ? { flex: 1, minHeight: 0, display: 'flex', padding: 12 }
+            : { flex: 1, minHeight: 0, display: 'grid', gap: 12, padding: 8, gridTemplateColumns: 'minmax(0, 1fr)' }}
         >
           {dos ? (
             <>
-              <Panel prefijo="pantalla-a" etiqueta="Mesa" ids={PANEL_A} valor={tabA} onCambiar={elegir} badge={badge} />
-              <Panel prefijo="pantalla-b" etiqueta="Registro" ids={PANEL_B} valor={tabB} onCambiar={elegir} badge={badge} />
+              <Panel
+                prefijo="pantalla-a" etiqueta="Mesa" ids={PANEL_A} valor={tabA} onCambiar={elegir} badge={badge}
+                estilo={{ flex: plegado ? '1 1 0' : `${reparto} 1 0`, minWidth: 320 }}
+              />
+              {plegado ? (
+                <RielRegistro ids={PANEL_B} badge={badge} onAbrir={(panel) => { plegar(false); if (panel) elegir(panel) }} />
+              ) : (
+                <>
+                  <Divisor
+                    zona={zona}
+                    reparto={reparto}
+                    onCambio={setReparto}
+                    onSoltar={(v) => guardarPreferencia(PREF_REPARTO, v)}
+                    onPlegar={() => plegar(true)}
+                  />
+                  <Panel
+                    prefijo="pantalla-b" etiqueta="Registro" ids={PANEL_B} valor={tabB} onCambiar={elegir} badge={badge}
+                    estilo={{ flex: `${1 - reparto} 1 0`, minWidth: 260 }}
+                    accion={
+                      <IconButton label="Plegar Registro" variant="surface" size={40} onClick={() => plegar(true)}>
+                        <PanelRightClose size={18} aria-hidden />
+                      </IconButton>
+                    }
+                  />
+                </>
+              )}
             </>
           ) : (
             <Panel prefijo="pantalla-u" etiqueta="Pantalla del director" ids={TODOS} valor={tabUnico} onCambiar={elegir} badge={badge} />
@@ -231,12 +277,24 @@ function Pantalla() {
   )
 }
 
-/** A pane: its tab strip and one scroll area per panel. A panel stays mounted once opened, so its scroll and form keep their place */
+/**
+ * A pane: its tab strip (with an optional action at its end, «Plegar Registro») and one scroll area per panel. A panel stays
+ * mounted once opened, so its scroll and form keep their place
+ */
 function Panel({
-  prefijo, etiqueta, ids, valor, onCambiar, badge,
-}: { prefijo: string; etiqueta: string; ids: PanelId[]; valor: PanelId; onCambiar: (p: PanelId) => void; badge: number }) {
+  prefijo, etiqueta, ids, valor, onCambiar, badge, estilo, accion,
+}: {
+  prefijo: string
+  etiqueta: string
+  ids: PanelId[]
+  valor: PanelId
+  onCambiar: (p: PanelId) => void
+  badge: number
+  estilo?: CSSProperties
+  accion?: ReactNode
+}) {
   const [abiertos, setAbiertos] = useState<PanelId[]>([valor])
-  // A panel opened from elsewhere (a chip of the top bar, «Preparar encuentro») stays mounted too, as one opened by its tab
+  // A panel opened from elsewhere (a chip of the top bar, «Al encuentro») stays mounted too, as one opened by its tab
   if (!abiertos.includes(valor)) setAbiertos([...abiertos, valor])
   const cambiar = (p: PanelId) => {
     setAbiertos((l) => (l.includes(p) ? l : [...l, p]))
@@ -259,10 +317,14 @@ function Panel({
       style={{
         minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
         borderRadius: radius.lg, border: `1px solid ${c.border}`, background: 'color-mix(in srgb, var(--surface-1) 55%, transparent)',
+        ...estilo,
       }}
     >
-      <div style={{ padding: 8, borderBottom: `1px solid ${c.border}`, flexShrink: 0 }}>
-        <Tabs<PanelId> idPrefix={prefijo} ariaLabel={etiqueta} tabs={tabs} value={valor} onChange={cambiar} stretch size="sm" tone="rubi" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 8, borderBottom: `1px solid ${c.border}`, flexShrink: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Tabs<PanelId> idPrefix={prefijo} ariaLabel={etiqueta} tabs={tabs} value={valor} onChange={cambiar} stretch size="sm" tone="rubi" />
+        </div>
+        {accion}
       </div>
       {ids.filter((id) => id === valor || abiertos.includes(id)).map((id) => (
         <div
@@ -277,6 +339,128 @@ function Panel({
         </div>
       ))}
     </section>
+  )
+}
+
+/**
+ * The divider between the two panes. Dragged (mouse, finger or pen) it shares the width out; taken almost to the right edge it
+ * folds «Registro». With the keyboard: arrows move it, Home and End take it to its limits, Enter folds «Registro». A double
+ * click puts it back where it started.
+ */
+function Divisor({
+  zona, reparto, onCambio, onSoltar, onPlegar,
+}: {
+  zona: RefObject<HTMLDivElement | null>
+  reparto: number
+  onCambio: (v: number) => void
+  onSoltar: (v: number) => void
+  onPlegar: () => void
+}) {
+  const [arrastrando, setArrastrando] = useState(false)
+  const fraccion = (x: number) => {
+    const r = zona.current?.getBoundingClientRect()
+    return r && r.width > 0 ? (x - r.left) / r.width : reparto
+  }
+  const empezar = (ev: PointerEvent<HTMLDivElement>) => {
+    if (ev.button !== 0) return
+    ev.preventDefault()
+    ev.currentTarget.setPointerCapture(ev.pointerId)
+    setArrastrando(true)
+  }
+  const mover = (ev: PointerEvent<HTMLDivElement>) => {
+    if (arrastrando) onCambio(acotarReparto(fraccion(ev.clientX)))
+  }
+  const soltar = (ev: PointerEvent<HTMLDivElement>) => {
+    if (!arrastrando) return
+    setArrastrando(false)
+    const f = fraccion(ev.clientX)
+    if (f > 0.92) {
+      onPlegar()
+      return
+    }
+    onSoltar(acotarReparto(f))
+  }
+  const teclas = (ev: KeyboardEvent<HTMLDivElement>) => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault()
+      onPlegar()
+      return
+    }
+    const destino = { ArrowLeft: reparto - 0.05, ArrowRight: reparto + 0.05, Home: REPARTO.min, End: REPARTO.max }[ev.key]
+    if (destino === undefined) return
+    ev.preventDefault()
+    const v = acotarReparto(destino)
+    onCambio(v)
+    onSoltar(v)
+  }
+  const pct = Math.round(reparto * 100)
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Reparto entre Mesa y Registro"
+      aria-valuemin={Math.round(REPARTO.min * 100)}
+      aria-valuemax={Math.round(REPARTO.max * 100)}
+      aria-valuenow={pct}
+      aria-valuetext={`Mesa ${pct} %, Registro ${100 - pct} %`}
+      title="Arrastra para repartir el ancho; hasta el borde, pliega Registro"
+      tabIndex={0}
+      className="ui-divisor"
+      data-arrastrando={arrastrando || undefined}
+      onPointerDown={empezar}
+      onPointerMove={mover}
+      onPointerUp={soltar}
+      onPointerCancel={() => setArrastrando(false)}
+      onDoubleClick={() => { onCambio(REPARTO.inicial); onSoltar(REPARTO.inicial) }}
+      onKeyDown={teclas}
+      style={{
+        width: 14, flexShrink: 0, alignSelf: 'stretch', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'col-resize', touchAction: 'none', userSelect: 'none', borderRadius: radius.sm,
+      }}
+    >
+      <span aria-hidden style={{ width: 4, height: 56, borderRadius: radius.full, background: c.borderBright }} />
+    </div>
+  )
+}
+
+/** «Registro» folded: a strip with its panels as icons (Tiradas keeps its count of new rolls); any of them unfolds it */
+function RielRegistro({ ids, badge, onAbrir }: { ids: PanelId[]; badge: number; onAbrir: (panel: PanelId | null) => void }) {
+  return (
+    <nav
+      aria-label="Registro (plegado)"
+      style={{
+        marginLeft: 12, width: 56, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '8px 0',
+        borderRadius: radius.lg, border: `1px solid ${c.border}`, background: 'color-mix(in srgb, var(--surface-1) 55%, transparent)',
+      }}
+    >
+      <IconButton label="Desplegar Registro" variant="surface" size={40} onClick={() => onAbrir(null)}>
+        <PanelRightOpen size={18} aria-hidden />
+      </IconButton>
+      <span aria-hidden style={{ width: 28, height: 1, margin: '4px 0', background: c.border }} />
+      {ids.map((id) => {
+        const Icon = PANELES[id].icon
+        const n = id === 'tiradas' ? badge : 0
+        return (
+          <span key={id} style={{ position: 'relative' }}>
+            <IconButton label={n ? `${PANELES[id].label}, ${n} tiradas nuevas` : PANELES[id].label} variant="ghost" size={40} onClick={() => onAbrir(id)}>
+              <Icon size={18} aria-hidden />
+            </IconButton>
+            {n > 0 && (
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute', top: 0, right: -2, minWidth: 18, height: 18, padding: '0 5px', borderRadius: radius.full,
+                  background: c.brandFill, color: c.onBrand, fontSize: 11, fontWeight: 800, lineHeight: 1,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+                }}
+              >
+                {n}
+              </span>
+            )}
+          </span>
+        )
+      })}
+    </nav>
   )
 }
 

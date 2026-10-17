@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, Edit2, Save, X, type LucideIcon } from 'lucide-react'
@@ -12,6 +12,7 @@ import { CosmereIcon } from '../../components/CosmereIcon'
 import { StatIcons } from '../../lib/gameIcons'
 import { c, eyebrow, font, fs, numeral, page, pill, radius, shadow, tint, titleText, tone, type Tone } from '../../theme'
 import type { GlobalNpc } from '../../types'
+import { RetratoAvatar } from '../../components/RetratoAvatar'
 
 /** Numeric fields of GlobalNpc (attributes, skills, resources) */
 type NumKey = { [K in keyof GlobalNpc]-?: GlobalNpc[K] extends number ? K : never }[keyof GlobalNpc]
@@ -50,7 +51,10 @@ const ATTR_NAMES: Record<string, string> = {
   discernimiento: 'Discernimiento', voluntad: 'Voluntad', presencia: 'Presencia',
 }
 
-type Tab = 'stats' | 'lore'
+type Tab = 'stats' | 'lore' | 'libro'
+
+// The book page of an adversary is the GM's and loads on demand, out of the main chunk
+const LibroDelAdversario = lazy(() => import('./LibroDelAdversario').then((m) => ({ default: m.LibroDelAdversario })))
 
 /** 0 on phones, `px` from 640px (media query in an inline style), as in CharacterDetailPage */
 const fromTablet = (px: number) => `clamp(0px, calc((100vw - 640px) * 999), ${px}px)`
@@ -157,6 +161,14 @@ export function GlobalNpcDetailPage() {
     setForm((p) => p ? { ...p, [k]: e.target.value } : p)
 
   const rubi = tone.rubi
+  const avatarHero: CSSProperties = {
+    width: 64, height: 64, borderRadius: radius.md, flexShrink: 0, overflow: 'hidden',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: npc.imageUrl ? c.s2 : `radial-gradient(120% 120% at 30% 20%, ${tint(rubi.fg, 22)}, var(--surface-2))`,
+    border: `1.5px solid ${rubi.border}`,
+    boxShadow: 'var(--shadow-1)',
+    ...titleText, fontSize: fs['2xl'], color: rubi.fg,
+  }
   const numberInput: CSSProperties = { textAlign: 'center', ...numeral, fontSize: fs.lg, padding: '6px 8px' }
   // The table of the world, the same one the sheet and the dice roller read (no world id is compared here)
   const sections = buildSections(cfg.habilidades)
@@ -200,23 +212,17 @@ export function GlobalNpcDetailPage() {
         <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, background: 'var(--gold-rule)' }} />
 
         <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-          {/* Avatar */}
-          <div
-            aria-hidden
-            style={{
-              width: 64, height: 64, borderRadius: radius.md, flexShrink: 0, overflow: 'hidden',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: npc.imageUrl ? c.s2 : `radial-gradient(120% 120% at 30% 20%, ${tint(rubi.fg, 22)}, var(--surface-2))`,
-              border: `1.5px solid ${rubi.border}`,
-              boxShadow: 'var(--shadow-1)',
-              ...titleText, fontSize: fs['2xl'], color: rubi.fg,
-            }}
-          >
-            {npc.imageUrl
-              ? <img src={npc.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : npc.name[0]?.toUpperCase() ?? '?'
-            }
-          </div>
+          {/* Avatar: the illustration of its book (GM), its image or its initial */}
+          {isGm && npc.bookImages.includes('retrato') ? (
+            <RetratoAvatar cId={cId} npcId={npc.id} estilo={{ ...avatarHero, background: c.s2 }}>{npc.name[0]?.toUpperCase() ?? '?'}</RetratoAvatar>
+          ) : (
+            <div aria-hidden style={avatarHero}>
+              {npc.imageUrl
+                ? <img src={npc.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : npc.name[0]?.toUpperCase() ?? '?'
+              }
+            </div>
+          )}
 
           {/* Name, tipo, source */}
           <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
@@ -318,7 +324,12 @@ export function GlobalNpcDetailPage() {
       {/* ─── Tabs ─── */}
       <div style={{ padding: '16px 16px 0' }}>
         <Tabs<Tab>
-          tabs={[{ id: 'stats', label: 'Stats' }, { id: 'lore', label: 'Lore' }]}
+          tabs={[
+            { id: 'stats', label: 'Stats' },
+            { id: 'lore', label: 'Lore' },
+            // The book page is the GM's: the images are only served to the GM of a campaign of the adversary's world
+            ...(isGm ? [{ id: 'libro' as const, label: 'Libro' }] : []),
+          ]}
           value={tab}
           onChange={setTab}
           ariaLabel="Secciones del NPC"
@@ -475,6 +486,13 @@ export function GlobalNpcDetailPage() {
               )
             })}
           </div>
+        )}
+
+        {/* BOOK TAB: the adversary as its book prints it */}
+        {tab === 'libro' && isGm && (
+          <Suspense fallback={<Spinner label="Cargando la página del libro…" />}>
+            <LibroDelAdversario cId={cId} npc={npc} />
+          </Suspense>
         )}
       </TabPanel>
     </div>

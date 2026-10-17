@@ -14,7 +14,7 @@ La sesión no se escribe entera en la app: se prepara fuera, normalmente con IA 
 Markdown. En la mesa se completa de dos formas:
 
 - **Desde el libro.** «Del libro» (en la barra de Sesión) abre el Libro. Cada escena tiene **A la sesión** en la fila fija del
-  índice, siempre a mano mientras se lee (solo el icono en el móvil), y cada combate, **Añadir a la sesión** junto a «Preparar
+  índice, siempre a mano mientras se lee (solo el icono en el móvil), y cada combate, **Añadir a la sesión** junto a «Al
   encuentro». La copia va en este formato (lectura en voz alta, texto, pruebas con su CD, caminos, consejos y tablas; en los
   combates, el mapa, los enemigos, las reglas y las recompensas). Si ya hay una escena con ese título, el botón dice «En la sesión».
   En un mundo sin libro, o sin capítulos para la era de la campaña, no se muestran ni el Libro ni «Del libro».
@@ -118,7 +118,7 @@ prueba: Persuasión CD 12 · éxito: +1 al atributo de la habilidad
 | `tipo:` | narrativa · social · exploración · combate · decisión (icono y color). |
 | `fuente:` | Página del libro de la que sale («L.<libro> / PDF <pdf>»). |
 | `imagen: ruta \| Título` | Galería con miniaturas que se abren a pantalla completa. Una línea por imagen. |
-| `enemigos:` | «2 Anguila aérea mayor, 2 Anguila aérea»: botón **Preparar encuentro** con las fichas del catálogo. El encuentro recuerda la escena y muestra sus reglas y contadores. |
+| `enemigos:` | «2 Anguila aérea mayor, 2 Anguila aérea»: los enemigos de la escena, con las fichas del catálogo (ver «El encuentro desde una escena»). |
 | `empeño:` | «6 éxitos antes de 4 fallos»: contador de éxitos y fallos con su resultado (se anota en la bitácora). |
 | `contadores:` | «Daño del barco, Días de más en Karanak»: contadores con +/− y «± Cantidad». |
 | `decide:` | Quién toma las decisiones de la escena: `todos` (por defecto), un legado (`convicto`) o el nombre de un PJ. |
@@ -181,6 +181,53 @@ objetos), las marcas de camino y de metal contadas (la más marcada destaca: es 
 y cada decisión con su prueba. Una decisión mal marcada se quita desde aquí, con confirmación. La pantalla no cambia la ficha: el
 tope de 3 por atributo y los puntos de control se comprueban al pasarlo a mano.
 
+## El encuentro desde una escena
+
+- **Al encuentro.** Toda escena de combate (`tipo: combate` o con `enemigos:`), de la sesión o del libro, lleva este botón en la
+  cabecera. Abre siempre un combate **nuevo**, en la ronda 1, con sus enemigos (enlazados al catálogo por nombre; el que no tiene
+  ficha entra como libre, con valores que ajustar) y enlazado a la escena, y pasa a la pestaña Encuentro. Pulsarlo otra vez abre
+  otro con número («… 2»). Con el máximo de combates abiertos espera a que acabe uno.
+- **La escena viaja con el combate.** En el Encuentro, las reglas del combate y los contadores de la escena siguen abiertos, y
+  debajo se pliega el resto: lectura en voz alta, texto, PNJ, imágenes y decisiones, que también se marcan desde ahí.
+- **Refuerzos.** Al final de la escena, los enemigos llevan su ficha (un toque la abre) y, con un combate abierto, **Añadir a…**
+  suma esos enemigos al combate en pantalla.
+- **Eliminar combate** (con confirmación) quita un combate abierto por error, sin resumen. Si no se anotó nada de él, también
+  desaparece su «Empieza» de la bitácora; si no, la bitácora dice que se eliminó.
+- **Terminar combate** anota rondas y derrotados y, si el combate salió de una escena aún sin jugar, ofrece marcarla como jugada.
+
+## Las fichas del libro
+
+La ficha de un adversario se puede ver **tal como la imprime el libro**: su ilustración, la caja de su ficha y la de sus
+tácticas. En el Encuentro y desde los enemigos de una escena, la hoja de su ficha tiene «Libro» (por defecto, si hay imagen) y
+«Resumen» (la transcripción de la app, la que usa el combate). En GM → NPCs, la ilustración es su avatar y la página del adversario
+tiene la pestaña **Libro**. Las imágenes están en el catálogo del mundo (`/global-npcs/{id}/book-images/{ficha|tacticas|retrato}`,
+`GlobalNpcImages`): las ve el director de cualquier campaña de ese mundo.
+
+**1. Recortar.** `scripts/aventura/fichas_libro.py` recorta de tu PDF la caja de cada ficha, la de sus tácticas y la ilustración
+del personaje (compuesta solo con sus capas de imagen, sin el texto de la página), en WebP. Hay perfiles para *El legado*, la
+*Guía del mundo* de Nacidos de la bruma y *Caminapiedras*; `--revision <png>` saca además una hoja con todos los retratos para
+repasarlos, y `retratos` del perfil fija a mano los que la detección no acierta:
+
+```bash
+python -I scripts/aventura/fichas_libro.py legado "<ruta>/SPA_NacidosBruma_Legado.pdf" ../cosmere-api/Resources/pdfextract/fichas/legado
+```
+
+```bash
+python -I scripts/aventura/fichas_libro.py guia "<ruta>/SPA_Mistborn_World_Guide.pdf" ../cosmere-api/Resources/pdfextract/fichas/guia
+```
+
+```bash
+python -I scripts/aventura/fichas_libro.py caminapiedras "<ruta>/ARTO007_Caminapiedras aventura_high.pdf" ../cosmere-api/Resources/pdfextract/fichas/caminapiedras
+```
+
+Cada imagen se llama `<nombre>.<libro>.webp`, `<nombre>.<libro>.tacticas.webp` y `<nombre>.<libro>.retrato.webp`. Como el libro original, son páginas del libro
+con derechos de autor: se quedan en local y fuera de git, y solo las sube el director.
+
+**2. Subir.** GM → NPCs → **Subir fichas del libro**: se eligen todas las imágenes de una carpeta. Cada una va al adversario de su
+nombre en el catálogo de la campaña; si un adversario sale en los dos libros («Matón»), se queda la del libro de su fuente. Antes
+de subir, la hoja dice qué va a cada adversario y qué se queda fuera (de otra era, repetidas o que no son del script). Una imagen
+suelta se sube, sustituye o quita desde la pestaña Libro del adversario.
+
 ## Imágenes
 
 Las rutas que empiezan por `/` se sirven desde `public/` de la web y se cargan solo cuando se ven (la PWA no las precachea).
@@ -208,7 +255,7 @@ colores de los títulos, desfase de páginas, partes y mapas) y genera, por part
   libro (con `apartado:`, su título de primer nivel, y `fuente:` con la página), `>` para los recuadros «Lee lo siguiente»,
   `### Pruebas` con las frases del libro que llevan CD, `### PNJ` para los «Cómo interpretar a…», las tablas como listas y los mapas
   como imágenes. Con el `combates.json` exportado de `src/data/<libro>` (título, mapa y enemigos con los nombres del catálogo), las
-  escenas de combate llevan `enemigos:` para «Preparar encuentro»; un combate que no es un título del libro va como escena propia
+  escenas de combate llevan `enemigos:` para «Al encuentro»; un combate que no es un título del libro va como escena propia
   detrás de la más parecida.
 
 ```bash

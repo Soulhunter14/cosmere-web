@@ -293,7 +293,7 @@ export function Conmutador({
 // ── Shared scene header ──────────────────────────────────────────────────────
 
 export function CabeceraEscena({
-  titulo, tipo, kicker, actual = false, jugada = false, onActual, onJugada, escala, onEscala, acciones,
+  titulo, tipo, kicker, actual = false, jugada = false, onActual, onJugada, escala, onEscala, acciones, destacado,
 }: {
   titulo: string
   tipo: TipoEscena
@@ -306,6 +306,8 @@ export function CabeceraEscena({
   escala: number
   onEscala: (v: number) => void
   acciones?: ReactNode
+  /** The scene's main action, first in the row («Al encuentro» of a combat) */
+  destacado?: ReactNode
 }) {
   const meta = ESCENA_META[tipo]
   const Icon = meta.icon
@@ -324,6 +326,7 @@ export function CabeceraEscena({
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {destacado}
         {onActual && (
           <Button size="sm" variant={actual ? 'gold' : 'secondary'} icon={actual ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />} onClick={onActual}>
             {actual ? 'Quitar de actual' : 'Escena actual'}

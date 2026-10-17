@@ -1,10 +1,10 @@
-import { lazy, Suspense, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useState, type CSSProperties } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, ChevronRight, BookOpen, FileUp } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronRight, BookOpen, FileUp } from 'lucide-react'
 import { globalNpcsApi } from '../../api/global-npcs'
 import { useCampaignStore } from '../../store/campaignStore'
-import { Button, ConfirmDialog, EmptyState, ErrorMessage, Field, IconButton, Input, PageHeader, Sheet, Spinner } from '../../components/ui'
+import { Button, EmptyState, ErrorMessage, PageHeader, Spinner } from '../../components/ui'
 import { buttonReset, c, card, font, fs, page, radius, tint, titleText, tone } from '../../theme'
 import type { GlobalNpc } from '../../types'
 import { RetratoAvatar } from '../../components/RetratoAvatar'
@@ -17,13 +17,11 @@ function GlobalNpcCard({
   npc,
   isGm,
   onOpen,
-  onDelete,
 }: {
   cId: number
   npc: GlobalNpc
   isGm: boolean
   onOpen: () => void
-  onDelete: () => void
 }) {
   const rubi = tone.rubi
   const avatar: CSSProperties = {
@@ -37,7 +35,7 @@ function GlobalNpcCard({
   return (
     <div
       className="ui-card ui-card--interactive"
-      style={{ ...card, display: 'flex', alignItems: 'center', gap: 4, paddingRight: isGm ? 8 : 0 }}
+      style={{ ...card, display: 'flex', alignItems: 'center' }}
     >
       <button
         type="button"
@@ -84,55 +82,27 @@ function GlobalNpcCard({
 
         <ChevronRight size={18} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
       </button>
-
-      {/* Actions (outside the open button, so delete never opens the card) */}
-      {isGm && (
-        <IconButton label={`Eliminar ${npc.name}`} variant="danger" size={44} onClick={onDelete}>
-          <Trash2 size={18} aria-hidden />
-        </IconButton>
-      )}
     </div>
   )
 }
 
+/**
+ * The adversaries of the campaign's world, read-only: the catalog is the books' (an erratum or a new adversary comes in a
+ * migration, like the seeds) and an enemy is adjusted on its own copy, in an encounter of the GM screen. The GM only uploads the
+ * images of their books.
+ */
 export function GlobalNpcListPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
   const cId = Number(campaignId)
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const { isGm } = useCampaignStore()
-  const [creating, setCreating] = useState(false)
   const [subiendoFichas, setSubiendoFichas] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null; name: string }>({ open: false, id: null, name: '' })
-  const inputRef = useRef<HTMLInputElement>(null)
 
   // The adversaries of the world of this campaign: the id is part of the key and of the request (an arrow, not `getAll` by reference: TanStack would pass it its context)
   const { data: npcs, isLoading, isError } = useQuery({
     queryKey: ['global-npcs', cId],
     queryFn: () => globalNpcsApi.getAll(cId),
   })
-
-  const createMutation = useMutation({
-    mutationFn: () => globalNpcsApi.create({ name: newName }, cId),
-    onSuccess: (npc) => {
-      qc.invalidateQueries({ queryKey: ['global-npcs', cId] })
-      setCreating(false)
-      setNewName('')
-      navigate(`/campaigns/${campaignId}/global-npcs/${npc.id}`, { state: { editing: true } })
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => globalNpcsApi.delete(id, cId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['global-npcs', cId] }),
-  })
-
-  const closeCreate = () => {
-    setCreating(false)
-    setNewName('')
-    if (createMutation.isError) createMutation.reset() // only clears the error message shown in the sheet
-  }
 
   if (isLoading) return <Spinner />
 
@@ -144,20 +114,10 @@ export function GlobalNpcListPage() {
         subtitle={npcs?.length
           ? `${npcs.length} adversario${npcs.length !== 1 ? 's' : ''} del libro`
           : 'Sin adversarios todavía'}
-        actions={isGm && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {!!npcs?.length && (
-              <Button variant="secondary" icon={<FileUp size={16} aria-hidden />} onClick={() => setSubiendoFichas(true)}>
-                Subir fichas del libro
-              </Button>
-            )}
-            <Button
-              icon={<Plus size={16} aria-hidden />}
-              onClick={() => { setCreating(true); setTimeout(() => inputRef.current?.focus(), 50) }}
-            >
-              Nuevo
-            </Button>
-          </div>
+        actions={isGm && !!npcs?.length && (
+          <Button variant="secondary" icon={<FileUp size={16} aria-hidden />} onClick={() => setSubiendoFichas(true)}>
+            Subir fichas del libro
+          </Button>
         )}
       />
       {subiendoFichas && npcs && (
@@ -165,42 +125,6 @@ export function GlobalNpcListPage() {
           <SubirFichasLibro cId={cId} catalogo={npcs} onClose={() => setSubiendoFichas(false)} />
         </Suspense>
       )}
-
-      {/* Create sheet */}
-      <Sheet
-        open={creating}
-        onClose={closeCreate}
-        title="Nuevo NPC"
-        description="Añade un adversario del libro de reglas."
-        maxWidth={480}
-        footer={
-          <>
-            <Button variant="secondary" size="lg" onClick={closeCreate} style={{ flex: 1 }}>Cancelar</Button>
-            <Button
-              size="lg"
-              onClick={() => createMutation.mutate()}
-              disabled={!newName.trim() || createMutation.isPending}
-              style={{ flex: 2 }}
-            >
-              {createMutation.isPending ? 'Creando...' : 'Crear NPC'}
-            </Button>
-          </>
-        }
-      >
-        <Field label="Nombre del adversario">
-          <Input
-            ref={inputRef}
-            data-autofocus
-            placeholder="Nombre del adversario..."
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && newName.trim() && createMutation.mutate()}
-          />
-        </Field>
-        {createMutation.isError && (
-          <ErrorMessage message="No se pudo crear el NPC. Inténtalo de nuevo." style={{ marginTop: 12 }} />
-        )}
-      </Sheet>
 
       {/* Load error (a failed fetch used to leave the page blank) */}
       {isError && !npcs && <ErrorMessage message="No se pudieron cargar los adversarios. Inténtalo de nuevo." />}
@@ -210,7 +134,7 @@ export function GlobalNpcListPage() {
         <EmptyState
           icon={<BookOpen size={22} aria-hidden />}
           title="Sin adversarios todavía"
-          description={isGm ? 'Importa adversarios del libro de reglas.' : 'No hay adversarios disponibles.'}
+          description="No hay adversarios disponibles."
         />
       )}
 
@@ -224,20 +148,11 @@ export function GlobalNpcListPage() {
                 npc={npc}
                 isGm={isGm}
                 onOpen={() => navigate(`/campaigns/${campaignId}/global-npcs/${npc.id}`)}
-                onDelete={() => setConfirmDelete({ open: true, id: npc.id, name: npc.name })}
               />
             </li>
           ))}
         </ul>
       )}
-
-      <ConfirmDialog
-        open={confirmDelete.open}
-        title={`¿Eliminar "${confirmDelete.name}"?`}
-        message="Esta acción no se puede deshacer."
-        onConfirm={() => { deleteMutation.mutate(confirmDelete.id!); setConfirmDelete({ open: false, id: null, name: '' }) }}
-        onCancel={() => setConfirmDelete({ open: false, id: null, name: '' })}
-      />
     </div>
   )
 }

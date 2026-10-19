@@ -16,6 +16,7 @@ import { useEra, useWorldConfig } from '../../../store/campaignStore'
 import { isAvailable } from '../../../worlds'
 import { c, eyebrow, font, fs, page, pill, radius, shadow, tint, titleText, tone, toneFrom } from '../../../theme'
 import { EraChips, EraNotice, HeroSheet, InfoList, NotaLibro, Note, TalentoRow } from './shared'
+import { OriginalEntrada, OriginalesDelLibro } from '../originales/Originales'
 
 type SeccionId = 'principal' | 'concede' | 'arbol' | 'meta'
 const SECCIONES: TabItem<SeccionId>[] = [
@@ -190,6 +191,8 @@ function CaminoDetail({ camino, titleId }: { camino: CaminoNacidoDelMetal; title
       <div style={{ ...stack(20), padding: '24px 20px 0' }}>
         <EraNotice eras={camino.eras} />
 
+        <OriginalEntrada seccion="caminos-metal" clave={camino.id} />
+
         <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: c.muted, lineHeight: 1.6 }}>{camino.definition}</p>
 
         <Tabs
@@ -288,6 +291,8 @@ export function CaminosMetalPage() {
           elegirlo en cualquier nivel (L.127-128 / PDF 133-134).
         </Note>
       </div>
+
+      <OriginalesDelLibro seccion="caminos-metal" style={{ marginBottom: 16 }} />
 
       <ul aria-label="Caminos de nacido del metal" style={{ listStyle: 'none', ...stack(10) }}>
         {CAMINOS_NACIDOS_DEL_METAL.map((camino, i) => (

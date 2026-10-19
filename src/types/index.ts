@@ -661,3 +661,31 @@ export interface SaveBookChapterRequest {
   /** At most 500 000 characters */
   md: string
 }
+
+// Originales de la enciclopedia: the book's text (Markdown) and a mini-PDF of each entry (a heroic path, a metalborn path, a power…),
+// shared by every campaign of the world (EncyclopediaController). Any member reads them; only the director uploads them. Generated
+// from the PDF by scripts/enciclopedia/generar_originales.py (`EncyclopediaOriginal*Response`).
+export interface EncyclopediaOriginalSummary {
+  section: string
+  key: string
+  title: string
+  /** Characters of the text; null = no text uploaded */
+  textLength: number | null
+  /** Bytes of the mini-PDF; null = no PDF uploaded */
+  pdfBytes: number | null
+  updatedAt: string
+}
+
+export interface EncyclopediaText {
+  section: string
+  key: string
+  title: string
+  md: string
+  updatedAt: string
+}
+
+export interface SaveEncyclopediaTextRequest {
+  title: string
+  /** At most 300 000 characters */
+  md: string
+}

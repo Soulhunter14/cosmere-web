@@ -1,0 +1,78 @@
+{
+  "libro": "Manual del Archivo de las Tormentas",
+  "desfase": 4,
+  "secciones": {
+    "caminos-heroicos": [
+      {
+        "clave": "intro",
+        "titulo": "Cómo usar los caminos y talentos",
+        "paginas": [
+          [
+            73,
+            76
+          ]
+        ]
+      },
+      {
+        "clave": "agente",
+        "titulo": "Agente",
+        "paginas": [
+          [
+            78,
+            85
+          ]
+        ]
+      },
+      {
+        "clave": "cazador",
+        "titulo": "Cazador",
+        "paginas": [
+          [
+            86,
+            93
+          ]
+        ]
+      },
+      {
+        "clave": "enviado",
+        "titulo": "Enviado",
+        "paginas": [
+          [
+            94,
+            101
+          ]
+        ]
+      },
+      {
+        "clave": "erudito",
+        "titulo": "Erudito",
+        "paginas": [
+          [
+            102,
+            109
+          ]
+        ]
+      },
+      {
+        "clave": "guerrero",
+        "titulo": "Guerrero",
+        "paginas": [
+          [
+            110,
+            117
+          ]
+        ]
+      },
+      {
+        "clave": "lider",
+        "titulo": "Líder",
+        "paginas": [
+          [
+            118,
+            125
+          ]
+        ]
+      }
+    ]
+  }
+}

@@ -11,6 +11,7 @@ import { useDialogA11y } from '../../hooks/useDialogA11y'
 import { useEra, useWorldConfig, useWorldData } from '../../store/campaignStore'
 import { isAvailable } from '../../worlds'
 import type { WorldConfig } from '../../worlds/types'
+import { OriginalEntrada, OriginalesDelLibro } from './originales/Originales'
 import { c, eyebrow, font, fs, page, pill, radius, shadow, tint, titleText, tone, toneFrom, type Tone } from '../../theme'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
@@ -157,6 +158,8 @@ function PathDetail({ path, titleId }: { path: HeroicPath; titleId: string }) {
 
       {/* Body */}
       <div style={{ ...stack(24), padding: '24px 20px 0' }}>
+        <OriginalEntrada seccion="caminos-heroicos" clave={path.id} />
+
         <section>
           <SectionTitle as="h3">Descripción</SectionTitle>
           <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: c.muted, lineHeight: 1.6 }}>
@@ -329,6 +332,8 @@ export function HeroicPathsPage() {
   return (
     <div style={page}>
       {header}
+
+      <OriginalesDelLibro seccion="caminos-heroicos" style={{ marginBottom: 16 }} />
 
       <ul
         aria-label="Caminos heroicos"

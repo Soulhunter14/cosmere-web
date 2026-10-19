@@ -22,6 +22,7 @@ import type { TalentRules } from '../lib/talentRules'
 import type { RadiantOrder } from '../data/radiantOrders'
 import type { CaminoNacidoDelMetal } from '../data/mistborn/caminosNacidosDelMetal'
 import type { AdventureChapter } from '../data/libros/tipos'
+import type { ManifiestoOriginales } from '../data/originales/tipos'
 import type { CatalogoBanda } from '../lib/banda/tipos'
 
 /** Character fields that hold an attribute value (talentGraph.ts only has `SkillField` for skills). */
@@ -185,6 +186,11 @@ export interface WorldConfig {
    * `cargar` is a lazy `import()`, so its chapters never travel in the main bundle; `null` = the world has no book
    */
   libro: { id: string; titulo: string; cargar: () => Promise<AdventureChapter[]> } | null
+  /**
+   * Originals of the encyclopedia (book text and mini-PDF of each heroic path, metalborn path, power…): the manifest with the pages of
+   * every entry (`src/data/originales/<world>.json`), a lazy `import()`; `null` = the world offers none
+   */
+  originales: { cargar: () => Promise<ManifiestoOriginales> } | null
   /**
    * Catalog of «La banda» (organization types, refuges, upgrades, trades, factions): a lazy `import()`, so it never travels in the main
    * bundle; `null` = the world has no crew sheet (`features.banda` false)

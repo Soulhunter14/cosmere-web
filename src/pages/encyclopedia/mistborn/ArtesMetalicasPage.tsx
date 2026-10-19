@@ -20,6 +20,7 @@ import { useEra, useWorldConfig } from '../../../store/campaignStore'
 import { isAvailable } from '../../../worlds'
 import { c, eyebrow, font, fs, numeral, page, pill, radius, shadow, tone } from '../../../theme'
 import { EraChips, GlifoMetal, InfoList, LinkPoder, NotaLibro, Note } from './shared'
+import { OriginalEntrada, OriginalesDelLibro } from '../originales/Originales'
 
 type TabId = ArteMetal | 'hemalurgia'
 const TABS: TabItem<TabId>[] = [
@@ -356,6 +357,8 @@ function HemalurgiaPanel() {
         los que la DJ les concede como recompensa (L.161 / PDF 167; L.251 / PDF 257; L.288 / PDF 294).
       </Intro>
 
+      <OriginalEntrada seccion="artes-metalicas" clave="hemalurgia" />
+
       <section>
         <SectionTitle>Efectos de los clavos</SectionTitle>
         <div style={stack(20)}>
@@ -408,6 +411,8 @@ export function ArtesMetalicasPage() {
   return (
     <div style={page}>
       <PageHeader title="Artes metálicas" subtitle={`Alomancia, feruquimia y hemalurgia en ${planeta}`} />
+
+      <OriginalesDelLibro seccion="artes-metalicas" style={{ marginBottom: 16 }} />
 
       <Tabs
         tabs={TABS}

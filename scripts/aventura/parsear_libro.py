@@ -456,10 +456,12 @@ def parrafos(bloque, tipo):
         encabezado = p is not None and p.fuente.startswith('Plantin') and es_negrita(p.fuente) and actual is not None \
             and re.search(r'[.:!?»”)]\**$', actual['lineas'][-1].strip() or '.')
         if vineta:
-            actual = {'tipo': 'item', 'lineas': [texto]}
+            # Where the item's text starts, after the «◆»: its wrapped lines are often a block of their own at that indent
+            x_texto = next((s.x0 for s in l.spans if s.texto.strip() and not s.fuente.startswith('ZapfDingbats')), l.bbox[0])
+            actual = {'tipo': 'item', 'lineas': [texto], 'x': x_texto}
             salida.append(actual)
         elif actual is None or encabezado or (sangrada and actual['tipo'] != 'item'):
-            actual = {'tipo': tipo, 'lineas': [texto]}
+            actual = {'tipo': tipo, 'lineas': [texto], 'x': l.bbox[0]}
             salida.append(actual)
         else:
             actual['lineas'].append(texto)
@@ -468,13 +470,15 @@ def parrafos(bloque, tipo):
         t = unir(x['lineas'])
         if not t:
             continue
+        # `_x` (where the text starts) is only for `fusionar_continuaciones`, which removes it
         if x['tipo'] == 'item':
             if resultado and resultado[-1]['tipo'] == 'lista':
                 resultado[-1]['items'].append(t)
+                resultado[-1]['_x'] = x['x']
             else:
-                resultado.append({'tipo': 'lista', 'items': [t]})
+                resultado.append({'tipo': 'lista', 'items': [t], '_x': x['x']})
         else:
-            resultado.append({'tipo': x['tipo'], 'texto': t})
+            resultado.append({'tipo': x['tipo'], 'texto': t, '_x': x['x']})
     return resultado
 
 
@@ -489,23 +493,42 @@ def sigue(prev: str, texto: str) -> bool:
     return True
 
 
+def juntar(prev: str, texto: str) -> str:
+    """Two pieces of one sentence, rejoining a word cut with «-»"""
+    if prev.endswith('-') and prev[-2:-1].isalpha():
+        return prev[:-1] + texto
+    return f'{prev} {texto}'
+
+
+def continua_vineta(lista, nodo) -> bool:
+    """Whether a paragraph is the rest of the list's last item: the item has no full stop and the paragraph starts where the
+    item's text does (its wrapped lines are a block of their own) or, after a column or page break, in lowercase"""
+    if nodo['tipo'] not in ('parrafo', 'leer') or not sigue(lista['items'][-1], nodo['texto']):
+        return False
+    alineado = lista.get('_x') is not None and nodo.get('_x') is not None and abs(lista['_x'] - nodo['_x']) <= 3
+    return alineado or bool(re.match(r'^\**[a-záéíóúñü]', nodo['texto']))
+
+
 def fusionar_continuaciones(nodos):
-    """A paragraph cut by a column or page break is one"""
+    """A paragraph cut by a column or page break is one, and so is a bullet item whose wrapped lines came as a paragraph"""
     salida = []
     for nodo in nodos:
         if nodo['tipo'] == 'recuadro':
             nodo['contenido'] = fusionar_continuaciones(nodo['contenido'])
         prev = salida[-1] if salida else None
         if prev and nodo['tipo'] == prev['tipo'] and nodo['tipo'] in ('parrafo', 'leer') and sigue(prev['texto'], nodo['texto']):
-            if prev['texto'].endswith('-') and prev['texto'][-2:-1].isalpha():
-                prev['texto'] = prev['texto'][:-1] + nodo['texto']
-            else:
-                prev['texto'] += ' ' + nodo['texto']
+            prev['texto'] = juntar(prev['texto'], nodo['texto'])
+            continue
+        if prev and prev['tipo'] == 'lista' and continua_vineta(prev, nodo):
+            prev['items'][-1] = juntar(prev['items'][-1], nodo['texto'])
             continue
         if prev and nodo['tipo'] == 'lista' and prev['tipo'] == 'lista':
             prev['items'].extend(nodo['items'])
+            prev['_x'] = nodo.get('_x')
             continue
         salida.append(nodo)
+    for nodo in salida:
+        nodo.pop('_x', None)
     return salida
 
 

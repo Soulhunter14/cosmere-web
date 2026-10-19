@@ -7,6 +7,7 @@ import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, tone, t
 import type { TramaDieResult } from '../../utils/dice'
 import type { TipoEscena } from './estado'
 import { ESCENA_META } from './meta'
+import { irAEscena } from './escenas'
 
 /* Building blocks shared by the panels of the «Pantalla del director» (big touch targets, readable at arm's length). */
 
@@ -383,7 +384,7 @@ export interface EntradaIndice {
 /**
  * Scene navigation of the Escena panel: a row that stays on top of the pane while reading (index, previous, the scene on screen
  * and its position, next) and the whole index in a sheet, grouped by the book's sections or the script's groups, with played and
- * current marks and big rows. After moving, the pane scrolls to the element `ancla` (the scene card).
+ * current marks and big rows. Moving keeps the row where it is (`irAEscena` with the element `ancla`, the scene card).
  */
 export function NavegadorEscenas({
   escenas, seleccion, onElegir, ancla, titulo, progreso = true, accion,
@@ -406,9 +407,8 @@ export function NavegadorEscenas({
   const jugadas = escenas.filter((e) => e.jugada).length
   const enCurso = escenas.find((e) => e.actual)
   const ir = (id: string) => {
-    onElegir(id)
     setAbierto(false)
-    requestAnimationFrame(() => document.getElementById(ancla)?.scrollIntoView({ block: 'start' }))
+    irAEscena(ancla, () => onElegir(id))
   }
   // Consecutive scenes of the same group go under one heading
   const grupos: { grupo: string; escenas: EntradaIndice[] }[] = []

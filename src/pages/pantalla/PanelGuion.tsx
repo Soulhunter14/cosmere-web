@@ -28,6 +28,7 @@ import { HojaFichaAdversario } from './FichaAdversario'
 import { copiarTexto, descargarTexto, promptSiguienteGuion, type EscenaJugada } from './exportar'
 import { ESCENA_META } from './meta'
 import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, NavegadorEscenas, TecladoNumerico, Tesela } from './piezas'
+import { ALTO_MIN_ESCENA, BAJO_LA_BARRA, irAEscena } from './escenas'
 import { DecisionGuion } from './DecisionGuion'
 import { vivos } from '../../lib/personajes'
 
@@ -310,12 +311,8 @@ function DetalleGuion({
   const clave = claveEscenaPropia(esc.id)
   const jugada = !!estado.marcas[clave]
   const actual = estado.escenaActual?.origen === 'propia' && estado.escenaActual.escenaId === esc.id
-  const articulo = useRef<HTMLElement>(null)
   /** To a neighbouring scene from the bottom of this one: the new scene is read from its top */
-  const ir = (id: string) => {
-    onElegir(id)
-    requestAnimationFrame(() => articulo.current?.scrollIntoView({ block: 'start' }))
-  }
+  const ir = (id: string) => irAEscena('escena-guion', () => onElegir(id), true)
 
   const fijarActual = (b: PantallaEstado, x: EscenaPropia) => {
     b.escenaActual = { origen: 'propia', capituloId: null, escenaId: x.id }
@@ -343,7 +340,7 @@ function DetalleGuion({
     })
 
   return (
-    <article id="escena-guion" ref={articulo} style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: 76 }}>
+    <article id="escena-guion" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: BAJO_LA_BARRA, minHeight: ALTO_MIN_ESCENA }}>
       <CabeceraEscena
         titulo={e.titulo}
         tipo={e.tipo}
@@ -409,7 +406,7 @@ function DetalleGuion({
 export function DetalleEscenaLibro({ esc, escala, onEscala }: { esc: EscenaPropia; escala: number; onEscala: (v: number) => void }) {
   const e = leerEscena(esc.md)
   return (
-    <article id="escena-aventura" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: 76 }}>
+    <article id="escena-aventura" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: BAJO_LA_BARRA, minHeight: ALTO_MIN_ESCENA }}>
       <CabeceraEscena
         titulo={e.titulo}
         tipo={e.tipo}

@@ -11,6 +11,7 @@ import { MAX_ENCUENTROS, encuentroEnPantalla } from './estado'
 import { buscarAdversario, cantidadDe, eraNumero } from './adversarios'
 import { abrirEncuentro, anadirAdversario, anadirEnemigos, asegurarEncuentro, destinoAnadir } from './encuentro'
 import { Apartado, CabeceraEscena, Galeria, LeerEnVozAlta, NavegadorEscenas, Parrafos, Tesela } from './piezas'
+import { ALTO_MIN_ESCENA, BAJO_LA_BARRA } from './escenas'
 import { BotonAnadirASesion, PanelGuion } from './PanelGuion'
 import { mdDesdeCombateLibro, mdDesdeEscenaLibro } from './guion'
 import { useLibro, useLibroOriginal } from './libro'
@@ -102,21 +103,36 @@ export function PanelEscena() {
 
   return (
     <div style={stack(16)}>
-      {conAventura && (
-        <Segmented<'aventura' | 'propias'>
-          ariaLabel="Fuente de las escenas"
-          value={fuente}
-          onChange={(v) => setPref({ fuente: v })}
-          options={[
-            { value: 'aventura', label: <><BookOpen size={15} aria-hidden />Libro</> },
-            { value: 'propias', label: <><ScrollText size={15} aria-hidden />Sesión</> },
-          ]}
-        />
-      )}
-      {!viendoActual && (
-        <Button variant="gold" size="sm" icon={<Pin size={14} aria-hidden />} onClick={irAActual} style={{ alignSelf: 'flex-start' }}>
-          Ir a la escena actual
-        </Button>
+      {/* «Ir a la escena actual» keeps its place in this row whether it shows or not, so nothing below moves when it comes and goes */}
+      {(conAventura || ref) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {conAventura && (
+            <Segmented<'aventura' | 'propias'>
+              ariaLabel="Fuente de las escenas"
+              value={fuente}
+              onChange={(v) => setPref({ fuente: v })}
+              options={[
+                { value: 'aventura', label: <><BookOpen size={15} aria-hidden />Libro</> },
+                { value: 'propias', label: <><ScrollText size={15} aria-hidden />Sesión</> },
+              ]}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+          )}
+          {ref && (
+            <Button
+              variant="gold"
+              size="sm"
+              icon={<Pin size={14} aria-hidden />}
+              onClick={irAActual}
+              aria-label="Ir a la escena actual"
+              aria-hidden={viendoActual || undefined}
+              tabIndex={viendoActual ? -1 : undefined}
+              style={{ flexShrink: 0, visibility: viendoActual ? 'hidden' : undefined }}
+            >
+              <span className="hide-mobile">Ir a la escena actual</span>
+            </Button>
+          )}
+        </div>
       )}
       {fuente === 'aventura' && conOriginal ? (
         <GuiaOriginal
@@ -211,7 +227,7 @@ function GuiaAventura({ libro, pref, setPref }: { libro: LibroAventura; pref: Pr
  */
 function DetalleEscenaAventura({ cap, escena, escala, onEscala }: { cap: AdventureChapter; escena: Scene; escala: number; onEscala: (v: number) => void }) {
   return (
-    <article id="escena-aventura" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: 76 }}>
+    <article id="escena-aventura" style={{ ...tarjeta, ...stack(18), padding: 18, scrollMarginTop: BAJO_LA_BARRA, minHeight: ALTO_MIN_ESCENA }}>
       <CabeceraEscena
         titulo={escena.title}
         tipo={escena.type}

@@ -213,8 +213,30 @@ export interface Character {
   legado: string
   /** Answers to the two questions of the legacy, in their order: `[]` = unanswered, always `[]` in Stormlight */
   legadoRespuestas: string[]
+  /** Dead (core, both worlds): the sheet is read-only for everyone and the gear left it for `equipoAlMorir`. Only the director sets it */
+  muerto: boolean
+  /** When the director marked the death (ISO), `null` while alive */
+  muertoEn: string | null
+  /** Optional cause written by the director (≤ 300), `''` while alive */
+  causaMuerte: string
+  /** What the character carried at death, given back if the director brings them back to life; `null` with no copy */
+  equipoAlMorir: EquipoGuardado | null
   createdAt: string
   updatedAt: string
+}
+
+/** Gear taken off a dead character's sheet (mirror of `Messages/Characters/EquipoGuardado.cs`) */
+export interface EquipoGuardado {
+  weapons: string[]
+  armor: string[]
+  spells: string[]
+  equipment: string[]
+  equippedArmor: string
+  desvio: number
+  marcosInfusas: number
+  marcosOpacas: number
+  /** What the world took, with keys only the world knows: Mistborn `arquillas`, `cuentasAtium`, `viales:<arte>:<metal>`, `cargas:<arte>:<metal>` */
+  mundo: Record<string, number>
 }
 
 export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante' | 'caminoMetal' | 'caminoInicial'> & { ownerId?: number }
@@ -224,7 +246,8 @@ export type UpdateCharacterRequest = Omit<Character,
   'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas' |
   'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |
   'salud' | 'investidura' | 'movimiento' | 'desvioCalculado' |
-  'recursos' | 'derivadosSet' | 'bonosAtributos'
+  'recursos' | 'derivadosSet' | 'bonosAtributos' |
+  'muerto' | 'muertoEn' | 'causaMuerte' | 'equipoAlMorir'
 >
 
 // PATCH …/recursos (Nacidos de la bruma, §5.2): only the keys that are present are written

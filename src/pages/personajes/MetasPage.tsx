@@ -11,6 +11,8 @@ import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
 import { buttonReset, c, card, fs, page, radius, shadow, titleText } from '../../theme'
 import { onGem } from '../../lib/hero'
+import { EtiquetaMuerto } from '../../components/PersonajeMuerto'
+import { estiloMuerto, vivosPrimero } from '../../lib/personajes'
 
 /* White initial on the deep character gradient (lib/avatar: ≥ 10:1 on every palette). */
 const ON_GEM = onGem
@@ -41,6 +43,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
           ...titleText,
           width: 48, height: 48, flexShrink: 0, borderRadius: radius.md,
           background: characterGradient(character.id), boxShadow: shadow[1],
+          ...(character.muerto ? estiloMuerto : {}),
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           fontSize: fs.xl, lineHeight: 1, color: ON_GEM,
         }}
@@ -50,6 +53,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
 
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>{character.name}</span>
+        {character.muerto && <EtiquetaMuerto style={{ alignSelf: 'flex-start' }} />}
 
         <CharacterIdentityPills character={character} />
 
@@ -77,9 +81,10 @@ export function MetasPage({ detailBasePath = 'personajes/metas' }: { detailBaseP
 
   if (isLoading) return <Spinner />
 
-  const visibleCharacters = isGm
+  // The dead stay on the list, at the end
+  const visibleCharacters = vivosPrimero(isGm
     ? characters
-    : characters.filter((c) => c.ownerId === user?.id)
+    : characters.filter((c) => c.ownerId === user?.id))
 
   const goToDetail = (character: Character) =>
     navigate(`/campaigns/${cId}/${detailBasePath}/${character.id}`)

@@ -3,9 +3,11 @@ import type { Character, CreateCharacterRequest, RecursosPatch, UpdateCharacterR
 
 // What Nacidos de la bruma adds to every character response (§5.1)
 type MistbornFields = 'caminoMetal' | 'caminoInicial' | 'poderes' | 'recursos' | 'bendiciones' | 'derivadosSet' | 'bonosAtributos' | 'clavos'
+// And the death fields: an API older than AddCharacterMuerte does not send them either
+type MuerteFields = 'muerto' | 'muertoEn' | 'causaMuerte' | 'equipoAlMorir'
 
 // A character as it arrives from the wire: an API older than T11 (parallel worktrees in development) does not send the Mistborn fields
-type CharacterWire = Omit<Character, MistbornFields> & Partial<Pick<Character, MistbornFields>>
+type CharacterWire = Omit<Character, MistbornFields | MuerteFields> & Partial<Pick<Character, MistbornFields | MuerteFields>>
 
 /**
  * Gives every character response the Mistborn fields with their empty value (§5.4), so that `poderes.some(...)`,
@@ -21,6 +23,10 @@ export const normalizeCharacter = (c: CharacterWire): Character => ({
   derivadosSet: c.derivadosSet ?? {},
   bonosAtributos: c.bonosAtributos ?? {},
   clavos: c.clavos ?? [],
+  muerto: c.muerto ?? false,
+  muertoEn: c.muertoEn ?? null,
+  causaMuerte: c.causaMuerte ?? '',
+  equipoAlMorir: c.equipoAlMorir ?? null,
 })
 
 export const charactersApi = {
@@ -60,4 +66,14 @@ export const charactersApi = {
   /** POST …/acciones/inicio-escena: Investiture to its maximum, or to 1 if the character is Sorprendido (L.129 / PDF 135) */
   inicioEscena: (campaignId: number, characterId: number, sorprendido: boolean) =>
     client.post<CharacterWire>(`/campaigns/${campaignId}/characters/${characterId}/acciones/inicio-escena`, { sorprendido }).then((r) => normalizeCharacter(r.data)),
+
+  // Death (director only). The sheet of a dead character is read-only: every write on it answers 409
+
+  /** POST …/muerte: marks the character as dead; the gear and the money leave the sheet for `equipoAlMorir` */
+  morir: (campaignId: number, characterId: number, causa?: string) =>
+    client.post<CharacterWire>(`/campaigns/${campaignId}/characters/${characterId}/muerte`, { causa: causa ?? null }).then((r) => normalizeCharacter(r.data)),
+
+  /** DELETE …/muerte: back to life, with exactly what the character carried */
+  revivir: (campaignId: number, characterId: number) =>
+    client.delete<CharacterWire>(`/campaigns/${campaignId}/characters/${characterId}/muerte`).then((r) => normalizeCharacter(r.data)),
 }

@@ -11,6 +11,7 @@ import { CosmereIcon } from '../../components/CosmereIcon'
 import { WorldBadge } from '../../components/WorldBadge'
 import { cosmereImage } from '../../lib/cosmereAssets'
 import { c, card, eyebrow, font, fs, numeral, page, pill, radius, semantic, shadow, titleText, tone } from '../../theme'
+import { vivos } from '../../lib/personajes'
 
 function isPast(date: Date) {
   const today = new Date()
@@ -86,7 +87,7 @@ export function HomeCampaignPage() {
         >
           <SectionTitle id="home-summary">Resumen</SectionTitle>
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-            <StatCard icon={<Users size={15} />} label="Personajes" value={characters.length} loading={loadingCharacters} />
+            <StatCard icon={<Users size={15} />} label="Personajes" value={vivos(characters).length} loading={loadingCharacters} />
             <StatCard icon={<CalendarDays size={15} />} label="Sesiones" value={sessions.length} loading={loadingSessions} />
           </div>
         </section>

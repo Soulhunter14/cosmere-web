@@ -8,6 +8,7 @@ import { Badge, Button, Card, ConfirmDialog, EmptyState, Field, IconButton, Inpu
 import type { Character, Meta, ConcludeMetaRequest, PoderPersonaje } from '../../types'
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { CharacterHero } from '../../components/CharacterHero'
+import { MuerteBanner } from '../../components/PersonajeMuerto'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, shadow, titleText, tone, type ToneName } from '../../theme'
 
@@ -31,7 +32,8 @@ const CONCLUSION_OPTIONS: { value: ConcludeMetaRequest['tipoConclusion']; label:
 
 // ─── Hito checkboxes (0-3 progress stepper) ───────────────────────────────
 
-function HitoCheckboxes({ hitos, onChange }: { hitos: number; onChange: (n: number) => void }) {
+/** Without `onChange` the milestones are read-only (a dead character's goal) */
+function HitoCheckboxes({ hitos, onChange }: { hitos: number; onChange?: (n: number) => void }) {
   return (
     <div role="group" aria-label={`Hitos: ${hitos} de ${TOTAL_HITOS}`} style={{ display: 'flex', alignItems: 'center' }}>
       {[1, 2, 3].map((n) => {
@@ -51,7 +53,8 @@ function HitoCheckboxes({ hitos, onChange }: { hitos: number; onChange: (n: numb
             <IconButton
               label={`Hito ${n} de ${TOTAL_HITOS}, ${done ? 'completado' : 'pendiente'}`}
               size={44}
-              onClick={() => onChange(hitos >= n ? n - 1 : n)}
+              disabled={!onChange}
+              onClick={() => onChange?.(hitos >= n ? n - 1 : n)}
               style={{ borderRadius: radius.full }}
             >
               <span
@@ -79,7 +82,7 @@ function HitoCheckboxes({ hitos, onChange }: { hitos: number; onChange: (n: numb
 
 // ─── Single meta card ──────────────────────────────────────────────────────
 
-function MetaCard({ meta, campaignId, characterId, index = 0, poderes, completos, onCompletos }: {
+function MetaCard({ meta, campaignId, characterId, index = 0, poderes, completos, onCompletos, soloLectura = false }: {
   meta: Meta
   campaignId: number
   characterId: number
@@ -89,6 +92,8 @@ function MetaCard({ meta, campaignId, characterId, index = 0, poderes, completos
   /** Powers that this goal turned complete when it was concluded; the page keeps them because the card changes of list (and remounts) when it is concluded */
   completos?: PoderCompleto[]
   onCompletos: (metaId: number, completos: PoderCompleto[]) => void
+  /** A dead character's goals: shown, never changed (the server answers 409) */
+  soloLectura?: boolean
 }) {
   const qc = useQueryClient()
   const bodyId = useId()
@@ -228,14 +233,16 @@ function MetaCard({ meta, campaignId, characterId, index = 0, poderes, completos
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span aria-hidden style={eyebrow}>Hitos</span>
-                  <HitoCheckboxes hitos={meta.hitos} onChange={(n) => updateMutation.mutate(n)} />
+                  <HitoCheckboxes hitos={meta.hitos} onChange={soloLectura ? undefined : (n) => updateMutation.mutate(n)} />
                 </div>
-                <IconButton label="Eliminar meta" variant="danger" size={44} onClick={() => setShowDelete(true)}>
-                  <Trash2 size={18} aria-hidden />
-                </IconButton>
+                {!soloLectura && (
+                  <IconButton label="Eliminar meta" variant="danger" size={44} onClick={() => setShowDelete(true)}>
+                    <Trash2 size={18} aria-hidden />
+                  </IconButton>
+                )}
               </div>
               {/* All hitos done: the conclusion is the card's call to action */}
-              {meta.hitos === 3 && (
+              {meta.hitos === 3 && !soloLectura && (
                 <Button size="md" fullWidth icon={<Flag size={16} aria-hidden />} aria-haspopup="dialog" onClick={() => setShowConclusion(true)}>
                   Concluir
                 </Button>
@@ -266,9 +273,11 @@ function MetaCard({ meta, campaignId, characterId, index = 0, poderes, completos
                   </span>
                 ))}
               </div>
-              <IconButton label="Eliminar meta" variant="danger" size={44} onClick={() => setShowDelete(true)}>
-                <Trash2 size={18} aria-hidden />
-              </IconButton>
+              {!soloLectura && (
+                <IconButton label="Eliminar meta" variant="danger" size={44} onClick={() => setShowDelete(true)}>
+                  <Trash2 size={18} aria-hidden />
+                </IconButton>
+              )}
             </div>
           )}
 
@@ -391,6 +400,8 @@ export function MetasDetailPage() {
     setShowConcluidas(true)
   }
 
+  // A dead character's goals are read-only
+  const soloLectura = character.muerto
   const activas = metas.filter((m) => m.estado === 'activa')
   const concluidas = metas.filter((m) => m.estado === 'concluida')
 
@@ -419,6 +430,8 @@ export function MetasDetailPage() {
       </CharacterHero>
 
       <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+        <MuerteBanner character={character} />
+
         {/* Active metas */}
         <section aria-labelledby={activasId}>
           <SectionTitle id={activasId}>Activas</SectionTitle>
@@ -429,11 +442,11 @@ export function MetasDetailPage() {
                 icon={<Target size={22} aria-hidden />}
                 title="Sin metas activas."
                 style={{ padding: '28px 20px' }}
-                action={
+                action={soloLectura ? undefined : (
                   <Button icon={<Plus size={16} aria-hidden />} onClick={() => setShowForm(true)}>
                     Nueva meta
                   </Button>
-                }
+                )}
               />
             )}
 
@@ -449,12 +462,13 @@ export function MetasDetailPage() {
                     poderes={character.poderes}
                     completos={completados[meta.id]}
                     onCompletos={avisarCompletos}
+                    soloLectura={soloLectura}
                   />
                 ))}
               </ul>
             )}
 
-            {showForm ? (
+            {soloLectura ? null : showForm ? (
               <Card padding={16} className="pop-in" style={{ border: '1px solid var(--brand-border)', display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <Field label="Título de la meta">
                   <Input
@@ -536,6 +550,7 @@ export function MetasDetailPage() {
                     poderes={character.poderes}
                     completos={completados[meta.id]}
                     onCompletos={avisarCompletos}
+                    soloLectura={soloLectura}
                   />
                 ))}
               </ul>

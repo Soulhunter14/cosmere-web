@@ -21,6 +21,7 @@ import { cosmereImage } from '../lib/cosmereAssets'
 import { RollModeIcons } from '../lib/gameIcons'
 import { characterPalette } from '../lib/avatar'
 import { c, eyebrow, font, fs, pill, radius, shadow, tint, tone, z, type Tone } from '../theme'
+import { vivos } from '../lib/personajes'
 
 // ── Constantes ─────────────────────────────────────────────────────────────
 
@@ -1428,9 +1429,10 @@ export function DiceRoller() {
     charactersApi.getAll(campaignId)
       .then((chars) => {
         if (isGm) {
-          setCampaignChars(chars)
+          setCampaignChars(vivos(chars))
         } else {
-          const mine = chars.find((c) => c.ownerId === user?.id) ?? null
+          // A dead character no longer rolls: with only dead ones, the modifier is typed by hand
+          const mine = chars.find((c) => c.ownerId === user?.id && !c.muerto) ?? null
           setPlayerCharacter(mine)
         }
       })

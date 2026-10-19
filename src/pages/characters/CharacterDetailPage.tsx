@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSPr
 import { useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
-  Check, ChevronDown, Info, Lock, Pencil, Save, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
+  Check, ChevronDown, HeartPulse, Info, Lock, Pencil, Save, Skull, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { metasApi } from '../../api/metas'
@@ -23,6 +23,7 @@ import { RADIANT_ORDERS } from '../../data/radiantOrders'
 import { POTENCIAS } from '../../data/potencias'
 import { RadiantOrderIcon } from '../../components/RadiantOrderIcon'
 import { CharacterHero } from '../../components/CharacterHero'
+import { EquipoAlMorirCard, MuerteBanner } from '../../components/PersonajeMuerto'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { MetalGlyph } from '../../components/mistborn/MetalGlyph'
 import { HeroicPathIcon, SurgeIcon } from '../../components/GameIcons'
@@ -620,13 +621,17 @@ export function CharacterDetailPage() {
   // Ancestries of the world that exist in the era of the campaign (the era only filters options, §3 b)
   const ascendencias = useMemo(() => cfg.ascendencias.filter((a) => isAvailable(a, era)), [cfg.ascendencias, era])
   const { user: currentUser } = useAuthStore()
-  const [editing, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
+  const [editandoEstado, setEditing] = useState(!!(location.state as { editing?: boolean } | null)?.editing)
   const [form, setForm] = useState<Character | null>(null)
   // A link may ask for the «Artes metálicas» tab (`location.state.tab`); if the character has no such tab (`tabActiva`, below) the sheet opens the first one
   const [tab, setTab] = useState<Tab>(() => ((location.state as { tab?: string } | null)?.tab === TAB_ARTES.id ? TAB_ARTES.id : 'caracteristicas'))
   const [picker, setPicker] = useState<'heroico' | 'radiante' | 'ascendencia' | 'forma' | 'caminoMetal' | 'metal' | 'bendicion' | 'vial' | 'legado' | 'legadoPreguntas' | null>(null)
   const [enCombate, setEnCombate] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  // Death (director only): the sheet with the optional cause, and the confirmation of bringing the character back to life
+  const [marcandoMuerte, setMarcandoMuerte] = useState(false)
+  const [causaMuerte, setCausaMuerte] = useState('')
+  const [confirmarRevivir, setConfirmarRevivir] = useState(false)
   // Flow «al elegir camino» (§7.4): the path that waits for its metals, and the confirmation of a removal or of a change of path
   const [caminoPendiente, setCaminoPendiente] = useState<CaminoPendiente | null>(null)
   // A change of legacy that would drop the answers of the old one, waiting for confirmation
@@ -640,6 +645,8 @@ export function CharacterDetailPage() {
     queryKey: ['character', cId, chId, enCombate],
     queryFn: () => charactersApi.getById(cId, chId, enCombate),
   })
+  // A dead character's sheet is read-only for everyone: edit mode never opens on it (not even from a link that asks for it)
+  const editing = editandoEstado && !char?.muerto
 
   // Keep the edit form in sync with every new server copy of the character
   const [syncedChar, setSyncedChar] = useState<Character | undefined>(undefined)
@@ -799,6 +806,23 @@ export function CharacterDetailPage() {
       qc.invalidateQueries({ queryKey: ['characters', cId] })
     },
   })
+  // Death (core, both worlds): the server takes the gear and the money off the sheet and keeps them in `equipoAlMorir`; back to life gives them back
+  const alCambiarMuerte = () => {
+    qc.invalidateQueries({ queryKey: prefijoFicha })
+    qc.invalidateQueries({ queryKey: ['characters', cId] })
+    qc.invalidateQueries({ queryKey: ['crew', cId] })
+  }
+  const morirMutation = useMutation({
+    mutationFn: (causa: string) => charactersApi.morir(cId, chId, causa.trim() || undefined),
+    onSuccess: () => { setMarcandoMuerte(false); setCausaMuerte(''); setEditing(false); setPicker(null) },
+    onSettled: alCambiarMuerte,
+  })
+  const revivirMutation = useMutation({
+    mutationFn: () => charactersApi.revivir(cId, chId),
+    onSuccess: () => setConfirmarRevivir(false),
+    onSettled: alCambiarMuerte,
+  })
+
   const mesa = (accion: AccionMesa) => {
     void qc.cancelQueries({ queryKey: prefijoFicha }) // starts cancelling at once: a refetch in flight must not overwrite the change
     const previas = qc.getQueriesData<Character>({ queryKey: prefijoFicha })
@@ -816,7 +840,10 @@ export function CharacterDetailPage() {
   }
 
   const isOwner = char.ownerId === currentUser?.id
-  const canEdit = isGm || isOwner
+  const muerto = char.muerto
+  // A dead character changes no more: nobody edits it, and what only the director changes is closed too (`gmActivo`)
+  const canEdit = (isGm || isOwner) && !muerto
+  const gmActivo = isGm && !muerto
 
   // «Artes metálicas» (T30): whoever has a path or powers sees the tab, and the director always does, because «Añadir poder» lives there and a
   // character with neither (a human who gets a spike) would have no way to receive it. If the tab goes away under the user (the powers were
@@ -898,7 +925,13 @@ export function CharacterDetailPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
           <p style={{ ...eyebrow, color: HERO_SOFT }}>{editing ? 'Modo edición' : 'Ficha de personaje'}</p>
 
-          {/* Edit / Save buttons */}
+          {/* Edit / Save buttons, and the director's death actions */}
+          {isGm && muerto && (
+            <button type="button" className="ui-btn" onClick={() => { revivirMutation.reset(); setConfirmarRevivir(true) }} style={heroAction}>
+              <HeartPulse size={16} aria-hidden />
+              Devolver a la vida
+            </button>
+          )}
           {canEdit && (
             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
               {editing ? (
@@ -920,10 +953,25 @@ export function CharacterDetailPage() {
                   </button>
                 </>
               ) : (
-                <button type="button" className="ui-btn" onClick={() => { setForm({ ...char }); setEditing(true) }} style={heroAction}>
-                  <Pencil size={16} aria-hidden />
-                  Editar
-                </button>
+                <>
+                  {isGm && (
+                    <button
+                      type="button"
+                      className="ui-btn"
+                      aria-label="Marcar como muerto"
+                      title="Marcar como muerto"
+                      aria-haspopup="dialog"
+                      onClick={() => { morirMutation.reset(); setMarcandoMuerte(true) }}
+                      style={{ ...heroAction, padding: '0 12px' }}
+                    >
+                      <Skull size={16} aria-hidden />
+                    </button>
+                  )}
+                  <button type="button" className="ui-btn" onClick={() => { setForm({ ...char }); setEditing(true) }} style={heroAction}>
+                    <Pencil size={16} aria-hidden />
+                    Editar
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -1003,6 +1051,8 @@ export function CharacterDetailPage() {
         </div>
       </CharacterHero>
 
+      {muerto && <MuerteBanner character={char} style={{ margin: '12px 16px 0' }} />}
+
       {/* ── Tab bar ───────────────────────────────────── */}
       <div className="sticky-under-topbar glass" style={{ padding: '10px 16px', borderBottom: `1px solid ${c.border}` }}>
         <Tabs<Tab>
@@ -1040,6 +1090,7 @@ export function CharacterDetailPage() {
                   aria-haspopup="dialog"
                   aria-busy={formaMutation.isPending || undefined}
                   icon={formaActivaData?.esPoder ? <Zap size={16} aria-hidden /> : <Sparkle size={16} aria-hidden />}
+                  disabled={muerto}
                   onClick={() => setPicker('forma')}
                   style={formaActiva ? { background: FORMA_TONE.bg, border: `1px solid ${FORMA_TONE.border}`, color: FORMA_TONE.fg } : undefined}
                 >
@@ -1064,7 +1115,7 @@ export function CharacterDetailPage() {
               // A radiant order is changed by the director in edit mode, with the rest of the form. A metalborn path is assigned by the
               // director OUTSIDE edit mode, with an immediate save (§7.4 rule 5, Q6); not again while the previous save is running
               const invPick = caminoInv?.field === 'caminoMetal'
-                ? (!editing && isGm ? () => {
+                ? (!editing && gmActivo ? () => {
                     if (caminoOcupado) return
                     aplicarCaminoMetal.reset()
                     quitarCaminoMetal.reset()
@@ -1296,6 +1347,9 @@ export function CharacterDetailPage() {
                 </div>
               )
             })()}
+
+            {/* What a dead character carried: read-only until the director brings them back to life */}
+            {muerto && char.equipoAlMorir && <EquipoAlMorirCard equipo={char.equipoAlMorir} />}
 
             {/* ── Defensas ─────────────────────────────────────────────── */}
             <div>
@@ -1676,7 +1730,7 @@ export function CharacterDetailPage() {
             <Suspense fallback={<Spinner />}>
               <ArtesMetalicasTab
                 character={char}
-                isGm={isGm}
+                isGm={gmActivo}
                 editing={editing}
                 puedeActuar={canEdit}
                 entorno={entornoCamino}
@@ -1694,7 +1748,7 @@ export function CharacterDetailPage() {
         {/* BACKGROUND TAB */}
         {tabActiva === 'background' && (
           <TabPanel idPrefix={TAB_PREFIX} id="background" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {!editing && (
+            {!editing && canEdit && (
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   variant="secondary"
@@ -2001,6 +2055,54 @@ export function CharacterDetailPage() {
           />
         </Suspense>
       )}
+
+      {/* Death: the sheet itself is the confirmation (it says what is lost) and never acts on the first tap */}
+      <Sheet
+        open={marcandoMuerte}
+        onClose={() => { if (!morirMutation.isPending) setMarcandoMuerte(false) }}
+        title={`¿Marcar a ${char.name} como muerto?`}
+        description="Su ficha quedará de solo lectura y perderá todo su equipo y su dinero. Lo que llevaba se guarda por si lo devuelves a la vida."
+        maxWidth={480}
+        footer={<>
+          <Button variant="secondary" size="lg" style={{ flex: 1 }} disabled={morirMutation.isPending} onClick={() => setMarcandoMuerte(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            size="lg"
+            style={{ flex: 1 }}
+            icon={<Skull size={16} aria-hidden />}
+            loading={morirMutation.isPending}
+            onClick={() => morirMutation.mutate(causaMuerte)}
+          >
+            Marcar como muerto
+          </Button>
+        </>}
+      >
+        <label htmlFor={`${fieldId}-causa`} style={{ ...eyebrow, color: c.subtle, display: 'block', marginBottom: 6 }}>Causa (opcional)</label>
+        <Textarea
+          id={`${fieldId}-causa`}
+          rows={3}
+          maxLength={300}
+          value={causaMuerte}
+          onChange={(e) => setCausaMuerte(e.target.value)}
+          placeholder="Cómo cayó…"
+        />
+        {morirMutation.isError && <ErrorMessage message="No se ha podido marcar la muerte. Inténtalo de nuevo." style={{ marginTop: 8 }} />}
+      </Sheet>
+      <ConfirmDialog
+        open={confirmarRevivir}
+        title={`¿Devolver a ${char.name} a la vida?`}
+        message={<>
+          Recupera la ficha editable y todo lo que llevaba al morir.
+          {revivirMutation.isError && <ErrorMessage message="No se ha podido devolver a la vida. Inténtalo de nuevo." style={{ marginTop: 8 }} />}
+        </>}
+        confirmLabel="Devolver a la vida"
+        tone="brand"
+        loading={revivirMutation.isPending}
+        onConfirm={() => revivirMutation.mutate()}
+        onCancel={() => setConfirmarRevivir(false)}
+      />
 
       <ConfirmDialog
         open={confirmDiscard}

@@ -18,6 +18,7 @@ import { Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, IconButton
 import type { Character, UpdateCharacterRequest } from '../../types'
 import { CANTOR_COLOR, getFormasDisponibles, withFormaActiva } from '../../data/cantores'
 import { CharacterHero } from '../../components/CharacterHero'
+import { MuerteBanner } from '../../components/PersonajeMuerto'
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { HeroicPathIcon } from '../../components/GameIcons'
 import { conVialBebido, esPoderDelVial } from '../../components/mistborn/vial'
@@ -103,7 +104,9 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
   const isGm = useCampaignStore((s) => s.isGm)
   // Capabilities and texts of the world of the campaign: Ideales jurados and formas of cantor are Roshar features
   const cfg = useWorldConfig()
-  const canEditIdeals = isGm || (!!user && character.ownerId === user.id)
+  // A dead character's talents are read-only: nothing is learned, forgotten or switched (the server answers 409)
+  const muerto = character.muerto
+  const canEditIdeals = (isGm || (!!user && character.ownerId === user.id)) && !muerto
   const [searchParams, setSearchParams] = useSearchParams()
   const contentW = useContentWidth()
   const reducedMotion = usePrefersReducedMotion()
@@ -368,7 +371,7 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
   const atlasCommon = {
     level: character.level, contentW, edgeStatus, stepOf, targetId, selectedId,
     onSelect: setSelectedId, openLaminas, onToggleLamina: toggleLamina, onCloseLaminas: closeLaminas,
-    onOpenSheet: setSheetId, onLearn: requestLearn, onSetGoal: (id: string) => requestSetGoal(id),
+    onOpenSheet: setSheetId, onLearn: muerto ? undefined : requestLearn, onSetGoal: (id: string) => requestSetGoal(id),
     onRemoveGoal: () => setGoalConfirm({ kind: 'remove' }), busy, surgeRank, state: tState,
   }
 
@@ -480,6 +483,7 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
       )}
 
       <div style={{ padding: '16px 16px 64px' }}>
+        <MuerteBanner character={character} style={{ marginBottom: 16 }} />
         {!hasAnything && (
           <EmptyState
             icon={<Sparkles size={24} aria-hidden />}
@@ -526,7 +530,7 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
             evaluation={evaluation}
             onOpenTalent={setSheetId}
             onShowInTree={showInTree}
-            onChangeForma={graph.isCantor && cfg.features.formasCantor ? () => setFormaOpen(true) : undefined}
+            onChangeForma={graph.isCantor && cfg.features.formasCantor && !muerto ? () => setFormaOpen(true) : undefined}
             onBeberVial={onBeberVial}
           />
         )}
@@ -567,7 +571,7 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
                           <Music size={13} aria-hidden />
                           Forma: <strong style={{ color: c.text }}>{evaluation.formaActiva ?? 'ninguna'}</strong>
                         </span>
-                        <Button variant="secondary" size="sm" onClick={() => setFormaOpen(true)} aria-haspopup="dialog" aria-label="Cambiar forma activa">Cambiar</Button>
+                        {!muerto && <Button variant="secondary" size="sm" onClick={() => setFormaOpen(true)} aria-haspopup="dialog" aria-label="Cambiar forma activa">Cambiar</Button>}
                       </span>
                     ) : undefined}
                     intro={
@@ -666,12 +670,12 @@ function TalentosView({ character, cId, rules }: { character: Character; cId: nu
           busy={busy}
           onClose={() => setSheetId(null)}
           onOpenNode={setSheetId}
-          onLearn={requestLearn}
-          onForget={requestForget}
+          onLearn={muerto ? undefined : requestLearn}
+          onForget={muerto ? undefined : requestForget}
           onSetGoal={requestSetGoal}
           onRemoveGoal={() => setGoalConfirm({ kind: 'remove' })}
           onChoicesChange={(choices) => { if (goal?.nodeId === sheetId) saveGoal({ nodeId: sheetId, choices }) }}
-          onActivateForma={activateForma}
+          onActivateForma={muerto ? undefined : activateForma}
         />
       )}
 

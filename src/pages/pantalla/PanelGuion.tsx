@@ -29,6 +29,7 @@ import { copiarTexto, descargarTexto, promptSiguienteGuion, type EscenaJugada } 
 import { ESCENA_META } from './meta'
 import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, NavegadorEscenas, TecladoNumerico, Tesela } from './piezas'
 import { DecisionGuion } from './DecisionGuion'
+import { vivos } from '../../lib/personajes'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -194,7 +195,8 @@ function BarraGuion({ onNueva, onImportar, onLibro }: { onNueva: () => void; onI
   const { cId, estado, ultimoDiario } = usePantalla()
   const cfg = useWorldConfig()
   const campana = useCampaignStore((s) => s.currentCampaign)
-  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId) })
+  // The next script is written for the living
+  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), select: vivos })
   const { data: diario } = useQuery({ queryKey: ['diary', cId], queryFn: () => diaryApi.getAll(cId) })
   const { data: datosMundo } = useWorldData()
   const [aviso, setAviso] = useState<string | null>(null)

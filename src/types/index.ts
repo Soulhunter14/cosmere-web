@@ -402,6 +402,24 @@ export interface CreateSessionRequest {
   notes: string
 }
 
+export type UpdateSessionRequest = CreateSessionRequest
+
+/** A session or a pending proposed slot of another campaign of the user (read-only in the calendar) */
+export interface OtherCampaignEvent {
+  campaignId: number
+  campaignName: string
+  world: WorldId
+  role: 'gm' | 'player'
+  kind: 'session' | 'proposal'
+  /** Session id, or proposal date id */
+  id: number
+  title: string
+  date: string
+  /** Always null for sessions */
+  slot: ProposalSlot | null
+  location: string
+}
+
 // Session Proposals
 export type ProposalStatus = 'Pending' | 'Promoted' | 'Rejected'
 /** Fixed slot of a proposed day (null = free time) */
@@ -417,6 +435,10 @@ export interface ProposalDateResponse {
   canCount: number
   cannotCount: number
   currentUserVote: boolean | null
+  /** Players of the campaign right now (votes expected); canCount/cannotCount only count players */
+  playerCount: number
+  /** Players who have not voted this slot yet */
+  pendingUserIds: number[]
 }
 
 export interface ProposalResponse {

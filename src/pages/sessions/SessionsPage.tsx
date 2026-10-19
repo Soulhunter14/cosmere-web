@@ -1,20 +1,24 @@
 import { useState, useMemo, useId, useRef, useEffect, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, MapPin, Clock, CalendarDays, Lock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, MapPin, Clock, CalendarDays, Lock, Pencil, TriangleAlert, ArrowUpRight } from 'lucide-react'
 import { sessionsApi } from '../../api/sessions'
 import { proposalsApi } from '../../api/proposals'
 import { lockedDaysApi } from '../../api/lockedDays'
+import { calendarApi } from '../../api/calendar'
+import { getWorld } from '../../worlds'
 import { useCampaignStore } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import {
   Input, Spinner, ConfirmDialog, Button, IconButton, Card, Badge, Field,
   PageHeader, SectionTitle, EmptyState, Sheet, ErrorMessage,
 } from '../../components/ui'
-import { c, eyebrow, font, fs, numeral, page, radius, tint, tone } from '../../theme'
-import type { Session, ProposalResponse, ProposalDateResponse, LockedDay } from '../../types'
+import { c, eyebrow, font, fs, numeral, page, radius, semantic, tint, tone } from '../../theme'
+import type { Session, ProposalResponse, ProposalDateResponse, LockedDay, OtherCampaignEvent } from '../../types'
 import {
   StatusBadge,
+  PendingAnswersBadge,
+  slotTimeLabel,
   ProposalDates,
   CreateProposalSheet,
   PromoteDialog,
@@ -124,6 +128,42 @@ const proposalMark: CSSProperties = {
   border: `2px solid ${c.brand}`,
 }
 
+/** Calendar mark for what is planned in another campaign (read-only): a diamond, filled for a session, hollow for a proposed slot */
+const otherMark = (filled: boolean): CSSProperties => ({
+  width: 6, height: 6, flexShrink: 0, boxSizing: 'border-box', transform: 'rotate(45deg)',
+  border: '1.5px solid var(--cuarzo)', background: filled ? 'var(--cuarzo)' : 'transparent',
+})
+
+/** The moment has already gone by (a proposed slot that can no longer be played) */
+const hasPassed = (iso: string) => new Date(iso).getTime() < Date.now()
+
+/** "18:00" for a session, "Tarde · 15:00" for a proposed slot */
+const otherWhen = (e: OtherCampaignEvent) => slotTimeLabel(e.kind === 'proposal' ? e.slot : null, e.date)
+
+/** Something already planned on a day, to warn before planning on top of it */
+interface DayConflict { key: string; text: string }
+
+/** Non-blocking warning: what is already planned that day */
+function ConflictNote({ conflicts }: { conflicts: DayConflict[] }) {
+  if (conflicts.length === 0) return null
+  return (
+    <div
+      role="status"
+      style={{
+        display: 'flex', gap: 8, alignItems: 'flex-start',
+        padding: '8px 12px', borderRadius: radius.md,
+        background: semantic.warning.bg, border: `1px solid ${semantic.warning.border}`,
+        color: semantic.warning.fg, fontSize: fs.sm, lineHeight: 1.45,
+      }}
+    >
+      <TriangleAlert size={15} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {conflicts.map((cf) => <li key={cf.key}>{cf.text}</li>)}
+      </ul>
+    </div>
+  )
+}
+
 /** Date/time pickers follow the active theme (index.css forces `color-scheme: dark` on them, which
  *  makes the native calendar/clock glyphs almost invisible on paper). color-scheme is inherited from :root. */
 const nativePickerScheme: CSSProperties = { colorScheme: 'inherit' }
@@ -162,7 +202,10 @@ function ProposalCalendarCard({
         <h3 style={{ ...cardTitle, flex: 1, minWidth: 0 }}>
           {proposal.title}
         </h3>
-        <StatusBadge status={proposal.status} />
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <StatusBadge status={proposal.status} />
+          {isGm && <PendingAnswersBadge proposal={proposal} />}
+        </span>
       </div>
 
       {proposal.notes && (
@@ -218,8 +261,9 @@ export function SessionsPage() {
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDay, setSelectedDayState] = useState<Date | null>(null)
 
-  // Session create form
+  // Session create / edit form (`editingSession` null = new session)
   const [showCreate, setShowCreate] = useState(false)
+  const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Session | null>(null)
   const [form, setForm] = useState<SessionCreateForm>({
     title: '', date: '', time: '18:00', location: '', notes: '',
@@ -317,6 +361,26 @@ export function SessionsPage() {
     queryFn: () => lockedDaysApi.getAll(cId),
   })
 
+  /** GM only: sessions and open slots of the user's other campaigns, shown read-only so they never overlap */
+  const { data: others = [] } = useQuery<OtherCampaignEvent[]>({
+    queryKey: ['calendar-others', cId],
+    queryFn: () => calendarApi.getOthers(cId),
+    enabled: isGm,
+  })
+
+  const othersByDate = useMemo(() => {
+    const map = new Map<string, OtherCampaignEvent[]>()
+    if (!isGm) return map
+    for (const e of others) {
+      if (e.kind === 'proposal' && hasPassed(e.date)) continue
+      const key = toDateKey(new Date(e.date))
+      const arr = map.get(key) ?? []
+      arr.push(e)
+      map.set(key, arr)
+    }
+    return map
+  }, [others, isGm])
+
   const lockedByDate = useMemo(() => {
     const map = new Map<string, LockedDay[]>()
     for (const ld of lockedDays) {
@@ -358,16 +422,24 @@ export function SessionsPage() {
 
   const canCreateSession = form.title.trim().length > 0 && form.date.length > 0 && form.time.length > 0
 
+  /** Sessions and proposals of this campaign show up in the calendar of the GM's other campaigns */
+  const invalidateOthers = () => qc.invalidateQueries({ queryKey: ['calendar-others'] })
+
   const createSessionMutation = useMutation({
-    mutationFn: () => sessionsApi.create(cId, {
-      title: form.title.trim(),
-      date: new Date(`${form.date}T${form.time}:00`).toISOString(),
-      location: form.location,
-      notes: form.notes,
-    }),
+    mutationFn: () => {
+      const request = {
+        title: form.title.trim(),
+        date: new Date(`${form.date}T${form.time}:00`).toISOString(),
+        location: form.location,
+        notes: form.notes,
+      }
+      return editingSession ? sessionsApi.update(cId, editingSession.id, request) : sessionsApi.create(cId, request)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sessions', cId] })
+      invalidateOthers()
       setShowCreate(false)
+      setEditingSession(null)
       setForm({ title: '', date: '', time: '18:00', location: '', notes: '' })
     },
   })
@@ -375,7 +447,7 @@ export function SessionsPage() {
   const deleteMutation = useMutation({
     mutationFn: (sessionId: number) => sessionsApi.delete(cId, sessionId),
     onMutate: clearError,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', cId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', cId] }); invalidateOthers() },
     onError: failWith('No se pudo eliminar la sesión.', undefined, ['sessions', cId]),
   })
 
@@ -390,6 +462,7 @@ export function SessionsPage() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['proposals', cId] })
+      invalidateOthers()
       setShowCreateProposal(false)
     },
   })
@@ -397,7 +470,7 @@ export function SessionsPage() {
   const rejectMutation = useMutation({
     mutationFn: (proposalId: number) => proposalsApi.reject(cId, proposalId),
     onMutate: clearError,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['proposals', cId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['proposals', cId] }); invalidateOthers() },
     onError: failWith('No se pudo cerrar la propuesta.', 'La propuesta ya estaba cerrada.', ['proposals', cId]),
   })
 
@@ -412,6 +485,7 @@ export function SessionsPage() {
     onSuccess: (updated) => {
       replaceProposal(updated)
       qc.invalidateQueries({ queryKey: ['sessions', cId] })
+      invalidateOthers()
       setPromoteTarget(null)
     },
     onError: () => qc.invalidateQueries({ queryKey: ['proposals', cId] }),
@@ -421,7 +495,7 @@ export function SessionsPage() {
     mutationFn: ({ proposalId, dateId }: { proposalId: number; dateId: number }) =>
       proposalsApi.rejectDate(cId, proposalId, dateId),
     onMutate: clearError,
-    onSuccess: replaceProposal,
+    onSuccess: (updated) => { replaceProposal(updated); invalidateOthers() },
     onError: failWith('No se pudo descartar la franja.', 'Esta franja ya estaba resuelta.', ['proposals', cId]),
   })
 
@@ -486,9 +560,44 @@ export function SessionsPage() {
     const d = day ?? today
     const pad = (n: number) => String(n).padStart(2, '0')
     const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-    setForm((f) => ({ ...f, date: dateStr }))
+    // Coming from an edit, start from an empty form
+    setForm((f) => editingSession ? { title: '', date: dateStr, time: '18:00', location: '', notes: '' } : { ...f, date: dateStr })
+    setEditingSession(null)
     createSessionMutation.reset()
     setShowCreate(true)
+  }
+
+  const openEdit = (s: Session) => {
+    const d = new Date(s.date)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    setForm({
+      title: s.title,
+      date: toDateKey(d),
+      time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+      location: s.location,
+      notes: s.notes,
+    })
+    setEditingSession(s)
+    createSessionMutation.reset()
+    setShowCreate(true)
+  }
+
+  const closeSessionSheet = () => { setShowCreate(false); setEditingSession(null) }
+
+  /** What is already planned on a day ('yyyy-MM-dd'): this campaign's sessions (except the one being edited) and
+   *  everything of the other campaigns. Used to warn, never to block. */
+  const dayConflicts = (dateKey: string, exceptSessionId?: number): DayConflict[] => {
+    const time = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+    const own = sessions
+      .filter((s) => s.id !== exceptSessionId && toDateKey(new Date(s.date)) === dateKey)
+      .map((s) => ({ key: `s${s.id}`, text: `Ese día ya hay otra sesión: «${s.title}» (${time(s.date)}).` }))
+    const elsewhere = (othersByDate.get(dateKey) ?? []).map((e) => ({
+      key: `${e.kind}${e.id}`,
+      text: e.kind === 'session'
+        ? `Ese día ya tienes «${e.title}» en «${e.campaignName}» (${otherWhen(e)}).`
+        : `Ese día ya tienes la propuesta «${e.title}» en «${e.campaignName}» (${otherWhen(e)}).`,
+    }))
+    return [...own, ...elsewhere]
   }
 
   const pendingProposals = proposals.filter((p) => p.status === 'Pending')
@@ -554,6 +663,9 @@ export function SessionsPage() {
     }
   }
   const monthHasProposals = [...proposalSlotsByDate.keys()].some((k) => k.startsWith(monthPrefix))
+  const monthOthers = [...othersByDate.entries()].filter(([k]) => k.startsWith(monthPrefix)).flatMap(([, v]) => v)
+  const monthHasOtherSessions = monthOthers.some((e) => e.kind === 'session')
+  const monthHasOtherProposals = monthOthers.some((e) => e.kind === 'proposal')
 
   const ids = {
     month: `${uid}-month`,
@@ -562,6 +674,7 @@ export function SessionsPage() {
     locks: `${uid}-locks`,
     upcoming: `${uid}-upcoming`,
     past: `${uid}-past`,
+    others: `${uid}-others`,
   }
 
   if (sessionsLoading || proposalsLoading) return <Spinner />
@@ -804,13 +917,20 @@ export function SessionsPage() {
                   const dayLocks = lockedByDate.get(toDateKey(day)) ?? []
                   const ownLocked = !isGm && dayLocks.some((l) => l.userId === currentUserId)
                   const pendingSlots = proposalSlotsByDate.get(toDateKey(day)) ?? 0
-                  // Up to 3 session marks; with more, 2 marks and "+N"
-                  const shownSessions = daySessions.length > 3 ? 2 : daySessions.length
+                  const dayOthers = othersByDate.get(toDateKey(day)) ?? []
+                  const otherSessions = dayOthers.filter((e) => e.kind === 'session').length
+                  const otherSlots = dayOthers.length - otherSessions
+                  // One diamond per kind of the other campaigns; this campaign's sessions get the room left (at most 3);
+                  // when they do not fit, one mark fewer and "+N"
+                  const room = Math.min(3, 4 - (otherSessions > 0 ? 1 : 0) - (otherSlots > 0 ? 1 : 0) - (pendingSlots > 0 ? 1 : 0))
+                  const shownSessions = daySessions.length > room ? Math.max(room - 1, 0) : daySessions.length
 
                   const labelParts = [`${WEEKDAYS_LONG[i]} ${dayNum} de ${MONTHS[viewMonth].toLowerCase()}`]
                   if (isToday) labelParts.push('hoy')
                   if (daySessions.length > 0) labelParts.push(`${daySessions.length} ${daySessions.length === 1 ? 'sesión' : 'sesiones'}`)
                   if (pendingSlots > 0) labelParts.push(`${pendingSlots} ${pendingSlots === 1 ? 'franja propuesta' : 'franjas propuestas'}`)
+                  if (otherSessions > 0) labelParts.push(`${otherSessions} ${otherSessions === 1 ? 'sesión en otra campaña' : 'sesiones en otras campañas'}`)
+                  if (otherSlots > 0) labelParts.push(`${otherSlots} ${otherSlots === 1 ? 'franja propuesta en otra campaña' : 'franjas propuestas en otras campañas'}`)
                   if (isGm && dayLocks.length > 0) labelParts.push(`bloqueado por ${namesList.format(dayLocks.map((l) => l.userDisplayName))}`)
                   if (ownLocked) labelParts.push('bloqueado')
 
@@ -855,7 +975,7 @@ export function SessionsPage() {
                         </span>
                         {/* Marks: one row for sessions and proposals, one for locks; never taller than the cell */}
                         <span aria-hidden style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, width: '100%', minHeight: 0, overflow: 'hidden' }}>
-                          {(daySessions.length > 0 || pendingSlots > 0) && (
+                          {(daySessions.length > 0 || pendingSlots > 0 || dayOthers.length > 0) && (
                             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, height: 8 }}>
                               {daySessions.slice(0, shownSessions).map((s) => (
                                 <span
@@ -870,6 +990,8 @@ export function SessionsPage() {
                                 <span style={{ fontSize: fs.eyebrow, fontWeight: 700, lineHeight: 1, color: c.subtle }}>+{daySessions.length - shownSessions}</span>
                               )}
                               {pendingSlots > 0 && <span style={proposalMark} />}
+                              {otherSessions > 0 && <span style={otherMark(true)} />}
+                              {otherSlots > 0 && <span style={otherMark(false)} />}
                             </span>
                           )}
                           {ownLocked && <Lock size={11} strokeWidth={2.4} style={{ color: tone.rubi.fg, flexShrink: 0 }} />}
@@ -890,8 +1012,8 @@ export function SessionsPage() {
           </tbody>
         </table>
 
-        {/* Legend: proposal mark, and (GM) which player each lock colour belongs to */}
-        {(monthHasProposals || (isGm && monthLockers.length > 0)) && (
+        {/* Legend: proposal mark, other campaigns, and (GM) which player each lock colour belongs to */}
+        {(monthHasProposals || monthOthers.length > 0 || (isGm && monthLockers.length > 0)) && (
           <div
             style={{
               display: 'flex', flexDirection: 'column', gap: 10,
@@ -903,6 +1025,22 @@ export function SessionsPage() {
                 <span aria-hidden style={proposalMark} />
                 Franjas propuestas pendientes
               </p>
+            )}
+            {(monthHasOtherSessions || monthHasOtherProposals) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
+                {monthHasOtherSessions && (
+                  <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: fs.sm, color: c.muted }}>
+                    <span aria-hidden style={otherMark(true)} />
+                    Sesión en otra campaña
+                  </p>
+                )}
+                {monthHasOtherProposals && (
+                  <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: fs.sm, color: c.muted }}>
+                    <span aria-hidden style={otherMark(false)} />
+                    Propuesta en otra campaña
+                  </p>
+                )}
+              </div>
             )}
             {isGm && monthLockers.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 16px' }}>
@@ -948,7 +1086,7 @@ export function SessionsPage() {
               <ul style={listReset}>
                 {selectedSessions.map((s, i) => (
                   <li key={s.id} className="rise" style={rise(i)}>
-                    <SessionCard session={s} isGm={isGm} onDelete={(trigger) => askDelete(s, trigger)} />
+                    <SessionCard session={s} isGm={isGm} onEdit={() => openEdit(s)} onDelete={(trigger) => askDelete(s, trigger)} />
                   </li>
                 ))}
               </ul>
@@ -968,6 +1106,20 @@ export function SessionsPage() {
             {/* Lock section */}
             {renderLockSection(selectedDay)}
           </div>
+
+          {/* What the GM has that day in other campaigns (read-only) */}
+          {(othersByDate.get(toDateKey(selectedDay)) ?? []).length > 0 && (
+            <section aria-labelledby={ids.others} style={{ marginTop: 24 }}>
+              <SectionTitle id={ids.others}>En otras campañas</SectionTitle>
+              <ul style={listReset}>
+                {(othersByDate.get(toDateKey(selectedDay)) ?? []).map((e, i) => (
+                  <li key={`${e.kind}${e.id}`} className="rise" style={rise(i)}>
+                    <OtherEventCard event={e} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </section>
       )}
 
@@ -1038,7 +1190,7 @@ export function SessionsPage() {
               <ul style={listReset}>
                 {upcoming.map((s, i) => (
                   <li key={s.id} className="rise" style={rise(Math.min(i, UPCOMING_LIMIT))}>
-                    <SessionCard session={s} isGm={isGm} onDelete={(trigger) => askDelete(s, trigger)} />
+                    <SessionCard session={s} isGm={isGm} onEdit={() => openEdit(s)} onDelete={(trigger) => askDelete(s, trigger)} />
                   </li>
                 ))}
               </ul>
@@ -1062,7 +1214,7 @@ export function SessionsPage() {
               <ul style={listReset}>
                 {pastSessions.map((s, i) => (
                   <li key={s.id} className="rise" style={rise(i)}>
-                    <SessionCard session={s} isGm={isGm} onDelete={(trigger) => askDelete(s, trigger)} />
+                    <SessionCard session={s} isGm={isGm} onEdit={() => openEdit(s)} onDelete={(trigger) => askDelete(s, trigger)} />
                   </li>
                 ))}
               </ul>
@@ -1148,6 +1300,7 @@ export function SessionsPage() {
           error={promoteDateMutation.isError
             ? calendarError(promoteDateMutation.error, 'No se pudo promover la franja.', 'Esta franja ya estaba resuelta. La propuesta se ha actualizado.')
             : null}
+          warning={<ConflictNote conflicts={dayConflicts(toDateKey(new Date(promoteTarget.date.proposedDate)))} />}
           onCancel={() => setPromoteTarget(null)}
           onConfirm={(promoteForm) => {
             rememberRemoval()
@@ -1156,11 +1309,11 @@ export function SessionsPage() {
         />
       )}
 
-      {/* Create session sheet */}
+      {/* Create / edit session sheet */}
       <Sheet
         open={showCreate}
-        onClose={() => setShowCreate(false)}
-        title="Nueva sesión"
+        onClose={closeSessionSheet}
+        title={editingSession ? 'Editar sesión' : 'Nueva sesión'}
         footer={
           <Button
             size="lg"
@@ -1169,14 +1322,14 @@ export function SessionsPage() {
             disabled={!canCreateSession || createSessionMutation.isPending}
             loading={createSessionMutation.isPending}
           >
-            {createSessionMutation.isPending ? 'Guardando...' : 'Crear sesión'}
+            {createSessionMutation.isPending ? 'Guardando...' : editingSession ? 'Guardar cambios' : 'Crear sesión'}
           </Button>
         }
       >
         <IconButton
           label="Cerrar"
           size={44}
-          onClick={() => setShowCreate(false)}
+          onClick={closeSessionSheet}
           style={{ position: 'absolute', top: 12, right: 12 }}
         >
           <X size={20} aria-hidden />
@@ -1209,6 +1362,8 @@ export function SessionsPage() {
               />
             </Field>
           </div>
+
+          {form.date && <ConflictNote conflicts={dayConflicts(form.date, editingSession?.id)} />}
 
           <Field label="Lugar">
             <Input
@@ -1261,6 +1416,7 @@ export function SessionsPage() {
           onSubmit={(createForm) => createProposalMutation.mutate(createForm)}
           isPending={createProposalMutation.isPending}
           error={createProposalMutation.isError ? calendarError(createProposalMutation.error, 'No se pudo crear la propuesta.') : null}
+          dayNote={(dateKey) => <ConflictNote conflicts={dayConflicts(dateKey)} />}
         />
       )}
     </div>
@@ -1269,7 +1425,12 @@ export function SessionsPage() {
 
 // ─── Session card ─────────────────────────────────────────────────────────────
 
-function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: boolean; onDelete: (trigger: HTMLElement) => void }) {
+function SessionCard({ session, isGm, onEdit, onDelete }: {
+  session: Session
+  isGm: boolean
+  onEdit: () => void
+  onDelete: (trigger: HTMLElement) => void
+}) {
   const date = new Date(session.date)
   const past = isPast(date)
   const today = isSameDay(date, new Date())
@@ -1325,16 +1486,62 @@ function SessionCard({ session, isGm, onDelete }: { session: Session; isGm: bool
       </div>
 
       {isGm && (
-        <IconButton
-          label={`Eliminar sesión ${session.title}`}
-          variant="danger"
-          size={44}
-          onClick={(e) => onDelete(e.currentTarget)}
-          style={{ marginTop: -4, marginRight: -4 }}
-        >
-          <Trash2 size={18} aria-hidden />
-        </IconButton>
+        <div style={{ display: 'flex', flexDirection: 'column', marginTop: -4, marginRight: -4 }}>
+          <IconButton label={`Editar sesión ${session.title}`} size={44} onClick={onEdit}>
+            <Pencil size={18} aria-hidden />
+          </IconButton>
+          <IconButton
+            label={`Eliminar sesión ${session.title}`}
+            variant="danger"
+            size={44}
+            onClick={(e) => onDelete(e.currentTarget)}
+          >
+            <Trash2 size={18} aria-hidden />
+          </IconButton>
+        </div>
       )}
+    </Card>
+  )
+}
+
+// ─── Other campaign's session or proposed slot (read-only) ───────────────────
+
+function OtherEventCard({ event }: { event: OtherCampaignEvent }) {
+  const isSession = event.kind === 'session'
+  return (
+    <Card as="article" padding={14} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, background: c.s2 }}>
+      <span aria-hidden style={{ ...iconTile(tone.cuarzo, 32), marginTop: 2 }}>
+        <span style={otherMark(isSession)} />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ ...eyebrow, overflowWrap: 'anywhere' }}>
+          {event.campaignName} · {getWorld(event.world).nombreCorto}
+        </p>
+        <h3 style={{ ...cardTitle, fontSize: fs.base + 1, marginTop: 4, overflowWrap: 'anywhere' }}>{event.title}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap', marginTop: 6 }}>
+          <Badge style={{ fontSize: fs.eyebrow, letterSpacing: '0.08em' }}>{isSession ? 'SESIÓN' : 'PROPUESTA'}</Badge>
+          <span style={metaText}>
+            <Clock size={14} aria-hidden />
+            {otherWhen(event)}
+          </span>
+          {event.location && (
+            <span style={{ ...metaText, alignItems: 'flex-start', lineHeight: 1.35 }}>
+              <MapPin size={14} aria-hidden style={{ flexShrink: 0, marginTop: 2 }} />
+              {event.location}
+            </span>
+          )}
+        </div>
+        <Link
+          to={`/campaigns/${event.campaignId}/historia`}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44, marginBottom: -10,
+            fontSize: fs.sm + 1, fontWeight: 650, color: c.brand, textDecoration: 'none',
+          }}
+        >
+          Abrir campaña
+          <ArrowUpRight size={15} aria-hidden />
+        </Link>
+      </div>
     </Card>
   )
 }

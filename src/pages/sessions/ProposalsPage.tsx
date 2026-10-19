@@ -8,7 +8,7 @@ import { useCampaignStore } from '../../store/campaignStore'
 import {
   Button, ConfirmDialog, Disclosure, EmptyState, ErrorMessage, Field, IconButton, Input, PageHeader, SectionTitle, Segmented, Sheet, Spinner,
 } from '../../components/ui'
-import { c, eyebrow, font, fs, page, pill, radius, tone, type Tone } from '../../theme'
+import { c, eyebrow, font, fs, page, pill, radius, semantic, tone, type Tone } from '../../theme'
 import type { ProposalResponse, ProposalDateResponse, ProposalSlot, ProposedSlotRequest } from '../../types'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -42,8 +42,23 @@ const SLOTS: Record<ProposalSlot, { label: string; time: string }> = {
 }
 
 /** "Mañana · 10:00" for a slot, "18:00" for a free time */
-const slotLabel = (d: ProposalDateResponse) =>
-  d.slot ? `${SLOTS[d.slot].label} · ${formatTime(d.proposedDate)}` : formatTime(d.proposedDate)
+// eslint-disable-next-line react-refresh/only-export-components
+export const slotTimeLabel = (slot: ProposalSlot | null, iso: string) =>
+  slot ? `${SLOTS[slot].label} · ${formatTime(iso)}` : formatTime(iso)
+
+const slotLabel = (d: ProposalDateResponse) => slotTimeLabel(d.slot, d.proposedDate)
+
+/** ['Raito', 'Kaligula', 'Soul'] → "Raito, Kaligula y Soul" */
+const namesList = new Intl.ListFormat('es', { style: 'long', type: 'conjunction' })
+
+/** Players with at least one open slot (still ahead) they have not answered; null when no slot is open */
+// eslint-disable-next-line react-refresh/only-export-components
+export function playersPendingOn(proposal: ProposalResponse): number | null {
+  if (proposal.status !== 'Pending') return null
+  const open = proposal.dates.filter((d) => d.status === 'Pending' && !slotPassed(d))
+  if (open.length === 0) return null
+  return new Set(open.flatMap((d) => d.pendingUserIds)).size
+}
 
 /** "Sábado, 18 de octubre · Mañana · 10:00" */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -107,6 +122,15 @@ export function StatusBadge({ status }: { status: string }) {
   return <ToneBadge label={s.label} t={s.tone} />
 }
 
+/** GM, open proposal: how many players still have a slot to answer («Faltan 2» / «Todos han respondido») */
+export function PendingAnswersBadge({ proposal }: { proposal: ProposalResponse }) {
+  const n = playersPendingOn(proposal)
+  if (n === null) return null
+  return n === 0
+    ? <ToneBadge label="Todos han respondido" t={tone.esmeralda} />
+    : <ToneBadge label={`Faltan ${n}`} t={semantic.warning} />
+}
+
 /** Toggle button for a vote ("Puedo" / "No puedo"): aria-pressed + gem tone + icon when chosen */
 function VoteButton({
   pressed,
@@ -137,23 +161,30 @@ function VoteButton({
   )
 }
 
-/** One proposed date or slot (inside its day): votes, and the GM's actions while it is pending */
-function VoteBar({ date, dayLabel, isPending, onVote, actions }: {
+/** One proposed date or slot (inside its day): votes, and the GM's actions while it is pending.
+ *  Only players vote (`canVote`); the GM sees who is still missing (`pendingNames`). */
+function VoteBar({ date, dayLabel, isPending, canVote, pendingNames, onVote, actions }: {
   date: ProposalDateResponse
   dayLabel: string
   isPending: boolean
+  canVote: boolean
+  pendingNames?: string[]
   onVote: (dateId: number, canAttend: boolean) => void
   actions?: ReactNode
 }) {
   const total = date.canCount + date.cannotCount
-  const canPct = total > 0 ? (date.canCount / total) * 100 : 0
-  const cannotPct = total > 0 ? (date.cannotCount / total) * 100 : 0
-
   const myVote = date.currentUserVote // null | true | false
   const open = date.status === 'Pending'
   const past = open && slotPassed(date)
+  const answering = open && !past
   const resolved = past ? { label: 'Pasada', tone: tone.cuarzo } : DATE_STATUS[date.status]
   const time = formatTime(date.proposedDate)
+
+  // While the slot can be answered the bar spans every player, so the grey track left is who has not answered yet
+  const scale = answering ? Math.max(date.playerCount, total) : total
+  const canPct = scale > 0 ? (date.canCount / scale) * 100 : 0
+  const cannotPct = scale > 0 ? (date.cannotCount / scale) * 100 : 0
+  const missing = date.pendingUserIds.length
 
   return (
     <div
@@ -180,22 +211,36 @@ function VoteBar({ date, dayLabel, isPending, onVote, actions }: {
         </p>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: fs.xs, color: c.subtle, fontVariantNumeric: 'tabular-nums' }}>
-            {total === 0 ? 'Sin votos' : `${date.canCount} sí · ${date.cannotCount} no`}
+            {total > 0 ? `${date.canCount} sí · ${date.cannotCount} no` : answering ? null : 'Sin votos'}
           </span>
           {resolved && <ToneBadge label={resolved.label} t={resolved.tone} />}
         </span>
       </div>
 
-      {/* Vote bar (the counts above carry the same data for screen readers) */}
-      {total > 0 && (
+      {/* Vote bar (the counts carry the same data for screen readers) */}
+      {scale > 0 && (
         <div aria-hidden style={{ display: 'flex', height: 6, borderRadius: radius.full, overflow: 'hidden', background: c.track }}>
           <div style={{ width: `${canPct}%`, background: tone.esmeralda.fg, transition: 'width 0.3s var(--ease-out)' }} />
           <div style={{ width: `${cannotPct}%`, background: tone.rubi.fg, transition: 'width 0.3s var(--ease-out)' }} />
         </div>
       )}
 
-      {/* Vote buttons (only while the slot is open and still ahead) */}
-      {open && !past && (
+      {/* Answered / missing (only while the slot can still be answered) */}
+      {answering && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: fs.sm, lineHeight: 1.4 }}>
+          <p style={{ color: c.muted, fontVariantNumeric: 'tabular-nums' }}>
+            {date.playerCount === 0
+              ? 'Aún no hay jugadores'
+              : `${total} de ${date.playerCount} han respondido${missing > 0 ? ` · faltan ${missing}` : ''}`}
+          </p>
+          {pendingNames && pendingNames.length > 0 && (
+            <p style={{ color: semantic.warning.fg }}>Faltan: {namesList.format(pendingNames)}</p>
+          )}
+        </div>
+      )}
+
+      {/* Vote buttons (players only, while the slot is open and still ahead) */}
+      {canVote && answering && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <VoteButton
             pressed={myVote === true}
@@ -247,6 +292,8 @@ export function ProposalDates({
 }) {
   const isPending = proposal.status === 'Pending'
   const days = groupByDay(proposal.dates).filter((d) => !onlyDay || d.key === onlyDay.toDateString())
+  const members = useCampaignStore((s) => s.currentCampaign?.members)
+  const nameOf = (userId: number) => members?.find((m) => m.userId === userId)?.displayName ?? 'Jugador'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -262,6 +309,8 @@ export function ProposalDates({
               date={d}
               dayLabel={day.label}
               isPending={votePending || !isPending}
+              canVote={!isGm}
+              pendingNames={isGm ? d.pendingUserIds.map(nameOf) : undefined}
               onVote={(dateId, canAttend) => onVote(proposal.id, dateId, canAttend)}
               actions={isGm && isPending ? (
                 <div style={{ display: 'grid', gridTemplateColumns: slotPassed(d) ? '1fr' : '1fr 1fr', gap: 8 }}>
@@ -324,6 +373,7 @@ function ProposalCard({
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {proposal.title}
           <StatusBadge status={proposal.status} />
+          {isGm && <PendingAnswersBadge proposal={proposal} />}
         </span>
       }
       summary={
@@ -371,6 +421,7 @@ export function PromoteDialog({
   onCancel,
   isPending,
   error,
+  warning,
 }: {
   proposal: ProposalResponse
   date: ProposalDateResponse
@@ -378,6 +429,8 @@ export function PromoteDialog({
   onCancel: () => void
   isPending: boolean
   error?: string | null
+  /** E.g. what else is already planned that day */
+  warning?: ReactNode
 }) {
   const [form, setForm] = useState<PromoteForm>({ title: proposal.title, location: '' })
   const canSubmit = form.title.trim().length > 0
@@ -416,8 +469,11 @@ export function PromoteDialog({
           <p style={{ fontSize: fs.base, fontWeight: 650, color: c.text }}>{sentenceCase(formatDate(date.proposedDate))}</p>
           <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
             {slotLabel(date)} · {date.canCount} pueden, {date.cannotCount} no pueden
+            {date.pendingUserIds.length > 0 && `, faltan ${date.pendingUserIds.length}`}
           </p>
         </div>
+
+        {warning}
 
         {/* Title */}
         <Field label="Título de la sesión">
@@ -492,11 +548,14 @@ export function CreateProposalSheet({
   onSubmit,
   isPending,
   error,
+  dayNote,
 }: {
   onClose: () => void
   onSubmit: (form: CreateForm) => void
   isPending: boolean
   error?: string | null
+  /** Extra line under a proposed day ('yyyy-MM-dd'), e.g. what is already planned that day */
+  dayNote?: (dateKey: string) => ReactNode
 }) {
   const newDay = (): ProposalDayForm => ({ date: todayStr(), mode: 'both', time: '18:00' })
   const [form, setForm] = useState<CreateForm>({ title: '', notes: '', days: [newDay()] })
@@ -600,6 +659,7 @@ export function CreateProposalSheet({
                       Se propone {hint}. Cada franja se vota y se promueve por separado.
                     </p>
                   )}
+                  {day.date && dayNote?.(day.date)}
                 </li>
               )
             })}

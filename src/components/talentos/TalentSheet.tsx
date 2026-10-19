@@ -76,12 +76,13 @@ export function TalentSheet({
   busy: boolean
   onClose: () => void
   onOpenNode: (id: string) => void
-  onLearn: (id: string) => void
-  onForget: (id: string) => void
+  /** Without `onLearn`, `onForget` and `onActivateForma` the sheet only shows the talent (a dead character's, read-only) */
+  onLearn?: (id: string) => void
+  onForget?: (id: string) => void
   onSetGoal: (id: string, choices: Record<string, string>) => void
   onRemoveGoal: () => void
   onChoicesChange: (choices: Record<string, string>) => void
-  onActivateForma: (nombre: string) => void
+  onActivateForma?: (nombre: string) => void
 }) {
   const node = graph.byId.get(nodeId)
   const [choices, setChoices] = useState<Record<string, string>>(() => ({ ...initialChoices }))
@@ -137,13 +138,13 @@ export function TalentSheet({
   let action: ReactNode = null
   if (owned && !node.autoGranted && cascade && !cascade.blocked) {
     const n = cascade.removed.length || 1
-    action = (
+    if (onForget) action = (
       <Button variant="danger" size="lg" icon={<X size={16} aria-hidden />} onClick={() => onForget(node.id)} aria-haspopup="dialog" style={{ flex: 1 }}>
         {n > 1 ? `Olvidar ${n} talentos` : 'Olvidar talento'}
       </Button>
     )
   } else if (mark.kind === 'available') {
-    action = <Button variant="primary" size="lg" icon={<Plus size={16} aria-hidden />} onClick={() => onLearn(node.id)} loading={busy} style={{ flex: 1 }}>Aprender</Button>
+    if (onLearn) action = <Button variant="primary" size="lg" icon={<Plus size={16} aria-hidden />} onClick={() => onLearn(node.id)} loading={busy} style={{ flex: 1 }}>Aprender</Button>
   } else if (!owned && route?.reachable) {
     action = isGoal
       ? <Button variant="secondary" size="lg" icon={<X size={16} aria-hidden />} onClick={onRemoveGoal} aria-haspopup="dialog" style={{ flex: 1 }}>Quitar objetivo</Button>
@@ -259,7 +260,7 @@ export function TalentSheet({
                         {sub}{sn && sn.treeId !== node.treeId ? ` · ${sourceOf(sn, graph)}` : ''}
                       </p>
                     </div>
-                    {i === 0 && s.availableNow && !isThis && (
+                    {i === 0 && s.availableNow && !isThis && onLearn && (
                       <Button variant="primary" size="sm" icon={<Plus size={14} aria-hidden />} onClick={() => onLearn(s.nodeId)} loading={busy} aria-label={`Aprender ${s.name}`} style={{ flexShrink: 0 }}>
                         Aprender
                       </Button>
@@ -366,7 +367,7 @@ export function TalentSheet({
                     accent={accent}
                     showPoderNote
                     showAcciones
-                    onActivate={owned && !isActive ? () => onActivateForma(forma.nombre) : undefined}
+                    onActivate={owned && !isActive && onActivateForma ? () => onActivateForma(forma.nombre) : undefined}
                   />
                 )
               })}

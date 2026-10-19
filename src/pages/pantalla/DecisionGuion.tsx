@@ -12,6 +12,7 @@ import { ahoraIso, anotar, claveDecision, type Efecto, type ResultadoPrueba } fr
 import { acortar, leerDecision, pruebaDeOpcion, type Bloque, type OpcionDecision, type Seccion } from './guion'
 import { EFECTOS_HOJA, EFECTOS_SECRETOS, ETIQUETA_EFECTO, quienesDeciden, registroDecisiones, resumenHoja, type Quien, type RegistroPersonaje, type Suma } from './decisiones'
 import { Apartado, Conmutador, EnLinea, LeerEnVozAlta } from './piezas'
+import { vivos } from '../../lib/personajes'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -100,7 +101,8 @@ export function DecisionGuion({
   soloLectura?: boolean
 }) {
   const { cId, estado, actualizar, ultimoDiario } = usePantalla()
-  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), enabled: !soloLectura })
+  // Only the living decide from now on; what the dead decided stays in the record
+  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), enabled: !soloLectura, select: vivos })
   const [marcas, setMarcas] = useVerMarcas()
   const d = leerDecision(seccion, decide)
   const { quienes, sinCoincidencia } = quienesDeciden(d.decide, personajes)

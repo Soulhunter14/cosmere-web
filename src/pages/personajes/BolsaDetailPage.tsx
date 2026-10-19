@@ -9,6 +9,7 @@ import type { Character, UpdateCharacterRequest, WeaponCatalog, ArmorCatalog, Ge
 import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { EquipoInicialButton } from './EquipoInicialButton'
 import { CharacterHero } from '../../components/CharacterHero'
+import { EquipoAlMorirCard, MuerteBanner } from '../../components/PersonajeMuerto'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { heroPill, onGem, onGemSoft } from '../../lib/hero'
 import { cosmereImage } from '../../lib/cosmereAssets'
@@ -537,6 +538,13 @@ export function BolsaDetailPage() {
         <CharacterIdentityPills character={character} variant="hero" style={{ marginTop: 12 }} />
       </CharacterHero>
 
+      {/* A dead character's purse is empty and read-only: its gear and money left the sheet for «Lo que llevaba» */}
+      {character.muerto ? (
+        <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <MuerteBanner character={character} />
+          {character.equipoAlMorir && <EquipoAlMorirCard equipo={character.equipoAlMorir} />}
+        </div>
+      ) : (
       <div style={{ padding: '24px 16px 48px', display: 'flex', flexDirection: 'column', gap: 32 }}>
         {/* ─── Arquillas: the money of Nacidos de la bruma (L.254 / PDF 260) ─── */}
         {cfg.features.arquillas && (
@@ -864,6 +872,7 @@ export function BolsaDetailPage() {
           )
         })}
       </div>
+      )}
 
       {/* ─── Marcos dialog ─── */}
       <Sheet

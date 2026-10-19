@@ -13,6 +13,8 @@ import { cosmereImage } from '../../lib/cosmereAssets'
 import { formatCantidad, monedaImagen } from '../../lib/moneda'
 import { buttonReset, c, card, fs, page, radius, shadow, titleText } from '../../theme'
 import { onGem } from '../../lib/hero'
+import { EtiquetaMuerto } from '../../components/PersonajeMuerto'
+import { estiloMuerto, vivosPrimero } from '../../lib/personajes'
 
 /** Official sphere illustration (a diamond mark) next to the marcos count */
 const MARCO_IMG = cosmereImage('esfera-marco-diamante')
@@ -57,6 +59,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
           height: 48,
           borderRadius: radius.md,
           background: characterGradient(character.id),
+          ...(character.muerto ? estiloMuerto : {}),
           boxShadow: shadow[1],
           flexShrink: 0,
           display: 'flex',
@@ -73,6 +76,7 @@ function CharacterSelectCard({ character, onSelect }: { character: Character; on
 
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>{character.name}</span>
+        {character.muerto && <EtiquetaMuerto style={{ alignSelf: 'flex-start' }} />}
 
         <CharacterIdentityPills character={character} />
 
@@ -127,7 +131,8 @@ export function BolsaPage({ detailBasePath = 'personajes/bolsa' }: { detailBaseP
 
   if (isLoading) return <Spinner />
 
-  const visible = isGm ? characters : characters.filter((ch) => ch.ownerId === user?.id)
+  // The dead stay on the list, at the end
+  const visible = vivosPrimero(isGm ? characters : characters.filter((ch) => ch.ownerId === user?.id))
 
   const goToDetail = (character: Character) =>
     navigate(`/campaigns/${cId}/${detailBasePath}/${character.id}`)

@@ -417,7 +417,10 @@ export function ArtesMetalicasTab({
       {editing && (
         <p role="note" style={nota}>Estás editando la ficha: guarda o cancela los cambios para mover cargas, viales o poderes.</p>
       )}
-      {!editing && !puedeActuar && (
+      {character.muerto && (
+        <p role="note" style={nota}>Este personaje ha muerto: sus poderes y sus clavos son de solo lectura.</p>
+      )}
+      {!editing && !puedeActuar && !character.muerto && (
         <p role="note" style={nota}>Solo el propietario del personaje y el director pueden cambiar el estado de los poderes.</p>
       )}
       {errorMesa && <ErrorMessage message="No se ha podido guardar el cambio de los poderes. Inténtalo de nuevo." />}

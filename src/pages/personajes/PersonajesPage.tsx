@@ -18,6 +18,7 @@ import { characterGradient } from '../../lib/avatar'
 import { cosmereImage } from '../../lib/cosmereAssets'
 import { monedaImagen } from '../../lib/moneda'
 import { buttonReset, c, card, eyebrow, font, fs, page, radius, shadow, titleText, tone, type Tone } from '../../theme'
+import { miPersonaje } from '../../lib/personajes'
 
 /* Text on the CharacterHero / character gradient (lib/avatar + CharacterHero: ≥ 7:1 on every palette) */
 const HERO_TEXT = onGem
@@ -151,7 +152,8 @@ function PlayerPersonajesPage() {
 
   if (isLoading) return <Spinner />
 
-  const character = characters.find((c) => c.ownerId === user?.id) ?? null
+  // The living one; with only dead characters, the one who died last
+  const character = miPersonaje(characters, user?.id)
 
   if (!character) {
     return (

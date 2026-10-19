@@ -13,6 +13,8 @@ import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
 import { buttonReset, c, card, fs, page, pill, radius, shadow, titleText, tone } from '../../theme'
 import { onGem } from '../../lib/hero'
+import { EtiquetaMuerto } from '../../components/PersonajeMuerto'
+import { estiloMuerto, vivosPrimero } from '../../lib/personajes'
 
 /* White initial on the deep character gradient (lib/avatar: >= 10:1 on every palette), as in MetasPage/BolsaPage. */
 const ON_GEM = onGem
@@ -50,6 +52,7 @@ function CharacterSelectCard({ character, rules, onSelect }: { character: Charac
           flexShrink: 0,
           borderRadius: radius.md,
           background: characterGradient(character.id),
+          ...(character.muerto ? estiloMuerto : {}),
           boxShadow: shadow[1],
           display: 'flex',
           alignItems: 'center',
@@ -66,6 +69,7 @@ function CharacterSelectCard({ character, rules, onSelect }: { character: Charac
         <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>
           {character.name}
         </span>
+        {character.muerto && <EtiquetaMuerto style={{ alignSelf: 'flex-start' }} />}
 
         <CharacterIdentityPills character={character} />
 
@@ -113,7 +117,8 @@ export function TalentosPage({ detailBasePath = 'personajes/talentos' }: { detai
 
   if (isLoading || worldPending) return <Spinner />
 
-  const visible = isGm ? characters : characters.filter((c) => c.ownerId === user?.id)
+  // The dead stay on the list, at the end
+  const visible = vivosPrimero(isGm ? characters : characters.filter((c) => c.ownerId === user?.id))
 
   const goToDetail = (character: Character) =>
     navigate(`/campaigns/${cId}/${detailBasePath}/${character.id}`)

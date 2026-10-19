@@ -39,7 +39,8 @@ export interface AtlasProps {
   onToggleLamina: (treeId: string) => void
   onCloseLaminas: (treeIds: string[]) => void
   onOpenSheet: (id: string) => void
-  onLearn: (id: string) => void
+  /** Without it nothing can be learned here (a dead character's talents are read-only) */
+  onLearn?: (id: string) => void
   onSetGoal: (id: string) => void
   onRemoveGoal: () => void
   busy: boolean
@@ -185,7 +186,7 @@ export function PathAtlas(props: AtlasProps) {
       busy={props.busy}
       onClose={closeBrief}
       onOpenSheet={() => props.onOpenSheet(selectedHere)}
-      onLearn={() => props.onLearn(selectedHere)}
+      onLearn={props.onLearn && (() => props.onLearn?.(selectedHere))}
       onSetGoal={() => props.onSetGoal(selectedHere)}
       onRemoveGoal={props.onRemoveGoal}
       headingLevel={subLevel}
@@ -272,7 +273,7 @@ export function PathAtlas(props: AtlasProps) {
           selected={selectedHere === key.id}
           briefId={briefId}
           onSelect={() => onSelect(selectedHere === key.id ? null : key.id)}
-          onLearn={() => props.onLearn(key.id)}
+          onLearn={props.onLearn && (() => props.onLearn?.(key.id))}
           busy={props.busy}
           extra={props.keyExtra}
           ownedNote={props.keyOwnedNote}
@@ -452,7 +453,7 @@ function KeyBox({ node, model, evaluation, level, accent, wide, explore, selecte
   selected: boolean
   briefId: string
   onSelect: () => void
-  onLearn: () => void
+  onLearn?: () => void
   busy: boolean
   extra?: ReactNode
   ownedNote?: string
@@ -532,7 +533,7 @@ function KeyBox({ node, model, evaluation, level, accent, wide, explore, selecte
       </button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, fontSize: fs.xs, flexWrap: 'wrap' }}>
         <span style={{ flex: '1 1 160px', minWidth: 0, lineHeight: 1.45 }}>{status}</span>
-        {mark.kind === 'available' && (
+        {mark.kind === 'available' && onLearn && (
           <Button size="sm" variant="primary" icon={<Plus size={15} aria-hidden />} onClick={onLearn} loading={busy} aria-label={`Aprender ${node.name}`}>
             Aprender
           </Button>
@@ -720,7 +721,7 @@ function BriefCard({ id, node, graph, evaluation, level, accent, caretLeft, isGo
   busy: boolean
   onClose: () => void
   onOpenSheet: () => void
-  onLearn: () => void
+  onLearn?: () => void
   onSetGoal: () => void
   onRemoveGoal: () => void
   headingLevel: 3 | 4
@@ -734,7 +735,7 @@ function BriefCard({ id, node, graph, evaluation, level, accent, caretLeft, isGo
   const stateColour = owned || mark.kind === 'available' ? accent.fg : c.text
   let action: ReactNode = null
   if (mark.kind === 'available') {
-    action = <Button variant="primary" size="md" icon={<Plus size={16} aria-hidden />} onClick={onLearn} loading={busy} style={{ flex: 1 }}>Aprender</Button>
+    if (onLearn) action = <Button variant="primary" size="md" icon={<Plus size={16} aria-hidden />} onClick={onLearn} loading={busy} style={{ flex: 1 }}>Aprender</Button>
   } else if (mark.kind === 'locked' && mark.distance !== null) {
     action = isGoal
       ? <Button variant="secondary" size="md" icon={<X size={16} aria-hidden />} onClick={onRemoveGoal} aria-haspopup="dialog" style={{ flex: 1 }}>Quitar objetivo</Button>

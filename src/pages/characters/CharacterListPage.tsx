@@ -11,6 +11,8 @@ import { CharacterIdentityPills } from '../../components/CharacterIdentityPills'
 import { characterGradient } from '../../lib/avatar'
 import { buttonReset, c, card, eyebrow, fs, page, pill, radius, shadow, titleText, tone, type Tone } from '../../theme'
 import { onGem } from '../../lib/hero'
+import { EtiquetaMuerto } from '../../components/PersonajeMuerto'
+import { estiloMuerto, vivosPrimero } from '../../lib/personajes'
 
 /* White initial on the deep character gradient (lib/avatar: ≥ 10:1 on every palette). */
 const ON_GEM = onGem
@@ -72,7 +74,7 @@ function CharacterCard({
   players,
   index = 0,
 }: {
-  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; caminoMetal: string; maxHealth: number; ownerId?: number }
+  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; caminoMetal: string; maxHealth: number; ownerId?: number; muerto: boolean }
   isGm: boolean
   ownerName?: string
   onOpen: () => void
@@ -110,6 +112,7 @@ function CharacterCard({
             style={{
               width: 48, height: 48, flexShrink: 0, borderRadius: radius.md,
               background: characterGradient(character.id), boxShadow: shadow[1],
+              ...(character.muerto ? estiloMuerto : {}),
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               ...titleText, fontSize: fs.xl, lineHeight: 1, color: ON_GEM,
             }}
@@ -122,6 +125,7 @@ function CharacterCard({
             <span style={{ ...titleText, fontSize: fs.md + 1, color: c.text, overflowWrap: 'anywhere' }}>
               {character.name}
             </span>
+            {character.muerto && <EtiquetaMuerto style={{ alignSelf: 'flex-start' }} />}
 
             {/* Path badges */}
             <CharacterIdentityPills character={character} />
@@ -394,7 +398,7 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
       {/* Character list */}
       {!!characters?.length && (
         <ul role="list" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {characters.map((c, i) => (
+          {vivosPrimero(characters).map((c, i) => (
             <CharacterCard
               key={c.id}
               index={i}

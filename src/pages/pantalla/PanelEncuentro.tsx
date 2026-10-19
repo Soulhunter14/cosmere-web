@@ -29,6 +29,7 @@ import { RANGO_META } from './meta'
 import { BarraRecurso, Conmutador, TecladoNumerico, Tesela } from './piezas'
 import { EscenaDelEncuentro } from './PanelGuion'
 import { HojaFichaAdversario } from './FichaAdversario'
+import { vivos } from '../../lib/personajes'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -68,7 +69,8 @@ export function PanelEncuentro() {
   const [eliminando, setEliminando] = useState(false)
   const [marcarJugada, setMarcarJugada] = useState(true)
 
-  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId) })
+  // Only the living join a fight; one who died while in it stays there (it is a copy)
+  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), select: vivos })
   // The characters that fight nowhere yet (with a split party, «Todo el grupo» never pulls one out of the other fight)
   const sinCombate = personajes.filter((ch) => !personajeEnCombate(estado, ch.id))
 
@@ -392,7 +394,7 @@ function ListaPersonajes({
 function HojaSimultaneo({ onClose, onCreado }: { onClose: () => void; onCreado: () => void }) {
   const { cId, estado, actualizar, ultimoDiario } = usePantalla()
   const cfg = useWorldConfig()
-  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId) })
+  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), select: vivos })
   const [titulo, setTitulo] = useState('')
   const [marcados, setMarcados] = useState<number[]>([])
   const mueve = marcados.some((id) => personajeEnCombate(estado, id))
@@ -1315,7 +1317,7 @@ function HojaAnadir({ onClose }: { onClose: () => void }) {
   const [libre, setLibre] = useState({ nombre: '', bando: 'pnj' as Bando, rango: 'ninguno' as Rango | 'ninguno', salud: '10', defensa: '12', desvio: '0' })
 
   const catalogo = useQuery({ queryKey: ['global-npcs', cId], queryFn: () => globalNpcsApi.getAll(cId) })
-  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId) })
+  const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), select: vivos })
   const mueve = marcados.some((id) => { const d = personajeEnCombate(estado, id); return d !== null && d.enc.id !== destino?.id })
 
   const filtrados = useMemo(() => {

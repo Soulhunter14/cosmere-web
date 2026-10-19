@@ -17,6 +17,7 @@ import { anadirPersonajes, asegurarEncuentro, destinoAnadir } from './encuentro'
 import { personajeEnCombate } from './estado'
 import { BarraRecurso } from './piezas'
 import { RegistroDecisiones } from './DecisionGuion'
+import { vivos } from '../../lib/personajes'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -54,8 +55,10 @@ export function PanelGrupo() {
     )
   }
 
-  // The characters that fight nowhere (with a split party, one already in the other fight stays there)
-  const fuera = personajes.filter((ch) => !personajeEnCombate(estado, ch.id))
+  // The living make the group (the dead keep their past decisions in the record); those who fight nowhere (with a split party, one
+  // already in the other fight stays there)
+  const grupo = vivos(personajes)
+  const fuera = grupo.filter((ch) => !personajeEnCombate(estado, ch.id))
   const anadir = (lista: Character[]) => {
     actualizar((b) => { anadirPersonajes(b, asegurarEncuentro(b, 'Encuentro', ultimoDiario), lista, cfg.habilidades, cfg.features.bonosServidor, ultimoDiario) })
     irA('encuentro')
@@ -71,7 +74,7 @@ export function PanelGrupo() {
       )}
       <RegistroDecisiones personajes={personajes} />
       <ul style={{ ...listReset, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 12 }}>
-        {personajes.map((ch) => (
+        {grupo.map((ch) => (
           <li key={ch.id}>
             <TarjetaPj ch={ch} enEncuentro={!fuera.includes(ch)} onAnadir={() => anadir([ch])} />
           </li>

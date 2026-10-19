@@ -19,6 +19,7 @@ import {
   VERSION_BANDA, existeBanda, necesitaMigrar, normalizarBanda, normalizarSecretos, secretosVacios, versionDocumento, type Actor,
 } from './estado'
 import { anotar, migrar, type CtxBanda, type DocBanda, type OpBanda } from './operaciones'
+import { vivos } from '../../lib/personajes'
 
 export const claveBanda = (campaignId: number) => ['crew', campaignId] as const
 
@@ -240,10 +241,10 @@ export function useBanda(campaignId: number) {
     guardarHoja(actual ? { ...actual, sharedWith: hoja.sharedWith } : hoja)
   }, [campaignId, guardarHoja])
 
-  // Who can act: each PC (the director, any of them; a player, their own) and, for the director, the director himself
+  // Who can act: each living PC (the director, any of them; a player, their own) and, for the director, the director himself
   const personajes = useMemo(() => personajesQ.data ?? [], [personajesQ.data])
   const actores = useMemo<Actor[]>(() => [
-    ...personajes.map((p): Actor => ({ tipo: 'pj', characterId: p.id, nombre: p.name })),
+    ...vivos(personajes).map((p): Actor => ({ tipo: 'pj', characterId: p.id, nombre: p.name })),
     ...(isGm ? [{ tipo: 'director', nombre: autor } as Actor] : []),
   ], [personajes, isGm, autor])
 

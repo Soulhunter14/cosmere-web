@@ -14,6 +14,7 @@ import { CAMINOS_NACIDOS_DEL_METAL } from '../../../data/mistborn/caminosNacidos
 import { CATEGORIAS_ALOMANCIA, CATEGORIAS_FERUQUIMIA, getMetal, type ArteMetal, type MetalId } from '../../../data/mistborn/metales'
 import type { AccionPoder, PoderDef, PoderFeruquimico } from '../../../data/mistborn/tipos'
 import { Card, EmptyState, PageHeader, SectionTitle } from '../../../components/ui'
+import { OriginalEntrada } from '../originales/Originales'
 import { TalentActivation } from '../../../components/TalentActivation'
 import { useWorldConfig } from '../../../store/campaignStore'
 import { c, eyebrow, font, fs, numeral, page, pill, radius, shadow, tint, tone, toneFrom } from '../../../theme'
@@ -240,6 +241,8 @@ function PoderDetalle({ poder }: { poder: PoderDef }) {
       <PageHeader eyebrow={NOMBRE_ARTE[poder.arte]} title={poder.name} subtitle={subtitulo(poder)} />
 
       <div style={stack(28)}>
+        <OriginalEntrada seccion="artes-metalicas" clave={`${poder.arte}-${poder.metal}`} />
+
         <div style={stack(14)}>
           {/* The metal: glyph, name and the colloquial name of its users, with the eras and what sets the power apart */}
           <div

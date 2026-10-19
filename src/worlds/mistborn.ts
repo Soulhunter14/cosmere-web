@@ -8,6 +8,7 @@
 import { Anvil, Coins, Flame, Sparkle } from 'lucide-react'
 import { tone } from '../theme'
 import type { WorldConfig } from './types'
+import type { ManifiestoOriginales } from '../data/originales/tipos'
 import { HABILIDADES_COSMERE } from './skills'
 import { iconoCaminoMetal, iconoHumano, iconoKandra, iconoSangreKoloss } from './mistborn.icons'
 import { MISTBORN_TOPICS } from './mistborn.topics'
@@ -126,6 +127,7 @@ export const MISTBORN: WorldConfig = {
   loadData: () => import('./mistborn.data').then((m) => m.DATA),
   // El legado de los nacidos de la bruma: chapters 1-4 in Era 1 and 5-9 in Era 2 (L.2 / PDF 5)
   libro: { id: 'legado', titulo: 'El legado de los nacidos de la bruma', cargar: () => import('../data/mistborn/legado').then((m) => m.CAPITULOS) },
+  originales: { cargar: () => import('../data/originales/mistborn.json').then((m) => m.default as ManifiestoOriginales) },
   // «La banda»: organizations, refuges and upgrades of cap. 8 (L.297-301 / PDF 303-307) plus our table rules (docs/banda/propuesta.md)
   banda: { cargar: () => import('../data/mistborn/banda').then((m) => m.CATALOGO_BANDA_MISTBORN) },
   // The Cosmere conditions plus Desprovisto and Mermado (L.310-311 / PDF 316-317)

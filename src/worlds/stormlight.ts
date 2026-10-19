@@ -8,6 +8,7 @@ import { Gem } from 'lucide-react'
 import { tone } from '../theme'
 import { RADIANT_ORDERS } from '../data/radiantOrders'
 import type { WorldConfig } from './types'
+import type { ManifiestoOriginales } from '../data/originales/tipos'
 import { HABILIDADES_COSMERE } from './skills'
 import { iconoHumano, iconoOrden, iconoOyente } from './stormlight.icons'
 import { STORMLIGHT_TOPICS } from './stormlight.topics'
@@ -76,6 +77,7 @@ export const STORMLIGHT: WorldConfig = {
   loadData: () => Promise.resolve(DATA),
   syncData: DATA,
   libro: { id: 'caminapiedras', titulo: 'Caminapiedras', cargar: () => import('../data/caminapiedras').then((m) => m.CHAPTERS) },
+  originales: { cargar: () => import('../data/originales/stormlight.json').then((m) => m.default as ManifiestoOriginales) },
   // No crew sheet in Stormlight for now (docs/banda/propuesta.md, D9)
   banda: null,
   // The Cosmere conditions plus Empoderado (Puente Nueve, conditions table; Ylt's Third Ideal in Caminapiedras)

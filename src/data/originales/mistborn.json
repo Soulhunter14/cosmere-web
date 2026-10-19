@@ -1,0 +1,516 @@
+{
+  "libro": "Manual de Nacidos de la bruma",
+  "desfase": 6,
+  "secciones": {
+    "caminos-heroicos": [
+      {
+        "clave": "intro",
+        "titulo": "Cómo usar los caminos y talentos",
+        "paginas": [
+          [
+            79,
+            83
+          ]
+        ]
+      },
+      {
+        "clave": "agente",
+        "titulo": "Agente",
+        "paginas": [
+          [
+            84,
+            91
+          ]
+        ]
+      },
+      {
+        "clave": "cazador",
+        "titulo": "Cazador",
+        "paginas": [
+          [
+            92,
+            99
+          ]
+        ]
+      },
+      {
+        "clave": "enviado",
+        "titulo": "Enviado",
+        "paginas": [
+          [
+            100,
+            107
+          ]
+        ]
+      },
+      {
+        "clave": "erudito",
+        "titulo": "Erudito",
+        "paginas": [
+          [
+            108,
+            115
+          ]
+        ]
+      },
+      {
+        "clave": "guerrero",
+        "titulo": "Guerrero",
+        "paginas": [
+          [
+            116,
+            123
+          ]
+        ]
+      },
+      {
+        "clave": "lider",
+        "titulo": "Líder",
+        "paginas": [
+          [
+            124,
+            131
+          ]
+        ]
+      }
+    ],
+    "caminos-metal": [
+      {
+        "clave": "intro",
+        "titulo": "Cómo usar los caminos de nacidos del metal",
+        "paginas": [
+          [
+            133,
+            139
+          ]
+        ]
+      },
+      {
+        "clave": "brumoso",
+        "titulo": "Brumoso",
+        "paginas": [
+          [
+            140,
+            143
+          ]
+        ]
+      },
+      {
+        "clave": "nacido-de-la-bruma",
+        "titulo": "Nacido de la bruma",
+        "paginas": [
+          [
+            144,
+            149
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimista",
+        "titulo": "Feruquimista",
+        "paginas": [
+          [
+            150,
+            153
+          ]
+        ]
+      },
+      {
+        "clave": "ferrin",
+        "titulo": "Ferrin",
+        "paginas": [
+          [
+            154,
+            157
+          ]
+        ]
+      },
+      {
+        "clave": "nacidoble",
+        "titulo": "Nacidoble",
+        "paginas": [
+          [
+            158,
+            165
+          ]
+        ]
+      }
+    ],
+    "artes-metalicas": [
+      {
+        "clave": "intro",
+        "titulo": "Cómo usar las artes metálicas",
+        "paginas": [
+          [
+            167,
+            171
+          ]
+        ]
+      },
+      {
+        "clave": "metales",
+        "titulo": "Metales de Scadrial",
+        "paginas": [
+          [
+            172,
+            177
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-acero",
+        "titulo": "Alomancia de acero",
+        "paginas": [
+          [
+            178,
+            180
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-aluminio",
+        "titulo": "Alomancia de aluminio",
+        "paginas": [
+          [
+            181,
+            181
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-atium",
+        "titulo": "Alomancia de atium",
+        "paginas": [
+          [
+            182,
+            184
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-bendaleo",
+        "titulo": "Alomancia de bendaleo",
+        "paginas": [
+          [
+            185,
+            187
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-bronce",
+        "titulo": "Alomancia de bronce",
+        "paginas": [
+          [
+            188,
+            190
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-cadmio",
+        "titulo": "Alomancia de cadmio",
+        "paginas": [
+          [
+            191,
+            193
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-cinc",
+        "titulo": "Alomancia de cinc",
+        "paginas": [
+          [
+            194,
+            196
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-cobre",
+        "titulo": "Alomancia de cobre",
+        "paginas": [
+          [
+            197,
+            198
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-cromo",
+        "titulo": "Alomancia de cromo",
+        "paginas": [
+          [
+            199,
+            200
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-duraluminio",
+        "titulo": "Alomancia de duraluminio",
+        "paginas": [
+          [
+            201,
+            202
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-electro",
+        "titulo": "Alomancia de electro",
+        "paginas": [
+          [
+            203,
+            204
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-estano",
+        "titulo": "Alomancia de estaño",
+        "paginas": [
+          [
+            205,
+            206
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-hierro",
+        "titulo": "Alomancia de hierro",
+        "paginas": [
+          [
+            207,
+            209
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-laton",
+        "titulo": "Alomancia de latón",
+        "paginas": [
+          [
+            210,
+            212
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-nicrosil",
+        "titulo": "Alomancia de nicrosil",
+        "paginas": [
+          [
+            213,
+            214
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-oro",
+        "titulo": "Alomancia de oro",
+        "paginas": [
+          [
+            215,
+            216
+          ]
+        ]
+      },
+      {
+        "clave": "alomancia-peltre",
+        "titulo": "Alomancia de peltre",
+        "paginas": [
+          [
+            217,
+            218
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-acero",
+        "titulo": "Feruquimia de acero",
+        "paginas": [
+          [
+            219,
+            221
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-aluminio",
+        "titulo": "Feruquimia de aluminio",
+        "paginas": [
+          [
+            222,
+            223
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-atium",
+        "titulo": "Feruquimia de atium",
+        "paginas": [
+          [
+            224,
+            225
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-bendaleo",
+        "titulo": "Feruquimia de bendaleo",
+        "paginas": [
+          [
+            226,
+            227
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-bronce",
+        "titulo": "Feruquimia de bronce",
+        "paginas": [
+          [
+            228,
+            229
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-cadmio",
+        "titulo": "Feruquimia de cadmio",
+        "paginas": [
+          [
+            230,
+            231
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-cinc",
+        "titulo": "Feruquimia de cinc",
+        "paginas": [
+          [
+            232,
+            233
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-cobre",
+        "titulo": "Feruquimia de cobre",
+        "paginas": [
+          [
+            234,
+            236
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-cromo",
+        "titulo": "Feruquimia de cromo",
+        "paginas": [
+          [
+            237,
+            239
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-duraluminio",
+        "titulo": "Feruquimia de duraluminio",
+        "paginas": [
+          [
+            240,
+            241
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-electro",
+        "titulo": "Feruquimia de electro",
+        "paginas": [
+          [
+            242,
+            243
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-estano",
+        "titulo": "Feruquimia de estaño",
+        "paginas": [
+          [
+            244,
+            246
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-hierro",
+        "titulo": "Feruquimia de hierro",
+        "paginas": [
+          [
+            247,
+            248
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-laton",
+        "titulo": "Feruquimia de latón",
+        "paginas": [
+          [
+            249,
+            251
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-nicrosil",
+        "titulo": "Feruquimia de nicrosil",
+        "paginas": [
+          [
+            252,
+            252
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-oro",
+        "titulo": "Feruquimia de oro",
+        "paginas": [
+          [
+            253,
+            254
+          ]
+        ]
+      },
+      {
+        "clave": "feruquimia-peltre",
+        "titulo": "Feruquimia de peltre",
+        "paginas": [
+          [
+            255,
+            256
+          ]
+        ]
+      },
+      {
+        "clave": "hemalurgia",
+        "titulo": "Hemalurgia y clavos hemalúrgicos",
+        "paginas": [
+          [
+            257,
+            257
+          ],
+          [
+            294,
+            297
+          ]
+        ]
+      }
+    ]
+  }
+}

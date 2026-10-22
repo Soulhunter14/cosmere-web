@@ -25,6 +25,7 @@ import {
   dateSlotLabel,
   slotPassed,
   toProposedSlots,
+  visibleDates,
 } from './ProposalsPage'
 import { calendarError } from './calendarErrors'
 import type { CreateForm, PromoteForm } from './ProposalsPage'
@@ -602,7 +603,7 @@ export function SessionsPage() {
 
   const pendingProposals = proposals.filter((p) => p.status === 'Pending')
   const selectedDayProposals = selectedDay
-    ? pendingProposals.filter((p) => p.dates.some((d) => isSameDay(new Date(d.proposedDate), selectedDay)))
+    ? pendingProposals.filter((p) => visibleDates(p).some((d) => isSameDay(new Date(d.proposedDate), selectedDay)))
     : []
 
   // Roving tabindex: one day of the grid is in the tab order; arrows move between days.

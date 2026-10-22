@@ -77,6 +77,11 @@ function groupByDay(dates: ProposalDateResponse[]) {
   return days
 }
 
+/** Slots shown for a proposal: an open one hides the slots the GM has discarded (it always keeps one pending) */
+// eslint-disable-next-line react-refresh/only-export-components
+export const visibleDates = (proposal: ProposalResponse) =>
+  proposal.status === 'Pending' ? proposal.dates.filter((d) => d.status !== 'Rejected') : proposal.dates
+
 /** The slot's start time has already gone by: it can no longer be voted or promoted */
 // eslint-disable-next-line react-refresh/only-export-components
 export const slotPassed = (d: ProposalDateResponse) => new Date(d.proposedDate).getTime() < Date.now()
@@ -291,7 +296,7 @@ export function ProposalDates({
   dayNote?: (day: Date) => ReactNode
 }) {
   const isPending = proposal.status === 'Pending'
-  const days = groupByDay(proposal.dates).filter((d) => !onlyDay || d.key === onlyDay.toDateString())
+  const days = groupByDay(visibleDates(proposal)).filter((d) => !onlyDay || d.key === onlyDay.toDateString())
   const members = useCampaignStore((s) => s.currentCampaign?.members)
   const nameOf = (userId: number) => members?.find((m) => m.userId === userId)?.displayName ?? 'Jugador'
 

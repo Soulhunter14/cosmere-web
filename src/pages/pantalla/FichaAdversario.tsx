@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Projector } from 'lucide-react'
 import { globalNpcsApi } from '../../api/global-npcs'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
 import { Button, Segmented, Sheet, Spinner } from '../../components/ui'
@@ -8,6 +9,7 @@ import { FichaLibro } from '../../components/FichaLibro'
 import { c, eyebrow, fs, pill, tone } from '../../theme'
 import { usePantalla } from './contexto'
 import { deOtraEra, eraNumero, etiquetaEra, type EraNum } from './adversarios'
+import { useMostrarEnMesa } from './useMesa'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 
@@ -30,6 +32,8 @@ export function HojaFichaAdversario({ adversarioId, nombre, onClose }: { adversa
   const conLibro = (npc?.bookImages.length ?? 0) > 0
   const vista: Vista = conLibro ? elegida ?? 'libro' : 'resumen'
   const ocultas = npc ? `${npc.talentos}\n${npc.notas}`.split('\n').filter((l) => deOtraEra(l, era)).length : 0
+  const mostrar = useMostrarEnMesa()
+  const conRetrato = !!npc?.bookImages.includes('retrato')
   return (
     <Sheet
       open
@@ -37,7 +41,22 @@ export function HojaFichaAdversario({ adversarioId, nombre, onClose }: { adversa
       title={npc?.name ?? nombre}
       description={npc ? `${npc.tipo}${npc.source ? ` · ${npc.source}` : ''}` : undefined}
       maxWidth={vista === 'libro' ? 820 : 680}
-      footer={<Button size="lg" style={{ flex: 1 }} onClick={onClose}>Cerrar</Button>}
+      footer={
+        <>
+          {conRetrato && npc && (
+            <Button
+              size="lg"
+              variant="secondary"
+              icon={<Projector size={16} aria-hidden />}
+              style={{ flex: 1 }}
+              onClick={() => { mostrar({ tipo: 'retrato', adversarioId: npc.id }, nombre); onClose() }}
+            >
+              Retrato a la mesa
+            </Button>
+          )}
+          <Button size="lg" style={{ flex: 1 }} onClick={onClose}>Cerrar</Button>
+        </>
+      }
     >
       {isLoading ? (
         <Spinner label="Cargando la ficha…" />

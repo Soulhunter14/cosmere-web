@@ -1460,6 +1460,10 @@ export function DiceRoller() {
     CrewSheetShared: (data: unknown) => {
       window.dispatchEvent(new CustomEvent('crewSheetShared', { detail: data }))
     },
+    // «La mesa»: the server only says that what the players see changed; the page fetches it again
+    MesaUpdated: (data: unknown) => {
+      window.dispatchEvent(new CustomEvent('mesaUpdated', { detail: data }))
+    },
   }), [activeTab, open])
 
   useCampaignHub(campaignId, hubHandlers())

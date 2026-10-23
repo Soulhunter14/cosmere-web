@@ -37,6 +37,8 @@ const PoderMetalPage = lazy(() => import('./pages/encyclopedia/mistborn/PoderMet
 const PantallaPage = lazy(() => import('./pages/pantalla/PantallaPage').then((m) => ({ default: m.PantallaPage })))
 // «La banda»: the crew sheet (worlds with `features.banda`); hidden from players unless the director shares it (own chunk)
 const BandaPage = lazy(() => import('./pages/banda/BandaPage').then((m) => ({ default: m.BandaPage })))
+// «La mesa»: what the director shows to the players at the table (own chunk, opened only during play)
+const MesaPage = lazy(() => import('./pages/mesa/MesaPage').then((m) => ({ default: m.MesaPage })))
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -76,6 +78,7 @@ export default function App() {
               <Route path="gm" element={<GmPage />} />
               <Route path="pantalla" element={<Suspense fallback={<Spinner />}><PantallaPage /></Suspense>} />
               <Route path="banda" element={<Suspense fallback={<Spinner />}><BandaPage /></Suspense>} />
+              <Route path="mesa" element={<Suspense fallback={<Spinner />}><MesaPage /></Suspense>} />
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />

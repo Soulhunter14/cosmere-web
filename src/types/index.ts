@@ -582,15 +582,36 @@ export interface CreateLockedDayRequest {
 export interface GmScreen {
   /** The stored document (`{}` when the campaign has none yet): read it through `normalizarEstado` */
   state: unknown
+  /** «La mesa»: the public document the players read (`{}` when none); the screen derives it and never reads it back */
+  mesa: unknown
   /** Send it back with the next save; 0 = never saved. A save with another version answers 409 with the stored GmScreen */
   version: number
   /** null = never saved */
   updatedAt: string | null
 }
 
+/** «La mesa» (`MesaResponse`): what the players read of the director's screen, a JSON object the web owns (src/pages/mesa/publica.ts) */
+export interface MesaDoc {
+  state: unknown
+  version: number
+  /** When the public document last changed; null = never */
+  updatedAt: string | null
+}
+
+/** An image the director uploaded to show at the table (`CampaignImageResponse`) */
+export interface CampaignImage {
+  id: number
+  name: string
+  contentType: string
+  bytes: number
+  createdAt: string
+}
+
 export interface SaveGmScreenRequest {
   /** The whole document (a JSON object, at most 1 MB of text) */
   state: object
+  /** «La mesa»: the public document (a JSON object, at most 200 000 characters); absent = the stored one stays */
+  mesa?: object
   /** The version the client read */
   version: number
 }

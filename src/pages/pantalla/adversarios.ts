@@ -188,6 +188,8 @@ const base = (bando: Bando, nombre: string): Combatiente => ({
   habilidades: {},
   notas: '',
   derrotado: false,
+  oculto: false,
+  mostrarSalud: false,
 })
 
 const lleno = (max: number) => ({ actual: Math.max(0, max), max: Math.max(0, max) })

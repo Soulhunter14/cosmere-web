@@ -53,7 +53,7 @@ export function useCatalogo() {
   return { catalogo: q.data ?? [], catalogoListo: q.isSuccess, catalogoFallo: q.isError }
 }
 
-export type PanelId = 'escena' | 'encuentro' | 'grupo' | 'tiradas' | 'bitacora'
+export type PanelId = 'escena' | 'encuentro' | 'grupo' | 'tiradas' | 'bitacora' | 'mesa'
 
 export interface PanelesCtx {
   /** Shows a panel: in two panes it selects the tab of its pane, in one pane the only tab strip */

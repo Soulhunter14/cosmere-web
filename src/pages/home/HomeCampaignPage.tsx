@@ -1,10 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, Users, Clock, MapPin } from 'lucide-react'
+import { CalendarDays, ChevronRight, Users, Clock, MapPin, Projector, Warehouse } from 'lucide-react'
 import { sessionsApi } from '../../api/sessions'
 import { charactersApi } from '../../api/characters'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import type { Session } from '../../types'
 import { EmptyState, SectionTitle, Skeleton, StatTile } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
@@ -25,6 +25,7 @@ export function HomeCampaignPage() {
   const { campaignId } = useParams<{ campaignId: string }>()
   const cId = Number(campaignId)
   const { currentCampaign, isGm } = useCampaignStore()
+  const { features } = useWorldConfig()
 
   const { data: sessions = [], isLoading: loadingSessions } = useQuery({
     queryKey: ['sessions', cId],
@@ -58,6 +59,30 @@ export function HomeCampaignPage() {
           {currentCampaign && <WorldBadge variant="chip" world={currentCampaign.world} era={currentCampaign.era} />}
         </p>
       </header>
+
+      {/* A player's entries to what is used during play: «La mesa» always; «La banda» on the phone only (the sidebar and the rail have it) */}
+      {!isGm && (
+        <div className="rise" style={{ '--i': 1, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 } as CSSProperties}>
+          <TarjetaAcceso
+            to={`/campaigns/${cId}/mesa`}
+            icono={<Projector size={22} />}
+            tono={tone.zafiro}
+            titulo="La mesa"
+            texto="Lo que el director muestra durante la partida: el combate, la salud del grupo y las imágenes."
+          />
+          {features.banda && currentCampaign?.bandaVisible && (
+            <div className="only-mobile">
+              <TarjetaAcceso
+                to={`/campaigns/${cId}/banda`}
+                icono={<Warehouse size={22} />}
+                tono={tone.esmeralda}
+                titulo="La banda"
+                texto="La hoja de la banda: refugio, mejoras, trabajadores y almacén."
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bento: next session (wide) + summary tiles (stacked beside it from ~560px, below it on phones) */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: '28px 16px' }}>
@@ -94,6 +119,36 @@ export function HomeCampaignPage() {
       </div>
 
     </div>
+  )
+}
+
+/** A card that is a link to a section (the same shape as the director's entry to the «Pantalla del director») */
+function TarjetaAcceso({ to, icono, tono, titulo, texto }: { to: string; icono: ReactNode; tono: { fg: string; bg: string; border: string }; titulo: string; texto: string }) {
+  return (
+    <Link
+      to={to}
+      className="ui-card ui-card--interactive"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: radius.lg,
+        background: `linear-gradient(135deg, ${tono.bg}, var(--surface-1) 72%)`, border: `1px solid ${tono.border}`,
+        boxShadow: shadow[1], color: c.text, textDecoration: 'none',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 44, height: 44, flexShrink: 0, borderRadius: radius.md, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: tono.bg, border: `1px solid ${tono.border}`, color: tono.fg,
+        }}
+      >
+        {icono}
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, lineHeight: 1.25 }}>{titulo}</span>
+        <span style={{ display: 'block', fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{texto}</span>
+      </span>
+      <ChevronRight size={20} aria-hidden style={{ color: c.subtle, flexShrink: 0 }} />
+    </Link>
   )
 }
 

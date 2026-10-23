@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid, Columns3, Warehouse } from 'lucide-react'
+import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid, Columns3, Projector, Warehouse } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useCampaignStore, useWorldConfig } from '../store/campaignStore'
@@ -25,6 +25,7 @@ const SECTION_LABELS: Record<string, string> = {
   catalog: 'Catálogo',
   settings: 'Ajustes',
   banda: 'Banda',
+  mesa: 'Mesa',
 }
 
 /** `soloAncho`: on the desktop sidebar and the tablet rail only, not on the phone bottom bar */
@@ -43,10 +44,10 @@ export function Sidebar() {
   const { features } = useWorldConfig()
 
   // «La banda» (worlds with a crew sheet): the director always; a player only when the director has shared it (bandaVisible).
-  // The director's phone bar already has five items, so there it lives on the desktop sidebar and the tablet rail, and the phone
-  // reaches it from Director, like the «Pantalla»
+  // Both phone bars are full (the player's with «Mesa»), so it lives on the desktop sidebar and the tablet rail, and the phone
+  // reaches it from Director or from a card on Inicio, like the «Pantalla»
   const banda: NavItem[] = features.banda && (isGm || currentCampaign?.bandaVisible)
-    ? [{ to: 'banda', label: 'Banda', icon: Warehouse, soloAncho: isGm }]
+    ? [{ to: 'banda', label: 'Banda', icon: Warehouse, soloAncho: true }]
     : []
 
   const navItems: NavItem[] = isGm
@@ -59,6 +60,8 @@ export function Sidebar() {
     : [
         { to: 'home', label: 'Inicio', icon: House },
         { to: 'personajes', label: 'Personaje', icon: Users },
+        // «La mesa»: what the director shows during play (the party's health, the enemies, the images)
+        { to: 'mesa', label: 'Mesa', icon: Projector },
         { to: 'historia', label: 'Partida', icon: BookOpen },
         ...banda,
         { to: 'encyclopedia', label: 'Enciclopedia', icon: Globe },

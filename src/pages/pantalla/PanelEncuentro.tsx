@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowRightLeft, BookOpen, ChevronDown, ChevronRight, ChevronUp, CopyPlus, Dices, EyeOff, LogOut, Pencil, Plus, Search, ShieldOff, Skull, Swords, Trash2, Undo2, Users,
+  ArrowRightLeft, BookOpen, ChevronDown, ChevronRight, ChevronUp, CopyPlus, Dices, Eye, EyeOff, LogOut, Pencil, Plus, Projector, Search, ShieldOff, Skull, Swords,
+  Trash2, Undo2, Users,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { globalNpcsApi } from '../../api/global-npcs'
@@ -15,7 +16,9 @@ import { StatIcons } from '../../lib/gameIcons'
 import { buildRollLabel, rollCombat, type CombatRollResult } from '../../utils/dice'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, shadow, tone, type Tone } from '../../theme'
 import type { EstadoDef } from '../../worlds/types'
-import { guardarPreferencia, leerPreferencia, usePantalla } from './contexto'
+import { guardarPreferencia, leerPreferencia, useCatalogo, usePantalla } from './contexto'
+import { useMostrarEnMesa } from './useMesa'
+import { enemigosOcultos } from './mesa'
 import {
   FASES, FASE_INFO, MAX_ENCUENTROS, actuoEnFase, anotar, aplicarDano, avanzarFase, claveEscenaPropia, curar, dejarACero, encuentroDe, encuentroEnPantalla,
   guardarTiradaPrivada, juegaEnFase, marcaDe, marcar, moverCombatiente, nombrarSerie, nombresNuevos, nuevoId, pasoRecurso, personajeEnCombate, registrarCambio, retirarCaidos,
@@ -219,6 +222,15 @@ export function PanelEncuentro() {
           ) : (
             <span style={{ alignSelf: 'center', fontSize: fs.xs, color: c.subtle }}>Máximo {MAX_ENCUENTROS} combates a la vez</span>
           )}
+          {/* «La mesa»: a fight is born hidden from the players; shown, they see the party's health and the enemies' names and conditions */}
+          <Conmutador
+            activo={enc.enMesa}
+            t={tone.zafiro}
+            icono={enc.enMesa ? <Projector size={16} aria-hidden /> : <EyeOff size={16} aria-hidden />}
+            etiqueta={enc.enMesa ? `En la mesa${enemigosOcultos(enc) ? ` · ${enemigosOcultos(enc)} oculto${enemigosOcultos(enc) === 1 ? '' : 's'}` : ''}` : 'Mostrar en la mesa'}
+            titulo={enc.enMesa ? 'Los jugadores ven este combate en su mesa (toca para ocultarlo)' : 'Oculto a los jugadores (toca para mostrarlo en su mesa)'}
+            onClick={() => cambiarEnc((e) => { e.enMesa = !e.enMesa })}
+          />
           <Button variant="ghost" icon={<Trash2 size={16} aria-hidden />} onClick={() => setEliminando(true)} style={{ marginLeft: 'auto', color: tone.rubi.fg }}>
             Eliminar combate
           </Button>
@@ -457,6 +469,10 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
   const acento = pj ? tone.brand : tone.rubi
   const actuo = fase ? actuoEnFase(cb, fase) : false
   const nombreEstado = (id: string) => cfg.estados.find((e) => e.id === id)?.nombre ?? id
+  // «La mesa»: what the players see of an enemy, and its book portrait to show them
+  const mostrarEnMesa = useMostrarEnMesa()
+  const { catalogo } = useCatalogo()
+  const conRetrato = cb.adversarioId !== null && !!catalogo.find((n) => n.id === cb.adversarioId)?.bookImages.includes('retrato')
 
   const tirarAtaque = (a: AtaqueDef) => {
     const r = rollCombat({
@@ -577,6 +593,8 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
             <span style={pill(acento)}>{pj ? 'PJ' : 'PNJ'}</span>
             {rango && <span style={pill(rango.tone)}>{rango.label}</span>}
             {cb.derrotado && <span style={pill(tone.cuarzo)}><Skull size={12} aria-hidden />Derrotado</span>}
+            {!pj && cb.oculto && <span style={pill(tone.cuarzo)}><EyeOff size={12} aria-hidden />Oculto a la mesa</span>}
+            {!pj && !cb.oculto && cb.mostrarSalud && <span style={pill(tone.esmeralda)}><StatIcons.salud size={12} aria-hidden />Salud en la mesa</span>}
           </span>
         </div>
         {!cb.derrotado && (
@@ -646,6 +664,36 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
           </span>
         )}
       </div>
+
+      {/* «La mesa»: what the players see of this enemy (an ally is always shown whole) */}
+      {!pj && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ ...eyebrow, color: tone.zafiro.fg, marginRight: 4 }}>Mesa</span>
+          <Conmutador
+            compacto
+            activo={!cb.oculto}
+            t={tone.zafiro}
+            icono={cb.oculto ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
+            etiqueta={cb.oculto ? 'Oculto' : 'Visible'}
+            titulo={cb.oculto ? `${cb.nombre} está oculto a los jugadores (toca para que lo vean)` : `Los jugadores ven a ${cb.nombre}: su nombre y sus estados (toca para ocultarlo)`}
+            onClick={() => cambiar((x) => { x.oculto = !x.oculto })}
+          />
+          <Conmutador
+            compacto
+            activo={cb.mostrarSalud}
+            t={tone.esmeralda}
+            icono={<StatIcons.salud size={14} aria-hidden />}
+            etiqueta="Salud"
+            titulo={cb.mostrarSalud ? `Los jugadores ven si ${cb.nombre} está intacto, herido o malherido, nunca el número (toca para ocultarlo)` : `Mostrar a los jugadores si ${cb.nombre} está intacto, herido o malherido, nunca el número`}
+            onClick={() => cambiar((x) => { x.mostrarSalud = !x.mostrarSalud })}
+          />
+          {conRetrato && cb.adversarioId !== null && (
+            <Button size="sm" variant="ghost" icon={<Projector size={14} aria-hidden />} onClick={() => mostrarEnMesa({ tipo: 'retrato', adversarioId: cb.adversarioId as number }, cb.nombre)} style={{ minHeight: 36 }}>
+              Retrato a la mesa
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Conditions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>

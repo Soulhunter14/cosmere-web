@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Check, ChevronLeft, ChevronRight, Delete, ExternalLink, ListTree, Pin, PinOff } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Delete, ExternalLink, ListTree, Pin, PinOff, Projector } from 'lucide-react'
 import { Button, IconButton, Sheet } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { PlotIcon } from '../../components/GameIcons'
@@ -8,6 +8,7 @@ import type { TramaDieResult } from '../../utils/dice'
 import type { TipoEscena } from './estado'
 import { ESCENA_META } from './meta'
 import { irAEscena } from './escenas'
+import { useMostrarEnMesa } from './useMesa'
 
 /* Building blocks shared by the panels of the «Pantalla del director» (big touch targets, readable at arm's length). */
 
@@ -151,10 +152,11 @@ export function ControlLetra({ escala, onChange }: { escala: number; onChange: (
   )
 }
 
-/** Thumbnails that open full size (maps of the book, images of an own scene) */
+/** Thumbnails that open full size (maps of the book, images of an own scene); the open one can go to the players' phones */
 export function Galeria({ imagenes }: { imagenes: { url: string; titulo: string }[] }) {
   const [abierta, setAbierta] = useState<number | null>(null)
   const actual = abierta !== null ? imagenes[abierta] : null
+  const mostrar = useMostrarEnMesa()
   return (
     <>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
@@ -202,6 +204,14 @@ export function Galeria({ imagenes }: { imagenes: { url: string; titulo: string 
                 <ExternalLink size={16} aria-hidden />
                 Abrir en pestaña nueva
               </a>
+              <Button
+                variant="secondary"
+                icon={<Projector size={16} aria-hidden />}
+                onClick={() => { mostrar({ tipo: 'publica', url: actual.url }, actual.titulo); setAbierta(null) }}
+                style={{ flex: '1 1 auto' }}
+              >
+                Mostrar a la mesa
+              </Button>
               <Button onClick={() => setAbierta(null)}>Cerrar</Button>
             </>
           )

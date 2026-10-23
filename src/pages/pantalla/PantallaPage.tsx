@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, Check, ChevronLeft, CloudOff, Dices, LoaderCircle, Maximize2, Minimize2, NotebookPen, PanelRightClose, PanelRightOpen, RefreshCw,
-  Sun, SunDim, Swords, Timer, TriangleAlert, Users, type LucideIcon,
+  BookOpen, Check, ChevronLeft, CloudOff, Dices, LoaderCircle, NotebookPen, PanelRightClose, PanelRightOpen, Projector, RefreshCw,
+  Swords, Timer, TriangleAlert, Users, type LucideIcon,
 } from 'lucide-react'
 import { gmScreenApi } from '../../api/gmScreen'
 import type { DiceRollResponse } from '../../api/diceRolls'
@@ -23,6 +23,8 @@ import { PanelEncuentro } from './PanelEncuentro'
 import { PanelGrupo } from './PanelGrupo'
 import { PanelTiradas } from './PanelTiradas'
 import { PanelBitacora } from './PanelBitacora'
+import { PanelMesa } from './PanelMesa'
+import { BotonEncendida, BotonPantallaCompleta } from './dispositivo'
 import { tituloDe } from './guion'
 import { useLibro } from './libro'
 import type { LibroAventura } from '../../data/libros/tipos'
@@ -33,10 +35,11 @@ const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => 
   grupo: { label: 'Grupo', icon: Users, render: () => <PanelGrupo /> },
   tiradas: { label: 'Tiradas', icon: Dices, render: () => <PanelTiradas /> },
   bitacora: { label: 'Bitácora', icon: NotebookPen, render: () => <PanelBitacora /> },
+  mesa: { label: 'Mesa', icon: Projector, render: () => <PanelMesa /> },
 }
-/** Left pane: what is happening (story, fight, party); right pane: what comes in and what is noted */
+/** Left pane: what is happening (story, fight, party); right pane: what comes in, what is noted and what the players see */
 const PANEL_A: PanelId[] = ['escena', 'encuentro', 'grupo']
-const PANEL_B: PanelId[] = ['tiradas', 'bitacora']
+const PANEL_B: PanelId[] = ['tiradas', 'bitacora', 'mesa']
 const TODOS: PanelId[] = [...PANEL_A, ...PANEL_B]
 
 const esDe = (ids: PanelId[]) => (v: unknown): v is PanelId => typeof v === 'string' && ids.includes(v as PanelId)
@@ -547,6 +550,12 @@ function BarraSuperior() {
             Sesión {sesion.numero ?? '¿?'} · {duracion(sesion.iniciadaEn, ahora)}
           </Chip>
         )}
+        {/* What the players have on their phones right now */}
+        {estado.mesa.proyeccion && (
+          <Chip icono={Projector} t={tone.zafiro} onClick={() => irA('mesa')} etiqueta={`En la mesa: ${estado.mesa.proyeccion.titulo || 'una imagen'}`}>
+            En la mesa: {estado.mesa.proyeccion.titulo || 'imagen'}
+          </Chip>
+        )}
       </div>
 
       <IndicadorGuardado guardado={guardado} />
@@ -600,100 +609,4 @@ function IndicadorGuardado({ guardado }: { guardado: EstadoGuardado }) {
   )
 }
 
-// ── Keep the screen on (Screen Wake Lock: needs https or localhost) ─────────
-
 const esBool = (v: unknown): v is boolean => typeof v === 'boolean'
-
-function BotonEncendida() {
-  const soportado = typeof navigator !== 'undefined' && 'wakeLock' in navigator
-  const [activo, setActivo] = useState(() => leerPreferencia('cosmere-pantalla-encendida', false, esBool))
-
-  useEffect(() => {
-    if (!soportado || !activo) return
-    let centinela: WakeLockSentinel | null = null
-    let cancelado = false
-    const pedir = () => {
-      navigator.wakeLock
-        .request('screen')
-        .then((s) => { if (cancelado) void s.release(); else centinela = s })
-        .catch(() => {})
-    }
-    // The browser drops the lock whenever the page is hidden: ask again when it comes back
-    const alVolver = () => { if (document.visibilityState === 'visible') pedir() }
-    pedir()
-    document.addEventListener('visibilitychange', alVolver)
-    return () => {
-      cancelado = true
-      document.removeEventListener('visibilitychange', alVolver)
-      void centinela?.release().catch(() => {})
-    }
-  }, [soportado, activo])
-
-  if (!soportado) return null
-  const alternar = () => {
-    setActivo(!activo)
-    guardarPreferencia('cosmere-pantalla-encendida', !activo)
-  }
-  return (
-    <IconButton
-      label={activo ? 'Pantalla siempre encendida (activado)' : 'Mantener la pantalla encendida'}
-      aria-pressed={activo}
-      variant="surface"
-      size={40}
-      onClick={alternar}
-      style={activo ? { color: tone.heliodoro.fg, borderColor: tone.heliodoro.border, background: tone.heliodoro.bg } : undefined}
-    >
-      {activo ? <Sun size={18} aria-hidden /> : <SunDim size={18} aria-hidden />}
-    </IconButton>
-  )
-}
-
-// ── Fullscreen (and landscape lock where the browser allows it) ─────────────
-
-type DocWebkit = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void>; webkitFullscreenEnabled?: boolean }
-type ElemWebkit = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }
-type Orientacion = ScreenOrientation & { lock?: (o: string) => Promise<void>; unlock?: () => void }
-
-const suscribirCompleta = (cb: () => void) => {
-  document.addEventListener('fullscreenchange', cb)
-  document.addEventListener('webkitfullscreenchange', cb)
-  return () => {
-    document.removeEventListener('fullscreenchange', cb)
-    document.removeEventListener('webkitfullscreenchange', cb)
-  }
-}
-const enCompleta = () => !!(document.fullscreenElement || (document as DocWebkit).webkitFullscreenElement)
-
-function BotonPantallaCompleta() {
-  const doc = document as DocWebkit
-  const soportado = !!(document.fullscreenEnabled || doc.webkitFullscreenEnabled)
-  const activo = useSyncExternalStore(suscribirCompleta, enCompleta, () => false)
-  // Fullscreen and the landscape lock belong to this screen: leaving it gives the rest of the app its normal window back
-  useEffect(() => () => {
-    (screen.orientation as Orientacion | undefined)?.unlock?.()
-    if (enCompleta()) void (document.exitFullscreen ? document.exitFullscreen() : (document as DocWebkit).webkitExitFullscreen?.())?.catch(() => {})
-  }, [])
-  if (!soportado) return null
-
-  const alternar = async () => {
-    const orientacion = screen.orientation as Orientacion | undefined
-    try {
-      if (activo) {
-        orientacion?.unlock?.()
-        await (document.exitFullscreen ? document.exitFullscreen() : doc.webkitExitFullscreen?.())
-      } else {
-        const el = document.documentElement as ElemWebkit
-        await (el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen?.())
-        await orientacion?.lock?.('landscape').catch(() => {})
-      }
-    } catch {
-      /* the browser refused (iframe, policy): nothing to do */
-    }
-  }
-
-  return (
-    <IconButton label={activo ? 'Salir de pantalla completa' : 'Pantalla completa'} aria-pressed={activo} variant="surface" size={40} onClick={() => void alternar()}>
-      {activo ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}
-    </IconButton>
-  )
-}

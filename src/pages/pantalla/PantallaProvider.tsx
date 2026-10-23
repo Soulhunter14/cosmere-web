@@ -5,6 +5,7 @@ import { gmScreenApi } from '../../api/gmScreen'
 import { diaryApi } from '../../api/diary'
 import type { GmScreen } from '../../types'
 import { VERSION_ESTADO, anotar as anotarEn, normalizarEstado, type PantallaEstado, type TipoEvento } from './estado'
+import { proyectarMesa } from './mesa'
 import { PantallaContext, guardadosEnCurso, type EstadoGuardado, type PantallaCtx } from './contexto'
 
 /** Quiet time after the last change before saving */
@@ -38,7 +39,7 @@ function bienFormada(s: string): string {
   return r
 }
 
-const aTexto = (estado: PantallaEstado) => JSON.stringify(estado, (_k, v: unknown) => (typeof v === 'string' ? bienFormada(v) : v))
+const aTexto = (estado: unknown) => JSON.stringify(estado, (_k, v: unknown) => (typeof v === 'string' ? bienFormada(v) : v))
 const bytes = (s: string) => new TextEncoder().encode(s).length
 
 /** The document as it is sent: well-formed text and, when too large, without its oldest closed sessions (newest first) */
@@ -106,7 +107,9 @@ export function PantallaProvider({ cId, inicial, children }: { cId: number; inic
       estadoRef.current = envio.estado
       setEstado(envio.estado)
     }
-    const peticion = gmScreenApi.saveJson(cId, `{"state":${envio.texto},"version":${versionRef.current}}`, TIEMPO_MAXIMO_MS)
+    // «La mesa» travels in the same request: the server keeps the public document only when it changed and tells the players
+    const mesa = aTexto(proyectarMesa(envio.estado))
+    const peticion = gmScreenApi.saveJson(cId, `{"state":${envio.texto},"mesa":${mesa},"version":${versionRef.current}}`, TIEMPO_MAXIMO_MS)
     guardadosEnCurso.set(cId, peticion)
     let reintentar = false
     let rechazado = false

@@ -6,12 +6,14 @@
  */
 import type { AnyRollResult } from '../../utils/dice'
 import { foldText } from '../../lib/catalogo'
+import { MAX_PROYECCIONES, proyeccion as proyeccionDe, type Proyeccion } from '../mesa/publica'
 
 /**
- * 4: `decisiones`. A release that does not know a field would drop it when it saves, so a newer document opens read only
- * in an older release (`PantallaProvider`) instead of losing what the table decided.
+ * 4: `decisiones`. 5: «La mesa» (`enMesa`, `oculto`, `mostrarSalud`, `mesa`). A release that does not know a field would drop
+ * it when it saves, so a newer document opens read only in an older release (`PantallaProvider`) instead of losing what the
+ * table decided.
  */
-export const VERSION_ESTADO = 4
+export const VERSION_ESTADO = 5
 /** Closed sessions kept in the document (the oldest ones are dropped) */
 const MAX_HISTORIAL = 30
 /** Closed sessions that keep the Markdown of their scenes; older ones keep only the titles and what the table noted (1 MB cap) */
@@ -93,6 +95,10 @@ export interface Combatiente {
   habilidades: Record<string, number>
   notas: string
   derrotado: boolean
+  /** «La mesa»: an enemy the players do not see yet (an ambush, a sniper); nothing of it leaves the screen */
+  oculto: boolean
+  /** «La mesa»: the players see the health hint of this enemy (intact, hurt, badly hurt), never the number */
+  mostrarSalud: boolean
 }
 
 /** Why a combatant left the fight before its end: it fell (or was beaten), it fled or it surrendered */
@@ -112,6 +118,14 @@ export interface Encuentro {
   retirados: Retirado[]
   /** Script scene it was prepared from: the encounter shows its combat rules and counters */
   escenaId: string | null
+  /** «La mesa»: published to the players' screen. A fight is born hidden, so one prepared ahead never spoils an ambush */
+  enMesa: boolean
+}
+
+/** «La mesa»: the image the director shows to the players right now, and those shown in the session (newest first) */
+export interface MesaDirector {
+  proyeccion: Proyeccion | null
+  proyecciones: Proyeccion[]
 }
 
 export interface ImagenEscena { url: string; titulo: string }
@@ -260,6 +274,8 @@ export interface PantallaEstado {
   tiradasPrivadas: TiradaPrivada[]
   /** Changes made in the encounters, newest first */
   cambios: CambioCombate[]
+  /** «La mesa»: what the director projects to the players (src/pages/pantalla/mesa.ts); emptied when the session ends */
+  mesa: MesaDirector
 }
 
 // ── Ids and dates ────────────────────────────────────────────────────────────
@@ -290,6 +306,7 @@ export const estadoVacio = (): PantallaEstado => ({
   historial: [],
   tiradasPrivadas: [],
   cambios: [],
+  mesa: { proyeccion: null, proyecciones: [] },
 })
 
 // ── Normalization (any stored JSON → a valid document) ──────────────────────
@@ -349,6 +366,8 @@ const combatiente = (v: unknown): Combatiente | null => {
     habilidades,
     notas: texto(v.notas),
     derrotado: logico(v.derrotado),
+    oculto: logico(v.oculto),
+    mostrarSalud: logico(v.mostrarSalud),
   }
 }
 
@@ -367,8 +386,15 @@ const encuentro = (v: unknown): Encuentro | null =>
             : esObj(s) && texto(s.nombre) ? { nombre: texto(s.nombre), motivo: una(s.motivo, MOTIVOS_SALIDA, 'derrotado') }
               : null),
         escenaId: typeof v.escenaId === 'string' && v.escenaId ? v.escenaId : null,
+        enMesa: logico(v.enMesa),
       }
     : null
+
+/** «La mesa» of the director: the current projection and the session's history, both missing in older documents */
+const mesaDirector = (v: unknown): MesaDirector => {
+  const o = esObj(v) ? v : {}
+  return { proyeccion: proyeccionDe(o.proyeccion), proyecciones: lista(o.proyecciones, proyeccionDe).slice(0, MAX_PROYECCIONES) }
+}
 
 const NOMBRE_TIPO: Record<TipoEscena, string> = {
   narrative: 'narrativa', social: 'social', exploration: 'exploración', combat: 'combate', choice: 'decisión',
@@ -534,6 +560,7 @@ export function normalizarEstado(raw: unknown): PantallaEstado {
     historial: lista(o.historial, sesion).slice(0, MAX_HISTORIAL),
     tiradasPrivadas: lista(o.tiradasPrivadas, tiradaPrivada).slice(0, MAX_TIRADAS_PRIVADAS),
     cambios: lista(o.cambios, cambio).slice(0, MAX_CAMBIOS),
+    mesa: mesaDirector(o.mesa),
   }
 }
 
@@ -614,6 +641,8 @@ export function terminarSesion(b: PantallaEstado, archivar: (esc: EscenaPropia) 
   b.historial.splice(MAX_HISTORIAL)
   for (const s of b.historial.slice(MAX_SESIONES_CON_ESCENAS)) for (const e of s.escenas) e.md = ''
   b.sesion = null
+  // The next session starts with a clean table: nothing projected, no history of images
+  b.mesa = { proyeccion: null, proyecciones: [] }
 }
 
 export function guardarTiradaPrivada(b: PantallaEstado, t: Omit<TiradaPrivada, 'id' | 'en'>) {
@@ -663,7 +692,7 @@ export function pasoRecurso(b: PantallaEstado, c: Combatiente, clave: 'concentra
 // ── Encounter ────────────────────────────────────────────────────────────────
 
 export function nuevoEncuentro(titulo = 'Encuentro', escenaId: string | null = null): Encuentro {
-  return { id: nuevoId(), titulo, ronda: 1, fase: 'pj-rapido', iniciadoEn: ahoraIso(), combatientes: [], retirados: [], escenaId }
+  return { id: nuevoId(), titulo, ronda: 1, fase: 'pj-rapido', iniciadoEn: ahoraIso(), combatientes: [], retirados: [], escenaId, enMesa: false }
 }
 
 /** The encounter on screen: the active one or, if its id is stale, the first open one */

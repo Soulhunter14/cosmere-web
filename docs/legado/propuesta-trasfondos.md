@@ -1,4 +1,12 @@
-# Trasfondos de los legados: revisión y propuesta (v2)
+# Trasfondos de los legados: revisión y propuesta (v3)
+
+**Cambios de la v3** (24 de octubre de 2026, noche, tras la segunda revisión de Xavi): el trasfondo pasa a **tres preguntas** por
+legado, propias de la mesa, que son el hilo conductor de la escena de cada uno en la sesión 0: **origen** (por qué eres de ese
+legado), **impulso** (qué te empuja a dejar lo que eres e intentar cambiar las cosas; «cambiar las cosas» mira al mundo, no solo a su
+suerte) y **meta** (qué buscas cuando las cosas cambien). La pregunta de la banda desaparece: la tercera la absorbe. Las tres llevan
+ejemplos. Viven en `src/data/mistborn/legados.ts` (la API admite ahora tres respuestas, `MistbornData.PreguntasLegado`); la biblia
+las repite en «El trasfondo: tres preguntas» (apartado 3, abajo, ya en su versión v3) y las líneas «Del trasfondo» de cada escena
+dicen qué hacer con cada una (texto final en la biblia y en el guion; las del apartado 5 son las de la v2).
 
 24 de octubre de 2026. Revisión de los seis legados de la sesión 0 («La caída») contra la idea de campaña de la biblia y
 contra *El legado de los nacidos de la bruma*. Los textos de los apartados 3, 4 y 5 están listos para pegar en la
@@ -70,58 +78,71 @@ legados hablan de la banda y de la Era 2 antes de tiempo, y falta la pregunta de
 11. **Pequeñas.** El apellido del Noble no puede ser el de una casa del libro; Jedd tiene que acabar en el ejército de
     Straff; el sello del ojo dorado aparece tres veces (lista, estuche, carros) y nadie lo une.
 
-## 3. El trasfondo: dos preguntas antes de jugar
+## 3. El trasfondo: tres preguntas antes de jugar (v3)
 
 **Dónde:** «Cómo funciona», el párrafo «Un trasfondo con motivos para la banda» se sustituye por este, y detrás va un
-apartado nuevo «El trasfondo: dos preguntas» (antes de «El tono»).
+apartado nuevo «El trasfondo: tres preguntas» (antes de «El tono»). Las mismas preguntas y ejemplos están en
+`src/data/mistborn/legados.ts`, que es donde las responde el jugador.
 
 Párrafo que sustituye a «Un trasfondo con motivos para la banda»:
 
-> **Un trasfondo antes de jugar.** Al elegir el legado, cada jugador responde por escrito a dos preguntas: por qué es de
-> ese legado (cada legado tiene la suya) y qué buscaría en una banda si se uniera a una. Los personajes no saben que van
-> a acabar en ninguna: lo que haya al final de la noche lo descubren jugando. Las respuestas le sirven al máster para
-> preparar la sesión (cada escena dice cómo usarlas) y para el cierre en Urteau.
+> **Un trasfondo antes de jugar.** Al elegir el legado, cada jugador responde en su hoja de personaje (pestaña
+> «Trasfondo») a las tres preguntas del legado: por qué es de ese legado, qué le empuja a dejar lo que es e intentar
+> cambiar las cosas, y qué busca cuando las cosas cambien. Los personajes no saben que van a acabar en una banda: lo que
+> haya al final de la noche lo descubren jugando. Las respuestas son el hilo conductor de la escena de cada uno: el máster
+> las lee antes de la sesión, cada escena dice en «Del trasfondo» qué hacer con ellas, y la tercera vuelve en Urteau.
 
 Apartado nuevo:
 
-> ### El trasfondo: dos preguntas
+> ### El trasfondo: tres preguntas
 >
-> Se responden por escrito, en unas líneas, antes de la sesión. Las respuestas de ejemplo son para dar ideas y para que el
-> origen encaje con el Imperio Final; el jugador puede inventar la suya.
+> Se responden en la hoja de personaje (pestaña «Trasfondo»), en unas líneas, antes de la sesión. Las tres miran a lo mismo
+> desde tres sitios: de dónde viene el personaje (origen), qué le empuja a dejar lo que es e intentar cambiar las cosas
+> (impulso) y qué busca cuando las cosas cambien (meta). «Cambiar las cosas» mira al mundo (el Imperio, los skaa, su casa),
+> no solo a su propia suerte. La app muestra las mismas preguntas con unos ejemplos para que encajen con el Imperio Final;
+> el jugador puede inventar los suyos.
 >
-> **1. ¿Por qué eres de este legado?** Una pregunta por legado:
+> **Convicto:** ¿Cómo acabaste en una celda del Ministerio? (nací en una plantación y me escapé · me vendió alguien de
+> confianza · caí en una redada que no iba a por mí · me entregué para que no se llevaran a otra persona) · ¿Qué te empuja
+> a querer cambiar las cosas, y no solo salir de aquí? (lo que he visto en la galería · alguien que entró conmigo y no va a
+> salir · la promesa que le hice a quien dejé fuera · que nadie tenga que dar un nombre falso para seguir vivo) · ¿Qué
+> buscas cuando las cosas cambien? (que las celdas se abran para quien no hizo nada · un nombre limpio · cobrarme lo que me
+> quitaron · que la gente de mi calle coma sin robar).
 >
-> - **Convicto: ¿Cómo acabaste en una celda del Ministerio?** Nací en una plantación y me escapé: la celda fue donde
->   acabó la huida · Me vendió alguien de confianza: un socio, un pariente, mi propia red · Caí en una redada que no iba a
->   por mí; estaba donde no debía · Me entregué para que no se llevaran a otra persona.
-> - **Funcionario: ¿Por qué entraste en el Ministerio de Acero?** Mi familia lleva generaciones dando obligadores al
->   Ministerio: no hubo elección · Era la única salida para una casa menor sin herencia que repartir · Creía de verdad en
->   el lord Legislador, y ya no · Alguien pagó mi puesto a cambio de un favor que todavía debo.
-> - **Noble: ¿Qué lugar ocupas en tu casa, y por qué nunca encajaste en él?** Sin derecho a heredar: me educaron para
->   servir a quien hereda · Quien hace las preguntas que la casa no quiere oír · Quien pasa más tiempo con los criados que
->   en el salón · Moneda de cambio: me prometieron a otra casa para pagar una deuda.
-> - **Pilluelo: ¿Cómo acabaste en la calle?** Nací en los Laberintos y no conocí a mis padres · A mi familia se la
->   llevaron (una redada, una deuda, un capricho noble) y yo me escondí · Huí de una plantación, o de la casa noble donde
->   servía · Me echaron de un taller o de un gremio, y la calle fue lo que quedó.
-> - **Veterano: ¿Por qué te uniste al ejército?** La leva se llevó a los jóvenes de mi calle, y yo estaba en ella · Para
->   comer: era el uniforme o los Pozos · Mi casa, pequeña, debía soldados a los Haught, y me tocó a mí · Para huir de
->   algo, o de alguien, que la guerra tapó.
-> - **Cronista: ¿Quién te puso una pluma en la mano, y por qué sigues escribiendo?** Un guardador terrisano me enseñó a
->   escondidas, y con la letra, lo prohibido · Mi señor necesitaba a alguien que anotara lo que él no quería recordar ·
->   Me formó el Ministerio, y me fui (o me echaron) con lo aprendido.
+> **Funcionario:** ¿Por qué entraste en el Ministerio de Acero? (familia de obligadores · casa menor sin herencia · creía de
+> verdad · alguien pagó mi puesto) · ¿Qué te empuja a dejar de servir al Ministerio e intentar cambiar las cosas? (un
+> expediente que firmé · las cuentas de skaa muertos · una súplica que no pude atender · lo que hace el Cantón de la
+> Inquisición con sus listas) · ¿Qué buscas cuando las cosas cambien? (que nadie muera por una firma · sacar a la luz lo
+> enterrado · una ley igual para skaa y nobles · que me juzguen, y que sirva de algo).
 >
-> **2. Si te unieras a una banda, ¿qué buscarías en ella?** La misma para todos:
+> **Noble:** ¿Qué lugar ocupas en tu casa, y por qué nunca encajaste en él? (sin derecho a heredar · quien hace preguntas ·
+> más tiempo con los criados · moneda de cambio) · ¿Qué te empuja a romper con tu casa e intentar cambiar las cosas? (lo que
+> vi hacer con sus skaa · un pacto que me enseñaron a no leer · alguien de abajo que me importó más que mi apellido · la
+> casa está acabada) · ¿Qué buscas fuera de la fortaleza, cuando las cosas cambien? (un mundo donde el apellido no mande ·
+> recuperar mi casa con otras reglas · que mi familia pague lo que firmó · valer por lo que hago).
 >
-> - Paga y techo: un trabajo que dé de comer y un sitio donde dormir sin cadenas.
-> - Gente que no pregunte por mi pasado.
-> - Una familia: alguien que note si no vuelvo.
-> - Una causa: devolver el golpe a quien me hizo esto.
-> - Protección: alguien entre quien me busca y yo.
-> - Alguien a quien seguir, o gente a la que mandar.
+> **Pilluelo:** ¿Cómo acabaste en la calle? (nací en los Laberintos · se llevaron a mi familia · huí de una plantación o de
+> una casa · me echaron de un taller) · ¿Qué te empuja a dejar de robar para otros e intentar cambiar las cosas? (un crío de
+> la red al que se llevaron por mí · lo que robo acaba en el mismo bolsillo · un noble que me pagó por algo que no era un
+> robo · media ciudad quieta por miedo) · ¿Qué buscas cuando las cosas cambien? (sentarme a la mesa de los carruajes · que
+> nadie robe para comer · que los míos estén bien · una red que trabaje para la calle).
 >
-> **Cómo las usa el máster.** La primera dice cómo leer al personaje en su escena de la mañana: cada escena lleva una línea
-> «Del trasfondo» que la recoge. La segunda se guarda hasta el final: en «Llegada a Urteau» es lo que Enge le ofrece a
-> cada uno, o lo que le falta por conseguir.
+> **Veterano:** ¿Por qué te uniste al ejército? (la leva · para comer · mi casa debía soldados a los Haught · para huir de
+> algo) · ¿Qué te empuja a colgar la librea e intentar cambiar las cosas? (una orden que no cumplí · pueblos quemados que
+> nadie anotó · los míos mueren por órdenes de gente que no sabe sus nombres · un señor que no sabe el mío) · ¿Qué buscas,
+> si consigues dejar de obedecer? (una causa · que nadie mande cargar contra desarmados · proteger a quien no pueda
+> defenderse · que las decisiones las tome yo).
+>
+> **Cronista:** ¿Quién te puso una pluma en la mano, y por qué sigues escribiendo? (un guardador a escondidas · mi señor ·
+> el Ministerio) · ¿Qué te empuja a dejar de escribir lo que te mandan y a escribir lo que pasa? (una crónica que me
+> hicieron tachar · un nombre que el Ministerio borró · lo que escribo es lo único que quedará de esta gente · la historia
+> se cuenta junto al fuego y nadie la anota) · ¿Qué buscas con tu crónica, cuando las cosas cambien? (que la verdad
+> sobreviva · salvar lo que otros quieren quemar · que quien venga después entienda · un sitio donde escribir sin permiso).
+>
+> **Cómo las usa el máster.** La de origen colorea la entrada de la escena y a sus PNJ. La de impulso manda sobre el dilema
+> de la escena (pregunta 4) y sobre los cruces con los demás; donde la escena ya pregunta el impulso con opciones (el
+> Veterano en la 1, el Funcionario en la 2), el jugador elige la que encaje con lo que escribió. La de meta se cruza con la
+> pregunta 5 y vuelve en «Llegada a Urteau»: es lo que Enge le ofrece, o lo que le falta.
 
 ## 4. Cambios transversales
 

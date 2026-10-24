@@ -4,9 +4,11 @@
  * legacies, answers its two questions and takes its extra skill; in Era 2 each player picks the legacy linked to one of the Era 1
  * characters and gets one of its two starting rewards, depending on what that character did during the adventure.
  *
- * The Era 1 questions are this table's own (24 Oct 2026): why the character is of that legacy, and what it would look for in a crew. The
- * book's two questions are answered by playing the session 0 «La caída» (biblia de campaña). The backstory is written before the
- * character knows it will belong to a crew, so no Era 1 text names Enge's crew, and the Era 1 cards do not show their Era 2 link for now.
+ * The Era 1 questions are this table's own (24 Oct 2026), three per legacy: where the character comes from (origin), what pushes it to
+ * leave what it is and try to change things (impulse) and what it seeks once things change (goal). They are the thread of each
+ * character's session 0 scene; the book's two questions are answered by playing that session («La caída», biblia de campaña). The
+ * backstory is written before the character knows it will belong to a crew, so no Era 1 text names Enge's crew, and the Era 1 cards do
+ * not show their Era 2 link for now. The Era 2 legacies keep the book's two questions.
  *
  * Ids are ASCII (P7) and must match `MistbornData.Legados` in the API. Texts are short paraphrases of the book, not quotations.
  * Light module: the legacy components import it BY FILE and load lazily (§8, risk 6), so it imports nothing but types.
@@ -29,10 +31,10 @@ export interface LegadoDef {
   /** How both characters are linked */
   vinculo: string
   resumen: string
-  /** The two «Preguntas para el personaje» */
-  preguntas: [string, string]
-  /** Example answers of each question, a hint in the picker: they give the origin a shape that fits the Final Empire */
-  ejemplos?: [string[], string[]]
+  /** The «Preguntas para el personaje»: three in Era 1 (origin, impulse, goal), the book's two in Era 2. The API stores at most 3 answers */
+  preguntas: string[]
+  /** Example answers of each question (same order), a hint in the picker: they give the answers a shape that fits the Final Empire */
+  ejemplos?: string[][]
   /** Era 1: extra skill, on top of the ones of character creation */
   pericia?: string
   /** Era 2: two starting rewards; the character gets only one */
@@ -47,27 +49,19 @@ export const RECOMPENSA_POR_DEFECTO: Omit<RecompensaLegado, 'condicion'> = {
     'vecino, que le acompaña como compañero guardaespaldas durante un día. También vale otra recompensa de rango 1 acordada con el director.',
 }
 
-/** Second question of every Era 1 legacy: what the character would look for in a crew, answered before knowing there will be one */
-export const PREGUNTA_BANDA = 'Si te unieras a una banda, ¿qué buscarías en ella?'
-
-const EJEMPLOS_BANDA = [
-  'Paga y techo: un trabajo que dé de comer y un sitio donde dormir sin cadenas',
-  'Gente que no pregunte por mi pasado',
-  'Una familia: alguien que note si no vuelvo',
-  'Una causa: devolver el golpe a quien me hizo esto',
-  'Protección: alguien entre quien me busca y yo',
-  'Alguien a quien seguir, o gente a la que mandar',
-]
-
 export const LEGADOS: LegadoDef[] = [
-  // ── Era 1 (L.20-21 / PDF 23-24); summaries valid before and after the fall, questions of this table ──
+  // ── Era 1 (L.20-21 / PDF 23-24); summaries valid before and after the fall; questions of this table: origin, impulse, goal ──
   {
     id: 'convicto', nombre: 'Convicto', era: 'era1', conexion: 'narrador',
     vinculo: 'Su historia es el tema principal de la obra del Narrador.',
     resumen:
       'Sabe lo que es estar preso a merced del lord Legislador: una celda, un número y el Ministerio de Acero detrás. Lo que aprendió ' +
       'dentro (quién manda, quién mira, por dónde se sale) es todo lo que tiene.',
-    preguntas: ['¿Cómo acabaste en una celda del Ministerio?', PREGUNTA_BANDA],
+    preguntas: [
+      '¿Cómo acabaste en una celda del Ministerio?',
+      '¿Qué te empuja a querer cambiar las cosas, y no solo salir de aquí?',
+      '¿Qué buscas cuando las cosas cambien?',
+    ],
     ejemplos: [
       [
         'Nací en una plantación y me escapé: la celda fue donde acabó la huida',
@@ -75,7 +69,18 @@ export const LEGADOS: LegadoDef[] = [
         'Caí en una redada que no iba a por mí; estaba donde no debía',
         'Me entregué para que no se llevaran a otra persona',
       ],
-      EJEMPLOS_BANDA,
+      [
+        'Lo que he visto en la galería: a quién encierran de verdad, y por qué',
+        'Alguien que entró conmigo y no va a salir',
+        'La promesa que le hice a quien dejé fuera',
+        'Que nadie tenga que dar un nombre falso para seguir vivo',
+      ],
+      [
+        'Que las celdas se abran para quien no hizo nada',
+        'Un nombre limpio y una calle donde nadie me mire de reojo',
+        'Cobrarme lo que me quitaron, con intereses',
+        'Que la gente de mi calle coma sin robar',
+      ],
     ],
     pericia: 'Pericia de utilidad Fuerzas del orden o pericia cultural Bajos fondos: lo que aprendió dentro del sistema.',
   },
@@ -85,14 +90,29 @@ export const LEGADOS: LegadoDef[] = [
     resumen:
       'Quiere dejar testimonio de la historia mientras sucede, para que sus crónicas sean un bastión de la verdad en el mundo que viene. ' +
       'Puede hacerlo por su cuenta o con el respaldo de una institución, como los guardadores feruquimistas de Terris.',
-    preguntas: ['¿Quién te puso una pluma en la mano, y por qué sigues escribiendo?', PREGUNTA_BANDA],
+    preguntas: [
+      '¿Quién te puso una pluma en la mano, y por qué sigues escribiendo?',
+      '¿Qué te empuja a dejar de escribir lo que te mandan y a escribir lo que pasa?',
+      '¿Qué buscas con tu crónica, cuando las cosas cambien?',
+    ],
     ejemplos: [
       [
         'Un guardador terrisano me enseñó a escondidas, y con la letra, lo prohibido',
         'Mi señor necesitaba a alguien que anotara lo que él no quería recordar',
         'Me formó el Ministerio, y me fui (o me echaron) con lo aprendido',
       ],
-      EJEMPLOS_BANDA,
+      [
+        'Una crónica que me hicieron tachar',
+        'Un nombre que el Ministerio borró y yo recuerdo',
+        'Saber que lo que escribo hoy es lo único que quedará de esta gente',
+        'Que la historia de verdad se cuenta junto al fuego, y nadie la anota',
+      ],
+      [
+        'Que la verdad sobreviva a quien la escribió',
+        'Salvar lo que otros quieren quemar',
+        'Que quien venga después entienda lo que pasó hoy',
+        'Un sitio donde escribir sin pedir permiso',
+      ],
     ],
     pericia: 'Pericia cultural Peregrina o Dominio de Terris: sus viajes o el lugar donde reunió sus registros.',
   },
@@ -102,7 +122,11 @@ export const LEGADOS: LegadoDef[] = [
     resumen:
       'Obligador del Ministerio de Acero, o alguien muy cercano al gobierno del Imperio Final. Conoce sus papeles, sus cantones y sus ' +
       'injusticias desde dentro, y algo de lo que ha firmado le pesa.',
-    preguntas: ['¿Por qué entraste en el Ministerio de Acero?', PREGUNTA_BANDA],
+    preguntas: [
+      '¿Por qué entraste en el Ministerio de Acero?',
+      '¿Qué te empuja a dejar de servir al Ministerio e intentar cambiar las cosas?',
+      '¿Qué buscas cuando las cosas cambien?',
+    ],
     ejemplos: [
       [
         'Mi familia lleva generaciones dando obligadores al Ministerio: no hubo elección',
@@ -110,7 +134,18 @@ export const LEGADOS: LegadoDef[] = [
         'Creía de verdad en el lord Legislador, y ya no',
         'Alguien pagó mi puesto a cambio de un favor que todavía debo',
       ],
-      EJEMPLOS_BANDA,
+      [
+        'Un expediente que firmé y no debí firmar',
+        'Las cuentas: el Ministerio cobra por skaa que llevan años muertos',
+        'Una súplica que no pude atender y no se me va de la cabeza',
+        'Saber lo que hace el Cantón de la Inquisición con los nombres de sus listas',
+      ],
+      [
+        'Que nadie vuelva a morir por una firma',
+        'Sacar a la luz lo que el Ministerio enterró',
+        'Una ley que valga igual para skaa y nobles',
+        'Pagar lo mío: que me juzguen, y que sirva de algo',
+      ],
     ],
     pericia: 'Pericia de utilidad Ministerio de Acero o pericia cultural Dominios Interiores: según trabajara más con el Ministerio o con la nobleza.',
   },
@@ -120,7 +155,11 @@ export const LEGADOS: LegadoDef[] = [
     resumen:
       'Ocupa un lugar privilegiado en la cruel jerarquía del Imperio Final, pero no encaja en él. Un acto de rebeldía o un fracaso le ' +
       'dejará fuera de su casa, y tendrá que buscarse la vida.',
-    preguntas: ['¿Qué lugar ocupas en tu casa, y por qué nunca encajaste en él?', PREGUNTA_BANDA],
+    preguntas: [
+      '¿Qué lugar ocupas en tu casa, y por qué nunca encajaste en él?',
+      '¿Qué te empuja a romper con tu casa e intentar cambiar las cosas?',
+      '¿Qué buscas fuera de la fortaleza, cuando las cosas cambien?',
+    ],
     ejemplos: [
       [
         'Sin derecho a heredar: me educaron para servir a quien hereda',
@@ -128,7 +167,18 @@ export const LEGADOS: LegadoDef[] = [
         'Quien pasa más tiempo con los criados que en el salón',
         'Moneda de cambio: me prometieron a otra casa para pagar una deuda',
       ],
-      EJEMPLOS_BANDA,
+      [
+        'Lo que vi hacer a mi familia con sus skaa, y que todos llaman normal',
+        'Un pacto de la casa que me enseñaron a no leer',
+        'Alguien de abajo que me importó más que mi apellido',
+        'Que la casa está acabada y nadie quiere decirlo en voz alta',
+      ],
+      [
+        'Un mundo donde el apellido no decida quién manda',
+        'Recuperar mi casa, pero con otras reglas',
+        'Que mi familia pague lo que firmó',
+        'Valer por lo que hago, no por lo que heredé',
+      ],
     ],
     pericia: 'Pericia cultural Alta sociedad o Luthadel (la segunda, si representó a su familia en la política de la capital).',
   },
@@ -138,7 +188,11 @@ export const LEGADOS: LegadoDef[] = [
     resumen:
       'De origen humilde, quiere salir de la miseria y del anonimato cueste lo que cueste. El clasismo manda en Luthadel: los nobles ' +
       'desconfían de los pilluelos y los skaa suelen simpatizar con ellos.',
-    preguntas: ['¿Cómo acabaste en la calle?', PREGUNTA_BANDA],
+    preguntas: [
+      '¿Cómo acabaste en la calle?',
+      '¿Qué te empuja a dejar de robar para otros e intentar cambiar las cosas?',
+      '¿Qué buscas cuando las cosas cambien?',
+    ],
     ejemplos: [
       [
         'Nací en los Laberintos y no conocí a mis padres',
@@ -146,7 +200,18 @@ export const LEGADOS: LegadoDef[] = [
         'Huí de una plantación, o de la casa noble donde servía',
         'Me echaron de un taller o de un gremio, y la calle fue lo que quedó',
       ],
-      EJEMPLOS_BANDA,
+      [
+        'Un crío de la red al que se llevaron por un encargo mío',
+        'Que lo que robo acaba siempre en el mismo bolsillo',
+        'Un noble que me pagó por algo que no era un robo',
+        'Ver que media ciudad se queda quieta por miedo',
+      ],
+      [
+        'Sentarme a la mesa de los que hoy miran desde los carruajes',
+        'Que en los Laberintos nadie tenga que robar para comer',
+        'Que los míos estén bien, cueste lo que cueste',
+        'Una red que trabaje para la calle, no contra ella',
+      ],
     ],
     pericia: 'Pericia cultural Bajos fondos; quien aspire a la nobleza (o a suplantar nobles y estafar) puede tomar Alta sociedad en su lugar.',
   },
@@ -156,7 +221,11 @@ export const LEGADOS: LegadoDef[] = [
     resumen:
       'Luchó en las campañas del lord Legislador, por la leva o al mando en nombre de su casa noble. Años de servicio le han enseñado ' +
       'lo que hay detrás de una victoria, y piensa en desertar para decidir su propio destino.',
-    preguntas: ['¿Por qué te uniste al ejército?', PREGUNTA_BANDA],
+    preguntas: [
+      '¿Por qué te uniste al ejército?',
+      '¿Qué te empuja a colgar la librea e intentar cambiar las cosas?',
+      '¿Qué buscas, si consigues dejar de obedecer?',
+    ],
     ejemplos: [
       [
         'La leva se llevó a los jóvenes de mi calle, y yo estaba en ella',
@@ -164,7 +233,18 @@ export const LEGADOS: LegadoDef[] = [
         'Mi casa, pequeña, debía soldados a los Haught, y me tocó a mí',
         'Para huir de algo, o de alguien, que la guerra tapó',
       ],
-      EJEMPLOS_BANDA,
+      [
+        'Una orden que no cumplí, y la cara de quien me la dio',
+        'Lo que había detrás de una victoria: pueblos quemados que nadie anotó',
+        'Los míos mueren por órdenes de gente que no sabe sus nombres',
+        'Un señor al que llevo años sirviendo y que no sabe el mío',
+      ],
+      [
+        'Una causa por la que valga la pena pelear',
+        'Que nadie vuelva a mandar cargar contra gente desarmada',
+        'Proteger a quien no pueda defenderse',
+        'Que las decisiones las tome yo',
+      ],
     ],
     pericia: 'Pericia de utilidad Vida militar o pericia cultural Dominios Exteriores: según las guarniciones donde sirvió.',
   },

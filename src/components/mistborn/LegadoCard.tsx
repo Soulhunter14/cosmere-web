@@ -1,6 +1,6 @@
 /**
  * The legacy of a character on the «Trasfondo» tab (adventure «El legado de los nacidos de la bruma», L.19-23 / PDF 22-26): what it is,
- * how it links to the other era (shown in Era 2 only, for now), its two questions with the character's answers and its extra skill (Era 1) or its starting rewards (Era 2). The sheet only shows
+ * how it links to the other era (shown in Era 2 only, for now), its questions (three in Era 1, two in Era 2) with the character's answers and its extra skill (Era 1) or its starting rewards (Era 2). The sheet only shows
  * them: the skill and the reward are written by hand, because the app does not track skills of utility or culture. Loaded lazily from
  * components/mistborn/index.ts and importing its data BY FILE, so none of it reaches the main chunk (§8, risk 6).
  */

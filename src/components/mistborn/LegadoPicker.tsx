@@ -1,6 +1,6 @@
 /**
  * Picker of the legacy of a character (adventure «El legado de los nacidos de la bruma», L.19-23 / PDF 22-26), in two steps: the legacy
- * (the six of the era of the campaign plus «Sin legado») and then the answers to its two «Preguntas para el personaje». It can open on
+ * (the six of the era of the campaign plus «Sin legado») and then the answers to its «Preguntas para el personaje» (three in Era 1, two in Era 2). It can open on
  * the second step to edit the answers of the saved legacy. The owner or the director use it outside edit mode, with an immediate save
  * (like the Blessings). In Era 2 each row says which Era 1 legacy it is linked to: offering only the ones linked to the Era 1 characters
  * of the group is the director's call; an Era 1 row does not show its Era 2 link for now (24 Oct 2026). Under each question, the legacy's
@@ -39,6 +39,9 @@ const normalizar = (r: string[]) => {
 
 const mismas = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i])
 
+/** A draft per question of the legacy `id`, from the saved answers (in the order of the questions) */
+const borradorDe = (id: string, guardadas: string[]) => (getLegado(id)?.preguntas ?? []).map((_, i) => guardadas[i] ?? '')
+
 export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = 'legado', onConfirm }: LegadoPickerProps) {
   const cfg = useWorldConfig()
   const era = useEra()
@@ -50,14 +53,15 @@ export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = '
   // The picker is mounted when it opens (the sheet renders it only then), so the initial state is the saved one
   const [paso, setPaso] = useState<'legado' | 'preguntas'>(pasoInicial === 'preguntas' && value ? 'preguntas' : 'legado')
   const [seleccion, setSeleccion] = useState(value)
-  const [borrador, setBorrador] = useState<[string, string]>([respuestas[0] ?? '', respuestas[1] ?? ''])
+  // One draft per question of the legacy (three in Era 1, two in Era 2): the saved answers in order, blank where there is none
+  const [borrador, setBorrador] = useState<string[]>(() => borradorDe(value, respuestas))
 
   const def = getLegado(seleccion)
   // Back to the saved legacy, its saved answers come back; another legacy starts blank (its questions are different)
   const elegir = (id: string) => {
     if (id === seleccion) return
     setSeleccion(id)
-    setBorrador(id === value ? [respuestas[0] ?? '', respuestas[1] ?? ''] : ['', ''])
+    setBorrador(borradorDe(id, id === value ? respuestas : []))
   }
 
   const finales = seleccion ? normalizar(borrador) : []
@@ -95,16 +99,16 @@ export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = '
                 id={`${idBase}-${i}`}
                 rows={4}
                 maxLength={MAX_RESPUESTA}
-                value={borrador[i]}
+                value={borrador[i] ?? ''}
                 aria-describedby={def.ejemplos?.[i]?.length ? `${idBase}-${i}-ejemplos ${idBase}-${i}-cuenta` : `${idBase}-${i}-cuenta`}
                 data-autofocus={i === 0 || undefined}
                 onChange={(e) => {
                   const texto = e.target.value
-                  setBorrador((cur) => (i === 0 ? [texto, cur[1]] : [cur[0], texto]))
+                  setBorrador((cur) => cur.map((x, j) => (j === i ? texto : x)))
                 }}
                 placeholder="Tu respuesta…"
               />
-              <p id={`${idBase}-${i}-cuenta`} style={{ fontSize: fs.xs, color: c.subtle, textAlign: 'right' }}>{borrador[i].length}/{MAX_RESPUESTA}</p>
+              <p id={`${idBase}-${i}-cuenta`} style={{ fontSize: fs.xs, color: c.subtle, textAlign: 'right' }}>{(borrador[i] ?? '').length}/{MAX_RESPUESTA}</p>
             </div>
           ))}
         </div>
@@ -118,7 +122,7 @@ export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = '
       open={open}
       onClose={onClose}
       title="Legado"
-      description="El trasfondo del personaje y su lugar en el mundo. Después responderás sus dos preguntas."
+      description="El trasfondo del personaje y su lugar en el mundo. Después responderás sus preguntas."
       maxWidth={520}
       footer={(
         <>

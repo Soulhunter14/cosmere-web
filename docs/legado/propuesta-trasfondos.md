@@ -108,8 +108,7 @@ Apartado nuevo:
 >   algo, o de alguien, que la guerra tapó.
 > - **Cronista: ¿Quién te puso una pluma en la mano, y por qué sigues escribiendo?** Un guardador terrisano me enseñó a
 >   escondidas, y con la letra, lo prohibido · Mi señor necesitaba a alguien que anotara lo que él no quería recordar ·
->   Me formó el Ministerio, y me fui (o me echaron) con lo aprendido · Mi pueblo es Terris: guarda la memoria del mundo,
->   y yo la pongo por escrito.
+>   Me formó el Ministerio, y me fui (o me echaron) con lo aprendido.
 >
 > **2. Si te unieras a una banda, ¿qué buscarías en ella?** La misma para todos:
 >

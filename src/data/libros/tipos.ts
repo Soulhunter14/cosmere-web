@@ -63,7 +63,7 @@ export interface AdventureMap {
   id: string
   title: string
   pdfPage?: number
-  imagePath?: string   // path relative to /public, e.g. "/maps/map_p32.webp"
+  imagePath?: string   // path relative to /public, e.g. "/maps/caminapiedras/mapa-1-2.webp"
   scale: string
   locations: string[]
   notes?: string

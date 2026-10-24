@@ -771,7 +771,7 @@ export const CHAPTER_2: AdventureChapter = {
       id: '2.1',
       title: 'Campamento de guerra de los Kholin',
       pdfPage: 41,
-      imagePath: '/maps/map_p41.webp',
+      imagePath: '/maps/caminapiedras/mapa-2-1.webp',
       scale: 'Vista general sin escala',
       locations: [
         'El Chull Gruñón',
@@ -788,13 +788,13 @@ export const CHAPTER_2: AdventureChapter = {
         'Zona de preparación',
         'Talleres de construcción',
       ],
-      notes: 'Muestra los lugares útiles del campamento de los Kholin; el capítulo prevé que los PJs visiten el monasterio (en el complejo del templo), el búnker de Bettani, el Devotario de la mente y el cuartel del sargento Ellar.',
+      notes: 'Muestra los lugares útiles del campamento de los Kholin; el capítulo prevé que los PJs visiten el monasterio (en el complejo del templo), el búnker de Bettani, el Devotario de la mente y el cuartel del sargento Ellar. Imagen tomada del libro (L. 37), con sus rótulos en castellano.',
     },
     {
       id: '2.2',
       title: 'El complejo del templo',
       pdfPage: 57,
-      imagePath: '/maps/map_p57.webp',
+      imagePath: '/maps/caminapiedras/mapa-2-2.webp',
       scale: 'Sin escala indicada',
       locations: [
         'Templo',
@@ -804,13 +804,13 @@ export const CHAPTER_2: AdventureChapter = {
         'Puesto de guardia',
         'Almacén (dos)',
       ],
-      notes: 'Complejo del templo que alberga el monasterio. Se usa en el primer obstáculo de la infiltración (los guardias Kholin del perímetro) y en «Hijo de Honor».',
+      notes: 'Complejo del templo que alberga el monasterio. Se usa en el primer obstáculo de la infiltración (los guardias Kholin del perímetro) y en «Hijo de Honor». La imagen es la vista general del PDF de mapas, con los rótulos en inglés: Temple (templo), Housing (aposentos), Monastery (monasterio), Training Complex (complejo de entrenamiento), Guard Post (puesto de guardia), Storage (almacén).',
     },
     {
       id: '2.3',
       title: 'Interior del monasterio',
       pdfPage: 59,
-      imagePath: '/maps/map_p59.webp',
+      imagePath: '/maps/caminapiedras/mapa-2-3.webp',
       scale: '1 casilla = 1,5 m',
       locations: [
         'Celda de Taln',
@@ -821,7 +821,7 @@ export const CHAPTER_2: AdventureChapter = {
         'Sala de espera',
         'Recepción y triaje',
       ],
-      notes: 'Interior del monasterio, al noreste del complejo del templo. Se usa en la infiltración en el fervor y en la escena con Taln.',
+      notes: 'Interior del monasterio, al noreste del complejo del templo. Se usa en la infiltración en el fervor y en la escena con Taln. La imagen es el montaje de las 16 losetas del PDF de mapas, sin los rótulos de las salas: los nombres de la lista salen del Mapa 2.3 del libro (L. 55).',
     },
   ],
 }

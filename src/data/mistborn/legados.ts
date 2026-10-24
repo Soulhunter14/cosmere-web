@@ -4,6 +4,10 @@
  * legacies, answers its two questions and takes its extra skill; in Era 2 each player picks the legacy linked to one of the Era 1
  * characters and gets one of its two starting rewards, depending on what that character did during the adventure.
  *
+ * The Era 1 questions are this table's own (24 Oct 2026): why the character is of that legacy, and what it would look for in a crew. The
+ * book's two questions are answered by playing the session 0 «La caída» (biblia de campaña). The backstory is written before the
+ * character knows it will belong to a crew, so no Era 1 text names Enge's crew, and the Era 1 cards do not show their Era 2 link for now.
+ *
  * Ids are ASCII (P7) and must match `MistbornData.Legados` in the API. Texts are short paraphrases of the book, not quotations.
  * Light module: the legacy components import it BY FILE and load lazily (§8, risk 6), so it imports nothing but types.
  */
@@ -27,6 +31,8 @@ export interface LegadoDef {
   resumen: string
   /** The two «Preguntas para el personaje» */
   preguntas: [string, string]
+  /** Example answers of each question, a hint in the picker: they give the origin a shape that fits the Final Empire */
+  ejemplos?: [string[], string[]]
   /** Era 1: extra skill, on top of the ones of character creation */
   pericia?: string
   /** Era 2: two starting rewards; the character gets only one */
@@ -41,15 +47,36 @@ export const RECOMPENSA_POR_DEFECTO: Omit<RecompensaLegado, 'condicion'> = {
     'vecino, que le acompaña como compañero guardaespaldas durante un día. También vale otra recompensa de rango 1 acordada con el director.',
 }
 
+/** Second question of every Era 1 legacy: what the character would look for in a crew, answered before knowing there will be one */
+export const PREGUNTA_BANDA = 'Si te unieras a una banda, ¿qué buscarías en ella?'
+
+const EJEMPLOS_BANDA = [
+  'Paga y techo: un trabajo que dé de comer y un sitio donde dormir sin cadenas',
+  'Gente que no pregunte por mi pasado',
+  'Una familia: alguien que note si no vuelvo',
+  'Una causa: devolver el golpe a quien me hizo esto',
+  'Protección: alguien entre quien me busca y yo',
+  'Alguien a quien seguir, o gente a la que mandar',
+]
+
 export const LEGADOS: LegadoDef[] = [
-  // ── Era 1 (L.20-21 / PDF 23-24) ──
+  // ── Era 1 (L.20-21 / PDF 23-24); summaries valid before and after the fall, questions of this table ──
   {
     id: 'convicto', nombre: 'Convicto', era: 'era1', conexion: 'narrador',
     vinculo: 'Su historia es el tema principal de la obra del Narrador.',
     resumen:
-      'Estuvo preso a merced del lord Legislador y escapó de la cárcel con una huida audaz. Tras esquivar al Ministerio de Acero, busca ' +
-      'una vida nueva en la red de contrabando de Enge.',
-    preguntas: ['¿Por qué delito te condenaron? ¿Lo cometiste de verdad?', '¿Cómo te escapaste de la prisión?'],
+      'Sabe lo que es estar preso a merced del lord Legislador: una celda, un número y el Ministerio de Acero detrás. Lo que aprendió ' +
+      'dentro (quién manda, quién mira, por dónde se sale) es todo lo que tiene.',
+    preguntas: ['¿Cómo acabaste en una celda del Ministerio?', PREGUNTA_BANDA],
+    ejemplos: [
+      [
+        'Nací en una plantación y me escapé: la celda fue donde acabó la huida',
+        'Me vendió alguien de confianza: un socio, un pariente, mi propia red',
+        'Caí en una redada que no iba a por mí; estaba donde no debía',
+        'Me entregué para que no se llevaran a otra persona',
+      ],
+      EJEMPLOS_BANDA,
+    ],
     pericia: 'Pericia de utilidad Fuerzas del orden o pericia cultural Bajos fondos: lo que aprendió dentro del sistema.',
   },
   {
@@ -58,18 +85,33 @@ export const LEGADOS: LegadoDef[] = [
     resumen:
       'Quiere dejar testimonio de la historia mientras sucede, para que sus crónicas sean un bastión de la verdad en el mundo que viene. ' +
       'Puede hacerlo por su cuenta o con el respaldo de una institución, como los guardadores feruquimistas de Terris.',
-    preguntas: ['¿Sobre qué tratan tus crónicas?', '¿Cómo llevas tu registro? ¿Tiene nombre?'],
+    preguntas: ['¿Quién te puso una pluma en la mano, y por qué sigues escribiendo?', PREGUNTA_BANDA],
+    ejemplos: [
+      [
+        'Un guardador terrisano me enseñó a escondidas, y con la letra, lo prohibido',
+        'Mi señor necesitaba a alguien que anotara lo que él no quería recordar',
+        'Me formó el Ministerio, y me fui (o me echaron) con lo aprendido',
+        'Mi pueblo es Terris: guarda la memoria del mundo, y yo la pongo por escrito',
+      ],
+      EJEMPLOS_BANDA,
+    ],
     pericia: 'Pericia cultural Peregrina o Dominio de Terris: sus viajes o el lugar donde reunió sus registros.',
   },
   {
     id: 'funcionario', nombre: 'Funcionario', era: 'era1', conexion: 'vigilante-de-la-ley',
     vinculo: 'Su filosofía influye en el trabajo del Vigilante de la ley.',
     resumen:
-      'Antiguo obligador del Ministerio de Acero, o alguien muy cercano al gobierno del Imperio Final. Tras la caída del lord Legislador ' +
-      'dejó su puesto para unirse a la red de Enge y poner su talento al servicio de algo mejor.',
-    preguntas: [
-      '¿A qué cantón del Ministerio estabas más ligado (Finanzas, Ortodoxia, Recursos…)? ¿Llevas los tatuajes de obligador alrededor de los ojos?',
-      '¿Qué te hizo ver las injusticias del Ministerio o de tu institución?',
+      'Obligador del Ministerio de Acero, o alguien muy cercano al gobierno del Imperio Final. Conoce sus papeles, sus cantones y sus ' +
+      'injusticias desde dentro, y algo de lo que ha firmado le pesa.',
+    preguntas: ['¿Por qué entraste en el Ministerio de Acero?', PREGUNTA_BANDA],
+    ejemplos: [
+      [
+        'Mi familia lleva generaciones dando obligadores al Ministerio: no hubo elección',
+        'Era la única salida para una casa menor sin herencia que repartir',
+        'Creía de verdad en el lord Legislador, y ya no',
+        'Alguien pagó mi puesto a cambio de un favor que todavía debo',
+      ],
+      EJEMPLOS_BANDA,
     ],
     pericia: 'Pericia de utilidad Ministerio de Acero o pericia cultural Dominios Interiores: según trabajara más con el Ministerio o con la nobleza.',
   },
@@ -77,27 +119,54 @@ export const LEGADOS: LegadoDef[] = [
     id: 'noble', nombre: 'Noble', era: 'era1', conexion: 'heredero',
     vinculo: 'Es de la misma familia que el Heredero.',
     resumen:
-      'Tuvo un lugar privilegiado en la cruel jerarquía del Imperio Final, pero por un acto de rebeldía o por un fracaso acabó repudiado ' +
-      'y tiene que buscarse la vida.',
-    preguntas: ['¿Cómo se llama tu familia y por qué era conocida?', '¿Por qué no podrás volver nunca con ella?'],
+      'Ocupa un lugar privilegiado en la cruel jerarquía del Imperio Final, pero no encaja en él. Un acto de rebeldía o un fracaso le ' +
+      'dejará fuera de su casa, y tendrá que buscarse la vida.',
+    preguntas: ['¿Qué lugar ocupas en tu casa, y por qué nunca encajaste en él?', PREGUNTA_BANDA],
+    ejemplos: [
+      [
+        'Sin derecho a heredar: me educaron para servir a quien hereda',
+        'Quien hace las preguntas que la casa no quiere oír',
+        'Quien pasa más tiempo con los criados que en el salón',
+        'Moneda de cambio: me prometieron a otra casa para pagar una deuda',
+      ],
+      EJEMPLOS_BANDA,
+    ],
     pericia: 'Pericia cultural Alta sociedad o Luthadel (la segunda, si representó a su familia en la política de la capital).',
   },
   {
     id: 'pilluelo', nombre: 'Pilluelo', era: 'era1', conexion: 'emprendedor',
     vinculo: 'Sus decisiones benefician al Emprendedor, su descendiente.',
     resumen:
-      'De origen humilde, está decidido a salir de la miseria y del anonimato. El clasismo sigue vivo en Luthadel: los nobles desconfían ' +
-      'de los pilluelos y los skaa suelen simpatizar con ellos.',
-    preguntas: ['¿Qué habilidad especial te hace indispensable para la banda?', '¿Quieres unirte a la élite rica o que todos jueguen en igualdad?'],
+      'De origen humilde, quiere salir de la miseria y del anonimato cueste lo que cueste. El clasismo manda en Luthadel: los nobles ' +
+      'desconfían de los pilluelos y los skaa suelen simpatizar con ellos.',
+    preguntas: ['¿Cómo acabaste en la calle?', PREGUNTA_BANDA],
+    ejemplos: [
+      [
+        'Nací en los Laberintos y no conocí a mis padres',
+        'A mi familia se la llevaron (una redada, una deuda, un capricho noble) y yo me escondí',
+        'Huí de una plantación, o de la casa noble donde servía',
+        'Me echaron de un taller o de un gremio, y la calle fue lo que quedó',
+      ],
+      EJEMPLOS_BANDA,
+    ],
     pericia: 'Pericia cultural Bajos fondos; quien aspire a la nobleza (o a suplantar nobles y estafar) puede tomar Alta sociedad en su lugar.',
   },
   {
     id: 'veterano', nombre: 'Veterano', era: 'era1', conexion: 'novato',
     vinculo: 'Sus hazañas legendarias ponen el listón muy alto al Novato.',
     resumen:
-      'Luchó en las campañas del lord Legislador, reclutado a la fuerza o al mando en nombre de su casa noble. Tras años de servicio, ' +
-      'desencantado con la guerra, desertó para decidir su propio destino.',
-    preguntas: ['¿Qué papel tenías en el ejército (soldado, cirujano, estratega…)?', '¿Cómo dejaste el ejército?'],
+      'Luchó en las campañas del lord Legislador, por la leva o al mando en nombre de su casa noble. Años de servicio le han enseñado ' +
+      'lo que hay detrás de una victoria, y piensa en desertar para decidir su propio destino.',
+    preguntas: ['¿Por qué te uniste al ejército?', PREGUNTA_BANDA],
+    ejemplos: [
+      [
+        'La leva se llevó a los jóvenes de mi calle, y yo estaba en ella',
+        'Para comer: era el uniforme o los Pozos',
+        'Mi casa, pequeña, debía soldados a los Haught, y me tocó a mí',
+        'Para huir de algo, o de alguien, que la guerra tapó',
+      ],
+      EJEMPLOS_BANDA,
+    ],
     pericia: 'Pericia de utilidad Vida militar o pericia cultural Dominios Exteriores: según las guarniciones donde sirvió.',
   },
 

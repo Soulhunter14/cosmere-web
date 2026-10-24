@@ -1,6 +1,6 @@
 /**
  * The legacy of a character on the «Trasfondo» tab (adventure «El legado de los nacidos de la bruma», L.19-23 / PDF 22-26): what it is,
- * how it links to the other era, its two questions with the character's answers and its extra skill (Era 1) or its starting rewards (Era 2). The sheet only shows
+ * how it links to the other era (shown in Era 2 only, for now), its two questions with the character's answers and its extra skill (Era 1) or its starting rewards (Era 2). The sheet only shows
  * them: the skill and the reward are written by hand, because the app does not track skills of utility or culture. Loaded lazily from
  * components/mistborn/index.ts and importing its data BY FILE, so none of it reaches the main chunk (§8, risk 6).
  */
@@ -31,7 +31,8 @@ export function LegadoCard({ legado, respuestas, onElegir, onResponder, cerrado 
   const cfg = useWorldConfig()
   const def = getLegado(legado)
   const t = cfg.eras?.find((e) => e.id === def?.era)?.tone ?? tone.cuarzo
-  const conexion = def && getLegado(def.conexion)
+  // An Era 1 card does not show its Era 2 link for now (24 Oct 2026): the backstory is written before the campaign looks that far
+  const conexion = def && def.era === 'era2' ? getLegado(def.conexion) : undefined
 
   const avisoCerrado = cerrado && (
     <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.subtle }}>

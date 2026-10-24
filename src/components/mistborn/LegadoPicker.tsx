@@ -3,7 +3,8 @@
  * (the six of the era of the campaign plus «Sin legado») and then the answers to its two «Preguntas para el personaje». It can open on
  * the second step to edit the answers of the saved legacy. The owner or the director use it outside edit mode, with an immediate save
  * (like the Blessings). In Era 2 each row says which Era 1 legacy it is linked to: offering only the ones linked to the Era 1 characters
- * of the group is the director's call. It writes `legado` and `legadoRespuestas` and nothing else; when the legacy changes, the page asks
+ * of the group is the director's call; an Era 1 row does not show its Era 2 link for now (24 Oct 2026). Under each question, the legacy's
+ * example answers are a hint. It writes `legado` and `legadoRespuestas` and nothing else; when the legacy changes, the page asks
  * before the old answers go. Loaded lazily from components/mistborn/index.ts and importing its data BY FILE, so none of it reaches the
  * main chunk (§8, risk 6).
  */
@@ -85,12 +86,17 @@ export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = '
           {def.preguntas.map((pregunta, i) => (
             <div key={pregunta} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <label htmlFor={`${idBase}-${i}`} style={{ fontSize: fs.base, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{pregunta}</label>
+              {def.ejemplos?.[i]?.length ? (
+                <p id={`${idBase}-${i}-ejemplos`} style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.45 }}>
+                  Por ejemplo: {def.ejemplos[i].join(' · ')}.
+                </p>
+              ) : null}
               <Textarea
                 id={`${idBase}-${i}`}
                 rows={4}
                 maxLength={MAX_RESPUESTA}
                 value={borrador[i]}
-                aria-describedby={`${idBase}-${i}-cuenta`}
+                aria-describedby={def.ejemplos?.[i]?.length ? `${idBase}-${i}-ejemplos ${idBase}-${i}-cuenta` : `${idBase}-${i}-cuenta`}
                 data-autofocus={i === 0 || undefined}
                 onChange={(e) => {
                   const texto = e.target.value
@@ -127,7 +133,7 @@ export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = '
     >
       <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {opciones.map((l) => {
-          const conexion = getLegado(l.conexion)
+          const conexion = l.era === 'era2' ? getLegado(l.conexion) : undefined
           const t = toneDe(l.era)
           return (
             <li key={l.id}>

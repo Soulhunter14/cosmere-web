@@ -365,9 +365,12 @@ director enemigo a enemigo; el resto, con la opción por defecto («adelante con
 
 ## 10. Estado de la implementación (DEV, 23 oct 2026)
 
-M1-M7 hechas en los *worktrees* `cosmere-web-mesa` y `cosmere-api-mesa` (rama `feature/mesa`), **sin commits** a la espera de la
-validación de Xavi en la mesa. Respuestas aplicadas: encuentros ocultos por defecto («Mostrar en la mesa»), pista de salud por
-enemigo («Salud» en la tarjeta, oculta por defecto); el resto, por defecto.
+M1-M7 hechas en los *worktrees* `cosmere-web-mesa` y `cosmere-api-mesa` (rama `feature/mesa`); **fusionada en `main` y subida el
+23 oct 2026** (web `b16b279`, API `8bcf60c`), despliegue pendiente de Xavi (dos migraciones). Respuestas aplicadas: encuentros
+ocultos por defecto («Mostrar en la mesa»), pista de salud por enemigo («Salud» en la tarjeta, oculta por defecto); el resto, por
+defecto. 24 oct 2026: apagar la niebla pide confirmación («¿Quitar la niebla?»), pedido por Xavi; comprobado en el navegador
+integrado con una campaña temporal (dos arrastres → «2 zonas destapadas» con sus «×»; la vista del jugador en negro con los dos
+huecos).
 
 ### Levantar DEV
 - Configuraciones `mesa-api` (5200) y `mesa-web` (5173) en `.claude/launch.json` del árbol principal. Vite escucha en la red local:
@@ -413,3 +416,132 @@ enemigo («Salud» en la tarjeta, oculta por defecto); el resto, por defecto.
 - El indicador de red del jugador: «Al día» (esmeralda) o «Sin conexión · lo último, hace n min» (topacio) cuando la consulta está
   en pausa sin red o falla con datos en caché; refetch al volver a primer plano, al reconectar y cada 45 s con la página visible.
 - `useImagenMesa` comparte la clave de caché `['global-npc-image', id, 'retrato']` con `useImagenLibro`: el retrato no se descarga dos veces.
+
+## 11. Propuesta: turnos sin elegir al empezar la ronda y turnos de los enemigos ocultos (24 oct 2026)
+
+> **Implementada el 24 oct 2026** (rama `feature/mesa-turnos-fichas`, estado v6) con las opciones por defecto. Precisión de Xavi
+> durante la implementación: cada enemigo tiene **tres mandos independientes**: Visible/Oculto a la mesa, su turno (Sin turno /
+> Rápido / Lento: el selector lleva las tres opciones, también en los PJ) y Turno visible/oculto a los jugadores. «Quitada la
+> opción URL» de «Mostrar una imagen» (petición del mismo día). Tarjeta del enemigo más compacta (salud, concentración e
+> Investidura en una fila, sin ocupar todo el ancho) y ancho mínimo de 440 px del panel Mesa de la pantalla, pedidos también.
+
+Pedido por Xavi: (a) al empezar cada ronda nadie tiene elegido si juega turno rápido o lento, así que hace falta un **grupo
+inicial «Sin turno elegido»**; (b) el director asigna el turno a los enemigos, pero **los jugadores no lo ven hasta que él lo
+decide**. Encaja con el libro: al principio de cada ronda cada combatiente declara su turno, y el director decide el de los PNJ
+(resumen propio de «Orden del combate», `src/data/combatRules.ts`).
+
+### 11.1 Comportamiento
+- **Director, Encuentro.** Al empezar un combate y en cada «Nueva ronda», todos los combatientes quedan **sin turno** (el Jefe no:
+  juega rápido y lento siempre). Aparece un carril nuevo arriba, **«Sin turno elegido»**, con sus tarjetas y el selector
+  Rápido / Lento sin nada marcado; al elegir, la tarjeta pasa a su carril. Un combatiente añadido a mitad de ronda entra sin turno.
+  La cabecera avisa «faltan n por elegir»; «Fase siguiente» **no se bloquea** (Q1). Si alguien elige su turno cuando su fase ya
+  pasó, queda en su carril sin «Actuado»: el director decide si actúa.
+- **Enemigos, turno oculto.** El director elige el turno del enemigo en su tarjeta como hoy, pero en la mesa de los jugadores el
+  enemigo sale con **«Turno por ver»** hasta que el director lo revela: botón **«Revelar turnos»** en la cabecera del encuentro
+  (todos los enemigos con turno elegido) o el conmutador **«Turno visible»** en la fila «Mesa» de la tarjeta. Un enemigo que
+  **actúa** (Actuado) revela su turno solo (Q2). «Nueva ronda» vuelve a ocultarlos (Q3).
+- **Jugador, Mesa.** Un compañero sin turno lleva la píldora «Sin turno»; un enemigo con turno oculto, «Turno por ver»; el resto
+  como hoy (Rápido / Lento, Ha actuado).
+
+### 11.2 Datos (`src/pages/pantalla/estado.ts`, versión 6)
+```ts
+export interface Combatiente { …; turno: Turno | null /* null = sin elegir */; turnoVisible: boolean /* enemigos: los jugadores ven su turno */ }
+```
+- `nuevaRonda`: `turno = null` para todos salvo `rango === 'jefe'`; `turnoVisible = false` en los PNJ; actuado y reacción como hoy.
+- `juegaEnFase(c, fase)`: `false` con `turno === null` (salvo Jefe). `pendientesDe` no cuenta a los que no han elegido; la
+  cabecera muestra «sin turno: n».
+- `normalizarEstado`: `turno` ← `'rapido' | 'lento' | null` (documentos antiguos conservan su valor); `turnoVisible` ← `logico`.
+  `combatienteDe*` (`adversarios.ts`) crean `turno: null, turnoVisible: false`. `moverCombatiente` conserva los dos.
+- `VERSION_ESTADO = 6`: una versión anterior de la app perdería `turnoVisible` al guardar (y leería `null` como rápido).
+- Público (`publica.ts` / `mesa.ts`): `AliadoMesa.turno: Turno | null`; `EnemigoMesa.turno` = su turno si
+  `turnoVisible || actuoRapido || actuoLento`, si no `null`. `actuoRapido`/`actuoLento` de un enemigo se publican como hoy (ya
+  revelan el turno al actuar, Q2).
+
+### 11.3 Tareas (solo web; sin API ni migración)
+| # | Tarea | Archivos | Aceptación | Verificación |
+|---|---|---|---|---|
+| T1 | Estado v6 | `estado.ts`, `adversarios.ts` | `nuevaRonda` deja a todos sin turno (Jefe no) y oculta turnos de PNJ; normalizador | `npx tsc -b`; `probar_proyeccion.mjs` ampliado |
+| T2 | Encuentro | `PanelEncuentro.tsx` | carril «Sin turno elegido», selector sin valor, aviso «faltan n», botón «Revelar turnos», conmutador «Turno visible», píldora «Turno oculto» | Chrome: nueva ronda → todos arriba; elegir → baja a su carril |
+| T3 | Público | `publica.ts`, `mesa.ts` | `turno` null en aliados sin elegir y en enemigos no revelados | script: enemigo con turno elegido y no revelado → `turno: null`; revelado o actuado → su turno |
+| T4 | Jugador | `MesaPage.tsx` | píldoras «Sin turno» y «Turno por ver» | tablet |
+| T5 | Documentación | este archivo, `docs/pantalla-director/propuesta.md` §2.3 | — | — |
+
+### 11.4 Preguntas (con la opción por defecto)
+1. «Fase siguiente» con gente sin turno: **avisar, nunca bloquear** *(por defecto)*; alternativa: pedir confirmación.
+2. Un enemigo que actúa revela su turno solo *(por defecto: sí)*.
+3. Al empezar una ronda nueva, los turnos de los enemigos vuelven a estar ocultos *(por defecto: sí)*.
+4. El Jefe queda fuera de «Sin turno elegido» porque juega los dos *(por defecto: sí)*.
+5. Que el jugador elija su propio turno desde el móvil: fuera de esta ronda (entra en «ida y vuelta», §9).
+
+## 12. Propuesta: fichas de los personajes sobre el mapa (24 oct 2026)
+
+> **Implementada el 24 oct 2026** (misma rama) con las opciones por defecto: `src/pages/mesa/Fichas.tsx` (`CapaFichas`, medidas
+> en unidades de contenedor `cqw`), `tonos.ts` (paleta), editor `EditorMapa` + `BandejaFichas` en `PanelMesa.tsx`, operaciones en
+> `pantalla/mesa.ts` (`ponerFicha`, `grupoAlMapa`, `moverFicha`, `quitarFicha`, `alternarFichaVisible`, `fijarTamanoFichas`,
+> `fijarNombresFichas`); la proyección publica `FichaMesa` sin `combatienteId`. Comprobado con `probar_proyeccion.mjs` y en el
+> navegador integrado (campaña temporal: colocar el grupo, arrastrar, ronda nueva, vista del jugador). Ajustes pedidos por Xavi
+> el mismo día: las fichas eran grandes → tamaño por defecto **3 %** del ancho y deslizador de 1 a 10 % en medios puntos; las
+> fichas de **enemigo nacen escondidas** (el ojo de la bandeja las muestra); «Sobresaturado» tras compactar la tarjeta del
+> enemigo → tarjeta en **dos columnas** cuando cabe (salud, recursos, estados y ataques | defensas y mandos de la mesa).
+
+Pedido por Xavi: «añadir los jugadores en un mapa». El director coloca **fichas** (los personajes y, si quiere, los enemigos) sobre
+la imagen proyectada, las mueve arrastrando, y los jugadores las ven en su móvil sobre el mapa, también con niebla (la ficha
+de un compañero se ve aunque esté sobre una zona tapada: es él). Es el tablero de la mesa física, sin reglas de movimiento.
+
+### 12.1 Comportamiento
+- **Director, panel Mesa → Ahora en la mesa.** Bajo el mapa, una **bandeja** con los combatientes del encuentro en pantalla (y,
+  si no hay combate, los personajes vivos de la campaña): tocar «Al mapa» pone la ficha en el centro; arrastrar una ficha sobre
+  el mapa la mueve (soltar = un guardado); arrastrarla fuera del mapa, o la «×» de la bandeja, la quita. Un arrastre que
+  empieza sobre una ficha la mueve; en cualquier otro sitio sigue dibujando una zona de niebla, como hoy. Deslizador **«Tamaño
+  de las fichas»** (3-10 % del ancho del mapa; por defecto 5 %, una casilla de 1,5 m en los mapas del libro), por imagen.
+- **Aspecto.** Fichas redondas como las del libro: inicial del personaje (o el número del enemigo, `marcaDe`) sobre un color;
+  cada compañero con una gema distinta (brand, esmeralda, zafiro, amatista, heliodoro, topacio…, estable por personaje), los
+  enemigos en rubí; un enemigo con retrato lo lleva recortado en círculo. Nombre en un rótulo pequeño bajo la ficha (ocultable).
+  Nada de arte del libro (los tokens del PDF son material con derechos).
+- **Jugador, Mesa.** Las fichas se dibujan **encima de la niebla**: las de los compañeros siempre; las de los enemigos solo si el
+  enemigo no está «Oculto a la mesa» (y, con niebla, solo si su centro cae en una zona destapada; Q2). Solo lectura: mover la
+  ficha propia desde el móvil queda para la «ida y vuelta» (§9).
+- Las fichas van con la imagen: «Volver a mostrar» un mapa recupera sus fichas; «Terminar sesión» las vacía con la mesa.
+
+### 12.2 Datos (`publica.ts`, `estado.ts` versión 6; sin API ni migración)
+```ts
+/** Una ficha sobre la imagen; `x`, `y` = centro en fracciones del mapa (0-1); `tamano` es de la proyección */
+export interface Ficha {
+  id: string
+  /** Combatiente al que representa (su nombre, color y retrato se resuelven al publicar), o personaje suelto sin combate */
+  combatienteId: string | null
+  characterId: number | null
+  nombre: string            // copia, por si el combatiente deja el encuentro
+  bando: 'pj' | 'pnj'
+  adversarioId: number | null
+  x: number
+  y: number
+  /** El director puede esconder una ficha concreta (una emboscada ya colocada) */
+  visible: boolean
+}
+export interface Proyeccion { …; fichas: Ficha[]; tamanoFicha: number /* 0.03-0.10, por defecto 0.05 */ }
+```
+- Público: `proyectarMesa` publica las fichas con `visible`, y de un enemigo solo si su combatiente no está `oculto`; la ficha
+  publicada lleva `nombre`, `bando`, `adversarioId`, `x`, `y` y un `color` (índice de gema) — nunca `combatienteId`.
+- `normalizarMesa`/`normalizarEstado`: fracciones acotadas, máximo 60 fichas, `tamanoFicha` acotado.
+- Capa compartida `src/pages/mesa/Fichas.tsx` (`CapaFichas`): `position: absolute` sobre la imagen, cada ficha en
+  `left: x·100 %`, `top: y·100 %`, diámetro `tamano × ancho` (con `container units` o midiendo el ancho con `ResizeObserver`);
+  encima de `CapaNiebla`. El retrato del enemigo con `useImagenMesa` (caché compartida).
+
+### 12.3 Tareas (solo web)
+| # | Tarea | Archivos | Aceptación | Verificación |
+|---|---|---|---|---|
+| F1 | Tipos y normalización | `publica.ts`, `estado.ts`, `mesa.ts` | fichas en los dos documentos; enemigo oculto no se publica; «Terminar sesión» vacía | `probar_proyeccion.mjs` ampliado; `npx tsc -b` |
+| F2 | Capa de fichas | `src/pages/mesa/Fichas.tsx` | redondas, color por personaje, retrato del enemigo, rótulo | captura a 390 px y 1024 px |
+| F3 | Editor | `PanelMesa.tsx` (`EditorNiebla` → `EditorMapa`) | bandeja, «Al mapa», arrastrar para mover, fuera = quitar, deslizador de tamaño, convive con la niebla | navegador integrado con campaña temporal (como la niebla) |
+| F4 | Jugador | `MesaPage.tsx` | fichas sobre la niebla, también en la hoja ampliada con zoom | tablet |
+| F5 | Documentación | este archivo | — | — |
+
+### 12.4 Preguntas (con la opción por defecto)
+1. ¿Fichas también para los enemigos? *(por defecto: sí, respetando «Oculto a la mesa» y `visible`)*.
+2. Con niebla, ¿una ficha enemiga en zona tapada se ve o no? *(por defecto: no se ve; la de un compañero, siempre)*.
+3. Tamaño por defecto ~~5 %~~ **3 %** del ancho del mapa, ajustable **1-10 %** (cambiado tras la primera prueba de Xavi).
+4. ¿Rejilla? Los mapas del libro llevan casillas de 1,5 m pero la imagen no trae la rejilla en datos: sin ajuste a casillas
+   en v1 *(por defecto: libre)*.
+5. ¿Pueden los jugadores mover su propia ficha desde el móvil? *(por defecto: no en v1; sería la primera «ida y vuelta»)*.
+6. Colocar al grupo de golpe: botón «Todo el grupo al mapa» *(por defecto: sí, en fila en el borde inferior)*.

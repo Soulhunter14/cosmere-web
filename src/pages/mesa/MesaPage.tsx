@@ -13,11 +13,12 @@ import { buttonReset, c, eyebrow, font, fs, numeral, page, pill, radius, shadow,
 import type { EstadoDef } from '../../worlds/types'
 import { duracion, useAhora } from '../pantalla/contexto'
 import { BotonEncendida, BotonPantallaCompleta } from '../pantalla/dispositivo'
-import { FASES, FASE_INFO, marcaDe, type EstadoAplicado, type Fase } from '../pantalla/estado'
+import { FASES, FASE_INFO, marcaDe, type EstadoAplicado, type Fase, type Turno } from '../pantalla/estado'
 import { BarraRecurso, Tesela } from '../pantalla/piezas'
+import { CapaFichas } from './Fichas'
 import { useImagenMesa } from './imagenes'
 import { CapaNiebla } from './Niebla'
-import { PISTA_LABEL, type AliadoMesa, type EncuentroMesa, type EnemigoMesa, type Niebla, type PistaSalud, type Proyeccion } from './publica'
+import { PISTA_LABEL, type AliadoMesa, type EncuentroMesa, type EnemigoMesa, type FichaMesa, type Niebla, type PistaSalud, type Proyeccion } from './publica'
 import { useMesaEnVivo, type EstadoRed } from './useMesaEnVivo'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
@@ -152,6 +153,7 @@ function EnLaMesa({ p, cId }: { p: Proyeccion; cId: number }) {
           <span style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
             <img src={url} alt={p.titulo || 'Imagen en la mesa'} decoding="async" style={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', width: 'auto', height: 'auto' }} />
             <CapaNiebla niebla={p.niebla} opaca />
+            <CapaFichas fichas={p.fichas} tamano={p.tamanoFicha} nombres={p.nombresFichas} cId={cId} />
           </span>
         </button>
       )}
@@ -170,7 +172,12 @@ function EnLaMesa({ p, cId }: { p: Proyeccion; cId: number }) {
           )}
         </div>
       )}
-      {abierta && url && <HojaImagen url={url} titulo={p.titulo} pie={p.pie} niebla={p.niebla} publica={p.imagen.tipo === 'publica' && !p.niebla.activa} onClose={() => setAbierta(false)} />}
+      {abierta && url && (
+        <HojaImagen
+          url={url} titulo={p.titulo} pie={p.pie} niebla={p.niebla} publica={p.imagen.tipo === 'publica' && !p.niebla.activa && p.fichas.length === 0}
+          fichas={p.fichas} tamanoFicha={p.tamanoFicha} nombresFichas={p.nombresFichas} cId={cId} onClose={() => setAbierta(false)}
+        />
+      )}
     </section>
   )
 }
@@ -179,9 +186,13 @@ const ZOOMS = [1, 1.5, 2, 3]
 
 /**
  * The image full width with zoom steps (two fingers on a phone zoom the whole page; the buttons work everywhere). With the fog
- * on, «Abrir en pestaña nueva» is not offered: the bare file would show the whole map
+ * or tokens on, «Abrir en pestaña nueva» is not offered: the bare file would show the whole map without them
  */
-function HojaImagen({ url, titulo, pie, niebla, publica, onClose }: { url: string; titulo: string; pie?: string; niebla?: Niebla; publica: boolean; onClose: () => void }) {
+function HojaImagen({
+  url, titulo, pie, niebla, publica, fichas = [], tamanoFicha = 0.05, nombresFichas = true, cId = 0, onClose,
+}: {
+  url: string; titulo: string; pie?: string; niebla?: Niebla; publica: boolean; fichas?: FichaMesa[]; tamanoFicha?: number; nombresFichas?: boolean; cId?: number; onClose: () => void
+}) {
   const [zoom, setZoom] = useState(0)
   const escala = ZOOMS[zoom]
   return (
@@ -222,6 +233,7 @@ function HojaImagen({ url, titulo, pie, niebla, publica, onClose }: { url: strin
         <span style={{ position: 'relative', display: 'inline-block', width: `${escala * 100}%`, verticalAlign: 'top' }}>
           <img src={url} alt={titulo || 'Imagen'} decoding="async" style={{ display: 'block', width: '100%', maxWidth: 'none', height: 'auto' }} />
           {niebla && <CapaNiebla niebla={niebla} opaca />}
+          <CapaFichas fichas={fichas} tamano={tamanoFicha} nombres={nombresFichas} cId={cId} />
         </span>
       </div>
     </Sheet>
@@ -321,8 +333,14 @@ function TiraFases({ fase }: { fase: Fase }) {
   )
 }
 
-const actuoEn = (x: { turno: 'rapido' | 'lento'; actuoRapido: boolean; actuoLento: boolean }, fase: Fase | null) =>
+const actuoEn = (x: { turno: Turno | null; actuoRapido: boolean; actuoLento: boolean }, fase: Fase | null) =>
   fase !== null && (FASE_INFO[fase].turno === 'rapido' ? x.actuoRapido : x.actuoLento)
+
+/** The turn chip: the chosen one, or what is known of it (a companion still to declare, an enemy the director has not revealed) */
+function ChipTurno({ turno, sinElegir }: { turno: Turno | null; sinElegir: string }) {
+  if (turno === null) return <span style={pill(tone.topacio)}>{sinElegir}</span>
+  return <span style={pill(tone.cuarzo)}><CosmereIcon name={ICONO_TURNO[turno]} size={12} />{turno === 'rapido' ? 'Rápido' : 'Lento'}</span>
+}
 
 function TarjetaAliado({ a, fase, tu }: { a: AliadoMesa; fase: Fase; tu: boolean }) {
   const cfg = useWorldConfig()
@@ -345,7 +363,7 @@ function TarjetaAliado({ a, fase, tu }: { a: AliadoMesa; fase: Fase; tu: boolean
         <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {tu && <span style={pill(tone.gold)}>Tú</span>}
           {a.characterId === null && <span style={pill(tone.brand)}>Aliado</span>}
-          <span style={pill(tone.cuarzo)}><CosmereIcon name={ICONO_TURNO[a.turno]} size={12} />{a.turno === 'rapido' ? 'Rápido' : 'Lento'}</span>
+          <ChipTurno turno={a.turno} sinElegir="Sin turno" />
           {actuo && <span style={pill(tone.esmeralda)}>Ha actuado</span>}
           {a.reaccionUsada && <span style={pill(tone.topacio)}><CosmereIcon name="reaccion" size={12} />Reacción usada</span>}
         </span>
@@ -393,7 +411,7 @@ function FilaEnemigo({ x, fase, cId }: { x: EnemigoMesa; fase: Fase | null; cId:
         ) : (
           <>
             {x.pistaSalud && <span style={pill(PISTA_TONE[x.pistaSalud])}><StatIcons.salud size={12} aria-hidden />{PISTA_LABEL[x.pistaSalud]}</span>}
-            <span style={pill(tone.cuarzo)}><CosmereIcon name={ICONO_TURNO[x.turno]} size={12} />{x.turno === 'rapido' ? 'Rápido' : 'Lento'}</span>
+            <ChipTurno turno={x.turno} sinElegir="Turno por ver" />
             {actuo && <span style={pill(tone.esmeralda)}>Ha actuado</span>}
           </>
         )}

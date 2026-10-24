@@ -246,7 +246,8 @@ function Pantalla() {
             <>
               <Panel
                 prefijo="pantalla-a" etiqueta="Mesa" ids={PANEL_A} valor={tabA} onCambiar={elegir} badge={badge}
-                estilo={{ flex: plegado ? '1 1 0' : `${reparto} 1 0`, minWidth: 320 }}
+                // Never narrower than an encounter card needs (its turn controls, bars and conditions), whatever the divider says
+                estilo={{ flex: plegado ? '1 1 0' : `${reparto} 1 0`, minWidth: 440 }}
               />
               {plegado ? (
                 <RielRegistro ids={PANEL_B} badge={badge} onAbrir={(panel) => { plegar(false); if (panel) elegir(panel) }} />

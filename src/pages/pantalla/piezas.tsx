@@ -53,7 +53,7 @@ export function BarraRecurso({
           {icono}
           {etiqueta}
         </span>
-        <span style={{ ...numeral, fontSize: fs.md, color: critico ? tone.rubi.fg : c.text }}>
+        <span style={{ ...numeral, fontSize: fs.md, color: critico ? tone.rubi.fg : c.text, whiteSpace: 'nowrap' }}>
           {actual}
           <span style={{ color: c.subtle, fontSize: fs.sm, fontWeight: 600 }}> / {max}</span>
         </span>

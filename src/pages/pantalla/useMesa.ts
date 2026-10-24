@@ -12,7 +12,7 @@ export function useMostrarEnMesa() {
   const { actualizar, ultimoDiario } = usePantalla()
   return useCallback(
     (imagen: OrigenImagen, titulo: string, pie = '', opciones: { mapa?: boolean } = {}) =>
-      actualizar((b) => { mostrarEnMesa(b, imagen, titulo, pie, ultimoDiario, nieblaInicial(titulo, opciones.mapa)) }),
+      actualizar((b) => { mostrarEnMesa(b, imagen, titulo, pie, ultimoDiario, { niebla: nieblaInicial(titulo, opciones.mapa) }) }),
     [actualizar, ultimoDiario],
   )
 }

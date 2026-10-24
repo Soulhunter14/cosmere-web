@@ -6,14 +6,14 @@
  */
 import type { AnyRollResult } from '../../utils/dice'
 import { foldText } from '../../lib/catalogo'
-import { MAX_PROYECCIONES, proyeccion as proyeccionDe, type Proyeccion } from '../mesa/publica'
+import { MAX_PROYECCIONES, proyeccionDirector as proyeccionDe, type ProyeccionDirector } from '../mesa/publica'
 
 /**
- * 4: `decisiones`. 5: «La mesa» (`enMesa`, `oculto`, `mostrarSalud`, `mesa`). A release that does not know a field would drop
- * it when it saves, so a newer document opens read only in an older release (`PantallaProvider`) instead of losing what the
- * table decided.
+ * 4: `decisiones`. 5: «La mesa» (`enMesa`, `oculto`, `mostrarSalud`, `mesa`). 6: turns start unchosen (`turno` null),
+ * `turnoVisible`, tokens on the map (`mesa.proyeccion.fichas`). A release that does not know a field would drop it when it
+ * saves, so a newer document opens read only in an older release (`PantallaProvider`) instead of losing what the table decided.
  */
-export const VERSION_ESTADO = 5
+export const VERSION_ESTADO = 6
 /** Closed sessions kept in the document (the oldest ones are dropped) */
 const MAX_HISTORIAL = 30
 /** Closed sessions that keep the Markdown of their scenes; older ones keep only the titles and what the table noted (1 MB cap) */
@@ -75,8 +75,10 @@ export interface Combatiente {
   /** Catalog adversary it comes from (`/global-npcs`), or null */
   adversarioId: number | null
   rango: Rango | null
-  /** Turn chosen for this round; a Jefe plays both */
-  turno: Turno
+  /** Turn chosen for this round, or null until it is chosen (the book: everyone declares at the start of the round); a Jefe plays both */
+  turno: Turno | null
+  /** «La mesa»: the players see this enemy's turn (the director reveals it, or the enemy acts); reset every round */
+  turnoVisible: boolean
   actuoRapido: boolean
   actuoLento: boolean
   reaccionUsada: boolean
@@ -124,8 +126,8 @@ export interface Encuentro {
 
 /** «La mesa»: the image the director shows to the players right now, and those shown in the session (newest first) */
 export interface MesaDirector {
-  proyeccion: Proyeccion | null
-  proyecciones: Proyeccion[]
+  proyeccion: ProyeccionDirector | null
+  proyecciones: ProyeccionDirector[]
 }
 
 export interface ImagenEscena { url: string; titulo: string }
@@ -350,7 +352,9 @@ const combatiente = (v: unknown): Combatiente | null => {
     characterId: typeof v.characterId === 'number' ? v.characterId : null,
     adversarioId: typeof v.adversarioId === 'number' ? v.adversarioId : null,
     rango: RANGOS.includes(v.rango as Rango) ? (v.rango as Rango) : null,
-    turno: una(v.turno, ['rapido', 'lento'] as const, 'rapido'),
+    // Documents before version 6 always carried a turn; from 6 on, null means «not chosen yet»
+    turno: v.turno === 'rapido' || v.turno === 'lento' ? v.turno : null,
+    turnoVisible: logico(v.turnoVisible),
     actuoRapido: logico(v.actuoRapido),
     actuoLento: logico(v.actuoLento),
     reaccionUsada: logico(v.reaccionUsada),
@@ -749,7 +753,11 @@ export function avanzarFase(enc: Encuentro): boolean {
   return true
 }
 
-/** New round: phase 1, and nobody has acted or used the reaction (each one gets a new reaction at the start of its turn) */
+/**
+ * New round: phase 1, nobody has acted or used the reaction (each one gets a new reaction at the start of its turn), and
+ * everyone declares its turn again (a Jefe plays both, so it keeps none to choose); the enemies' turns are hidden from the
+ * players again until the director reveals them
+ */
 export function nuevaRonda(enc: Encuentro) {
   enc.ronda += 1
   enc.fase = 'pj-rapido'
@@ -757,7 +765,24 @@ export function nuevaRonda(enc: Encuentro) {
     c.actuoRapido = false
     c.actuoLento = false
     c.reaccionUsada = false
+    if (c.rango !== 'jefe') c.turno = null
+    c.turnoVisible = false
   }
+}
+
+/** Combatants still in the fight that have not chosen a turn this round (a Jefe never has to) */
+export const sinTurno = (enc: Encuentro) => enc.combatientes.filter((c) => !c.derrotado && c.rango !== 'jefe' && c.turno === null)
+
+/** «Revelar turnos»: the players get to see the turn of every enemy that has one. Returns how many were revealed */
+export function revelarTurnos(enc: Encuentro): number {
+  let n = 0
+  for (const c of enc.combatientes) {
+    if (c.bando === 'pnj' && !c.turnoVisible && (c.turno !== null || c.rango === 'jefe')) {
+      c.turnoVisible = true
+      n++
+    }
+  }
+  return n
 }
 
 const tieneEstado = (c: Combatiente, id: string) => c.estados.some((e) => e.id === id)

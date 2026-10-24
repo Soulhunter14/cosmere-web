@@ -4,7 +4,7 @@
  * it in the same PUT. This module is pure and shared by both sides; it only takes TYPES from the director's state, so the
  * players' chunk never pulls the screen's logic. `normalizarMesa` turns any stored JSON (older, partial, `{}`) into a valid document.
  */
-import type { EstadoAplicado, Fase, Recurso, Retirado, Turno } from '../pantalla/estado'
+import type { Bando, EstadoAplicado, Fase, Recurso, Retirado, Turno } from '../pantalla/estado'
 
 /** Bumped when a release adds fields; an older app shows «Actualiza la app» instead of a half-read document */
 export const VERSION_MESA = 1
@@ -48,7 +48,54 @@ export const sinNiebla = (): Niebla => ({ activa: false, zonas: [] })
 /** The map fully covered: the director uncovers it zone by zone */
 export const nieblaCerrada = (): Niebla => ({ activa: true, zonas: [] })
 
-export interface Proyeccion {
+// ── Tokens on the map («fichas») ─────────────────────────────────────────────
+
+/** Most tokens on one image */
+export const MAX_FICHAS = 60
+/** Token diameter as a fraction of the map's width: a 1.5 m square of the book's battle maps is 2-3 % of a whole map */
+export const TAMANO_FICHA = { min: 0.01, max: 0.1, def: 0.03 }
+/** Gem tones a character's token can take (index into the palette of `Fichas.tsx`) */
+export const COLORES_FICHA = 6
+
+/** A token as the players see it: who it looks like and where; `x`, `y` = its centre in fractions of the map */
+export interface FichaMesa {
+  id: string
+  nombre: string
+  bando: Bando
+  /** The book's portrait of an enemy, or null */
+  adversarioId: number | null
+  x: number
+  y: number
+  /** Palette index of a character's token (stable per character); enemies are always ruby */
+  color: number
+}
+
+/** A token on the director's screen: the same, plus who it stands for and whether the players see it */
+export interface FichaDirector {
+  id: string
+  /** Combatant of an open fight it stands for (its name follows the combatant), or null */
+  combatienteId: string | null
+  /** Campaign character (a token placed without a fight), or null */
+  characterId: number | null
+  nombre: string
+  bando: Bando
+  adversarioId: number | null
+  x: number
+  y: number
+  /** The director can hide a token already placed (an ambush) */
+  visible: boolean
+}
+
+/** Palette index of a character's token: stable per character, so it keeps its colour from one map to the next */
+export const colorDeFicha = (f: { characterId: number | null; nombre: string }): number => {
+  if (f.characterId !== null) return Math.abs(f.characterId) % COLORES_FICHA
+  let h = 0
+  for (const ch of f.nombre) h = (h * 31 + ch.charCodeAt(0)) % 9973
+  return h % COLORES_FICHA
+}
+
+/** What a projection carries besides its tokens (the public one and the director's share it) */
+export interface ProyeccionBase {
   id: string
   imagen: OrigenImagen
   titulo: string
@@ -57,6 +104,20 @@ export interface Proyeccion {
   /** ISO date when it was shown */
   en: string
   niebla: Niebla
+  /** Token diameter, fraction of the map's width (`TAMANO_FICHA`) */
+  tamanoFicha: number
+  /** Names under the tokens */
+  nombresFichas: boolean
+}
+
+/** The projection the players read: its visible tokens, already resolved */
+export interface Proyeccion extends ProyeccionBase {
+  fichas: FichaMesa[]
+}
+
+/** The projection on the director's screen (`PantallaEstado.mesa`) */
+export interface ProyeccionDirector extends ProyeccionBase {
+  fichas: FichaDirector[]
 }
 
 /** A character (or an ally added by the director): the players see everything the director tracks of their side */
@@ -65,7 +126,8 @@ export interface AliadoMesa {
   nombre: string
   /** null = an ally without a character («Aliado») */
   characterId: number | null
-  turno: Turno
+  /** null = not chosen yet this round */
+  turno: Turno | null
   actuoRapido: boolean
   actuoLento: boolean
   reaccionUsada: boolean
@@ -82,7 +144,8 @@ export interface EnemigoMesa {
   nombre: string
   /** For the book's portrait, or null */
   adversarioId: number | null
-  turno: Turno
+  /** null = not chosen, or chosen but not revealed yet (the director reveals it, or the enemy acts) */
+  turno: Turno | null
   actuoRapido: boolean
   actuoLento: boolean
   estados: EstadoAplicado[]
@@ -155,13 +218,64 @@ export const zonaNiebla = (v: unknown): ZonaNiebla | null => {
 
 export const niebla = (v: unknown): Niebla => (esObj(v) ? { activa: logico(v.activa), zonas: lista(v.zonas, zonaNiebla).slice(0, MAX_ZONAS) } : sinNiebla())
 
-export const proyeccion = (v: unknown): Proyeccion | null => {
+const BANDOS: readonly Bando[] = ['pj', 'pnj']
+const idNumerico = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.trunc(v) : null)
+
+/** The common part of a token (position clipped to the map), or null when it has no name or no position */
+const fichaBase = (v: unknown, i: number) => {
+  if (!esObj(v) || !texto(v.nombre)) return null
+  const x = fraccion(v.x)
+  const y = fraccion(v.y)
+  if (x === null || y === null) return null
+  return { id: idDe(v.id, `ficha-${i}`), nombre: texto(v.nombre), bando: una(v.bando, BANDOS, 'pj'), adversarioId: idNumerico(v.adversarioId), x, y }
+}
+
+export const fichaMesa = (v: unknown, i: number): FichaMesa | null => {
+  const f = fichaBase(v, i)
+  if (!f) return null
+  const o = v as Obj
+  const color = idNumerico(o.color)
+  return { ...f, color: color !== null && color >= 0 && color < COLORES_FICHA ? color : colorDeFicha({ characterId: null, nombre: f.nombre }) }
+}
+
+export const fichaDirector = (v: unknown, i: number): FichaDirector | null => {
+  const f = fichaBase(v, i)
+  if (!f) return null
+  const o = v as Obj
+  return { ...f, combatienteId: texto(o.combatienteId) || null, characterId: idNumerico(o.characterId), visible: o.visible !== false }
+}
+
+export const tamanoFicha = (v: unknown): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.min(TAMANO_FICHA.max, Math.max(TAMANO_FICHA.min, v)) : TAMANO_FICHA.def
+
+const proyeccionBase = (v: unknown): ProyeccionBase | null => {
   if (!esObj(v)) return null
   const imagen = origenImagen(v.imagen)
   return imagen
-    ? { id: idDe(v.id, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`), imagen, titulo: texto(v.titulo), pie: texto(v.pie), en: texto(v.en), niebla: niebla(v.niebla) }
+    ? {
+        id: idDe(v.id, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`), imagen, titulo: texto(v.titulo), pie: texto(v.pie), en: texto(v.en),
+        niebla: niebla(v.niebla), tamanoFicha: tamanoFicha(v.tamanoFicha), nombresFichas: v.nombresFichas !== false,
+      }
     : null
 }
+
+const fichasDe = <T>(v: unknown, f: (x: unknown, i: number) => T | null): T[] =>
+  Array.isArray(v) ? v.map(f).filter((x): x is T => x !== null).slice(0, MAX_FICHAS) : []
+
+/** A projection of the public document */
+export const proyeccion = (v: unknown): Proyeccion | null => {
+  const base = proyeccionBase(v)
+  return base ? { ...base, fichas: fichasDe((v as Obj).fichas, fichaMesa) } : null
+}
+
+/** A projection of the director's document */
+export const proyeccionDirector = (v: unknown): ProyeccionDirector | null => {
+  const base = proyeccionBase(v)
+  return base ? { ...base, fichas: fichasDe((v as Obj).fichas, fichaDirector) } : null
+}
+
+/** A turn, or null while it is not chosen (or not revealed) */
+export const turnoONulo = (v: unknown): Turno | null => (TURNOS.includes(v as Turno) ? (v as Turno) : null)
 
 const aliado = (v: unknown, i: number): AliadoMesa | null =>
   esObj(v) && texto(v.nombre)
@@ -169,7 +283,7 @@ const aliado = (v: unknown, i: number): AliadoMesa | null =>
         id: idDe(v.id, `aliado-${i}`),
         nombre: texto(v.nombre),
         characterId: typeof v.characterId === 'number' && Number.isFinite(v.characterId) ? Math.trunc(v.characterId) : null,
-        turno: una(v.turno, TURNOS, 'rapido'),
+        turno: turnoONulo(v.turno),
         actuoRapido: logico(v.actuoRapido),
         actuoLento: logico(v.actuoLento),
         reaccionUsada: logico(v.reaccionUsada),
@@ -187,7 +301,7 @@ const enemigo = (v: unknown, i: number): EnemigoMesa | null =>
         id: idDe(v.id, `enemigo-${i}`),
         nombre: texto(v.nombre),
         adversarioId: typeof v.adversarioId === 'number' && Number.isFinite(v.adversarioId) ? Math.trunc(v.adversarioId) : null,
-        turno: una(v.turno, TURNOS, 'rapido'),
+        turno: turnoONulo(v.turno),
         actuoRapido: logico(v.actuoRapido),
         actuoLento: logico(v.actuoLento),
         estados: estados(v.estados),
@@ -225,6 +339,10 @@ export function normalizarMesa(raw: unknown): MesaPublica {
 
 /** The stored document comes from a newer release of the app than this one */
 export const esMasNueva = (raw: unknown): boolean => esObj(raw) && typeof raw.version === 'number' && raw.version > VERSION_MESA
+
+/** The centre of a token lies in an uncovered zone of the fog (or the fog is off) */
+export const enZonaDestapada = (f: { x: number; y: number }, n: Niebla): boolean =>
+  !n.activa || n.zonas.some((z) => f.x >= z.x && f.x <= z.x + z.w && f.y >= z.y && f.y <= z.y + z.h)
 
 /** Two origins show the same picture */
 export const mismaImagen = (a: OrigenImagen, b: OrigenImagen): boolean =>

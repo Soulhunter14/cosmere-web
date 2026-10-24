@@ -22,7 +22,7 @@ import { enemigosOcultos } from './mesa'
 import {
   FASES, FASE_INFO, MAX_ENCUENTROS, actuoEnFase, anotar, aplicarDano, avanzarFase, claveEscenaPropia, curar, dejarACero, encuentroDe, encuentroEnPantalla,
   guardarTiradaPrivada, juegaEnFase, marcaDe, marcar, moverCombatiente, nombrarSerie, nombresNuevos, nuevoId, pasoRecurso, personajeEnCombate, registrarCambio, retirarCaidos,
-  sacarDelCombate, tramo,
+  revelarTurnos, sacarDelCombate, sinTurno, tramo,
   type AtaqueDef, type Bando, type Combatiente, type Encuentro, type Fase, type MotivoSalida, type PantallaEstado, type Rango,
 } from './estado'
 import { eraNumero, formatoDado } from './adversarios'
@@ -110,6 +110,9 @@ export function PanelEncuentro() {
 
   const activos = enc.combatientes.filter((x) => !x.derrotado)
   const fuera = enc.combatientes.filter((x) => x.derrotado)
+  // At the start of each round everyone declares fast or slow: until then they wait in their own lane
+  const pendientesDeTurno = sinTurno(enc)
+  const turnosPorRevelar = enc.combatientes.filter((x) => x.bando === 'pnj' && !x.derrotado && !x.turnoVisible && (x.turno !== null || x.rango === 'jefe')).length
   const ultimaFase = enc.fase === FASES[FASES.length - 1]
   const varios = estado.encuentros.length > 1
   const siguiente = estado.encuentros.find((e) => e.id !== enc.id)
@@ -222,6 +225,17 @@ export function PanelEncuentro() {
           ) : (
             <span style={{ alignSelf: 'center', fontSize: fs.xs, color: c.subtle }}>Máximo {MAX_ENCUENTROS} combates a la vez</span>
           )}
+          {/* «La mesa»: the enemies' turns stay hidden from the players until the director reveals them (or they act) */}
+          {enc.enMesa && turnosPorRevelar > 0 && (
+            <Button
+              variant="secondary"
+              icon={<Eye size={16} aria-hidden />}
+              onClick={() => cambiarEnc((e) => { revelarTurnos(e) })}
+              title="Los jugadores ven el turno (rápido o lento) de cada enemigo que ya lo tiene elegido"
+            >
+              Revelar turnos ({turnosPorRevelar})
+            </Button>
+          )}
           {/* «La mesa»: a fight is born hidden from the players; shown, they see the party's health and the enemies' names and conditions */}
           <Conmutador
             activo={enc.enMesa}
@@ -242,6 +256,32 @@ export function PanelEncuentro() {
 
       {/* ── The script scene the fight comes from: its battlefield rules and counters, and the rest of it ── */}
       {enc.escenaId && <EscenaDelEncuentro escenaId={enc.escenaId} />}
+
+      {/* ── Those still to declare their turn this round (the book: everyone declares at the start of the round) ── */}
+      {pendientesDeTurno.length > 0 && (
+        <section aria-labelledby="fase-sin-turno" style={stack(10)}>
+          <h3
+            id="fase-sin-turno"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, margin: 0,
+              fontFamily: font.display, fontVariantCaps: 'all-small-caps', fontSize: fs.lg + 1, fontWeight: 600, letterSpacing: '0.05em', color: tone.topacio.fg,
+            }}
+          >
+            Sin turno elegido
+            <span style={{ fontFamily: font.ui, fontVariantCaps: 'normal', fontSize: fs.xs, color: c.subtle, letterSpacing: 0 }}>
+              {pendientesDeTurno.length === 1 ? 'falta 1 por elegir' : `faltan ${pendientesDeTurno.length} por elegir`}
+            </span>
+            <span aria-hidden style={{ flex: 1, height: 1, background: tone.topacio.border }} />
+          </h3>
+          <ul style={{ ...listReset, ...stack(10) }}>
+            {pendientesDeTurno.map((x) => (
+              <li key={`sin-turno-${x.id}`}>
+                <TarjetaCombatiente cb={x} fase={null} enJuego={false} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ── One lane per phase (a Jefe is in both of its side) ── */}
       {FASES.map((fase) => {
@@ -499,18 +539,19 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
   const borde = enJuego && !actuo ? acento.border : c.border
   const sombra = enJuego && !actuo ? `inset 3px 0 0 ${acento.fg}, ${shadow[1]}` : shadow[1]
 
-  // Turn (fast/slow) and reaction: shown on the folded PJ card and on the full one
+  // Turn (none yet / fast / slow) and reaction: shown on the folded PJ card and on the full one
   const controlTurno = cb.rango === 'jefe' ? (
     <span style={pill(tone.rubi)} title="El Jefe juega un turno rápido y uno lento cada ronda">Rápido y lento</span>
   ) : (
-    <Segmented<'rapido' | 'lento'>
+    <Segmented<'ninguno' | 'rapido' | 'lento'>
       ariaLabel={`Turno de ${cb.nombre}`}
       size="sm"
       stretch={false}
       tone={pj ? 'brand' : 'rubi'}
-      value={cb.turno}
-      onChange={(t) => cambiar((x) => { x.turno = t })}
+      value={cb.turno ?? 'ninguno'}
+      onChange={(t) => cambiar((x) => { x.turno = t === 'ninguno' ? null : t })}
       options={[
+        { value: 'ninguno', label: '—', ariaLabel: 'Sin turno elegido' },
         { value: 'rapido', label: 'Rápido' },
         { value: 'lento', label: 'Lento' },
       ]}
@@ -569,7 +610,8 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
     <article
       aria-label={cb.nombre}
       style={{
-        ...stack(12), padding: 14, borderRadius: radius.lg,
+        // An enemy's card is tighter: there are many of them on the tablet
+        ...stack(pj ? 12 : 9), padding: pj ? 14 : '10px 12px', borderRadius: radius.lg,
         background: c.s1, border: `1px solid ${borde}`, boxShadow: sombra,
         opacity: cb.derrotado || (fase && actuo) ? 0.72 : 1,
       }}
@@ -627,73 +669,25 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
         )}
       </div>
 
-      {/* Health */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+      {/* Two columns when the card is wide enough (a tablet, the one-pane view): what happens to the combatant on the left
+          (health, resources, conditions, attacks) and its sheet and table settings on the right (defenses, «Mesa»); one
+          column on a narrow pane */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px 28px', alignItems: 'start' }}>
+      <div style={stack(10)}>
+      {/* Health, Focus and Investiture in one row (adversaries: the director spends them; a character tracks its own); the bars
+          take only the room they need */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px 16px', flexWrap: 'wrap' }}>
+        <div style={{ flex: pj ? '1 1 180px' : '1 1 160px', maxWidth: pj ? undefined : 280, minWidth: 0 }}>
           <BarraRecurso etiqueta="Salud" icono={<StatIcons.salud size={13} aria-hidden />} actual={cb.salud.actual} max={cb.salud.max} t={tone.granate} alto={10} />
         </div>
         <Button size="sm" variant="danger" onClick={() => setHoja('salud')}>Daño / Curar</Button>
-      </div>
-
-      {/* Focus and Investiture (adversaries: the director spends them; a character tracks its own) */}
-      {!pj && (cb.concentracion.max > 0 || cb.investidura.max > 0) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
-          {cb.concentracion.max > 0 && (
-            <Recurso etiqueta="Concentración" t={tone.heliodoro} icono={<StatIcons.concentracion size={13} aria-hidden />} actual={cb.concentracion.actual} max={cb.concentracion.max} onPaso={(d) => recursoPaso('concentracion', d)} />
-          )}
-          {cb.investidura.max > 0 && (
-            <Recurso etiqueta="Investidura" t={tone.amatista} icono={<cfg.iconos.investidura size={13} aria-hidden />} actual={cb.investidura.actual} max={cb.investidura.max} onPaso={(d) => recursoPaso('investidura', d)} />
-          )}
-        </div>
-      )}
-
-      {/* Defenses, deflect, immunities */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px 14px', flexWrap: 'wrap' }}>
-        <Defensa etiqueta="Física" valor={cb.defensas.fisica} t={tone.granate} />
-        <Defensa etiqueta="Cognitiva" valor={cb.defensas.cognitiva} t={tone.zafiro} />
-        <Defensa etiqueta="Espiritual" valor={cb.defensas.espiritual} t={tone.amatista} />
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted }}>
-          <CosmereIcon name="marco-desvio" size={18} style={{ color: tone.topacio.fg }} />
-          Desvío <strong style={{ ...numeral, fontSize: fs.md, color: c.text }}>{cb.desvio}</strong>
-          {cb.desvioNota && <span style={{ fontSize: fs.xs, color: c.subtle }}>({cb.desvioNota})</span>}
-        </span>
-        {cb.inmunidades.length > 0 && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.subtle }}>
-            <ShieldOff size={13} aria-hidden />
-            Inmune: {cb.inmunidades.join(', ')}
-          </span>
+        {!pj && cb.concentracion.max > 0 && (
+          <Recurso etiqueta="Concentración" t={tone.heliodoro} icono={<StatIcons.concentracion size={13} aria-hidden />} actual={cb.concentracion.actual} max={cb.concentracion.max} onPaso={(d) => recursoPaso('concentracion', d)} />
+        )}
+        {!pj && cb.investidura.max > 0 && (
+          <Recurso etiqueta="Investidura" t={tone.amatista} icono={<cfg.iconos.investidura size={13} aria-hidden />} actual={cb.investidura.actual} max={cb.investidura.max} onPaso={(d) => recursoPaso('investidura', d)} />
         )}
       </div>
-
-      {/* «La mesa»: what the players see of this enemy (an ally is always shown whole) */}
-      {!pj && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ ...eyebrow, color: tone.zafiro.fg, marginRight: 4 }}>Mesa</span>
-          <Conmutador
-            compacto
-            activo={!cb.oculto}
-            t={tone.zafiro}
-            icono={cb.oculto ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
-            etiqueta={cb.oculto ? 'Oculto' : 'Visible'}
-            titulo={cb.oculto ? `${cb.nombre} está oculto a los jugadores (toca para que lo vean)` : `Los jugadores ven a ${cb.nombre}: su nombre y sus estados (toca para ocultarlo)`}
-            onClick={() => cambiar((x) => { x.oculto = !x.oculto })}
-          />
-          <Conmutador
-            compacto
-            activo={cb.mostrarSalud}
-            t={tone.esmeralda}
-            icono={<StatIcons.salud size={14} aria-hidden />}
-            etiqueta="Salud"
-            titulo={cb.mostrarSalud ? `Los jugadores ven si ${cb.nombre} está intacto, herido o malherido, nunca el número (toca para ocultarlo)` : `Mostrar a los jugadores si ${cb.nombre} está intacto, herido o malherido, nunca el número`}
-            onClick={() => cambiar((x) => { x.mostrarSalud = !x.mostrarSalud })}
-          />
-          {conRetrato && cb.adversarioId !== null && (
-            <Button size="sm" variant="ghost" icon={<Projector size={14} aria-hidden />} onClick={() => mostrarEnMesa({ tipo: 'retrato', adversarioId: cb.adversarioId as number }, cb.nombre)} style={{ minHeight: 36 }}>
-              Retrato a la mesa
-            </Button>
-          )}
-        </div>
-      )}
 
       {/* Conditions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -738,6 +732,67 @@ function TarjetaCombatiente({ cb, fase, enJuego }: { cb: Combatiente; fase: Fase
           ))}
         </div>
       )}
+      </div>
+
+      <div style={stack(10)}>
+      {/* Defenses, deflect, immunities */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px 14px', flexWrap: 'wrap' }}>
+        <Defensa etiqueta="Física" valor={cb.defensas.fisica} t={tone.granate} />
+        <Defensa etiqueta="Cognitiva" valor={cb.defensas.cognitiva} t={tone.zafiro} />
+        <Defensa etiqueta="Espiritual" valor={cb.defensas.espiritual} t={tone.amatista} />
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted }}>
+          <CosmereIcon name="marco-desvio" size={18} style={{ color: tone.topacio.fg }} />
+          Desvío <strong style={{ ...numeral, fontSize: fs.md, color: c.text }}>{cb.desvio}</strong>
+          {cb.desvioNota && <span style={{ fontSize: fs.xs, color: c.subtle }}>({cb.desvioNota})</span>}
+        </span>
+        {cb.inmunidades.length > 0 && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: fs.xs, color: c.subtle }}>
+            <ShieldOff size={13} aria-hidden />
+            Inmune: {cb.inmunidades.join(', ')}
+          </span>
+        )}
+      </div>
+
+      {/* «La mesa»: what the players see of this enemy (an ally is always shown whole) */}
+      {!pj && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ ...eyebrow, color: tone.zafiro.fg, marginRight: 4 }}>Mesa</span>
+          <Conmutador
+            compacto
+            activo={!cb.oculto}
+            t={tone.zafiro}
+            icono={cb.oculto ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
+            etiqueta={cb.oculto ? 'Oculto' : 'Visible'}
+            titulo={cb.oculto ? `${cb.nombre} está oculto a los jugadores (toca para que lo vean)` : `Los jugadores ven a ${cb.nombre}: su nombre y sus estados (toca para ocultarlo)`}
+            onClick={() => cambiar((x) => { x.oculto = !x.oculto })}
+          />
+          <Conmutador
+            compacto
+            activo={cb.mostrarSalud}
+            t={tone.esmeralda}
+            icono={<StatIcons.salud size={14} aria-hidden />}
+            etiqueta="Salud"
+            titulo={cb.mostrarSalud ? `Los jugadores ven si ${cb.nombre} está intacto, herido o malherido, nunca el número (toca para ocultarlo)` : `Mostrar a los jugadores si ${cb.nombre} está intacto, herido o malherido, nunca el número`}
+            onClick={() => cambiar((x) => { x.mostrarSalud = !x.mostrarSalud })}
+          />
+          <Conmutador
+            compacto
+            activo={cb.turnoVisible}
+            t={tone.cuarzo}
+            icono={<CosmereIcon name={ICONO_TURNO[cb.turno ?? 'rapido']} size={14} />}
+            etiqueta={cb.turnoVisible ? 'Turno visible' : 'Turno oculto'}
+            titulo={cb.turnoVisible ? `Los jugadores ven el turno de ${cb.nombre} (toca para ocultarlo hasta que actúe)` : `Los jugadores no ven si ${cb.nombre} juega rápido o lento hasta que lo reveles o actúe (toca para revelarlo)`}
+            onClick={() => cambiar((x) => { x.turnoVisible = !x.turnoVisible })}
+          />
+          {conRetrato && cb.adversarioId !== null && (
+            <Button size="sm" variant="ghost" icon={<Projector size={14} aria-hidden />} onClick={() => mostrarEnMesa({ tipo: 'retrato', adversarioId: cb.adversarioId as number }, cb.nombre)} style={{ minHeight: 36 }}>
+              Retrato a la mesa
+            </Button>
+          )}
+        </div>
+      )}
+      </div>
+      </div>
       {ultima && (
         <p role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '8px 12px', borderRadius: radius.md, background: tone.rubi.bg, border: `1px solid ${tone.rubi.border}`, fontSize: fs.sm, color: c.text }}>
           <Dices size={15} aria-hidden style={{ color: tone.rubi.fg }} />
@@ -842,7 +897,7 @@ function Recurso({
   etiqueta, t, icono, actual, max, onPaso,
 }: { etiqueta: string; t: Tone; icono: ReactNode; actual: number; max: number; onPaso: (d: number) => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, flex: '0 1 230px', minWidth: 170 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <BarraRecurso etiqueta={etiqueta} icono={icono} actual={actual} max={max} t={t} />
       </div>

@@ -172,7 +172,9 @@ const base = (bando: Bando, nombre: string): Combatiente => ({
   characterId: null,
   adversarioId: null,
   rango: null,
-  turno: 'rapido',
+  // Nobody has a turn until it is declared at the start of the round (a Jefe plays both and never chooses)
+  turno: null,
+  turnoVisible: false,
   actuoRapido: false,
   actuoLento: false,
   reaccionUsada: false,

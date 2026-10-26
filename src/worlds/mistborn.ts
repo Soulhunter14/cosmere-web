@@ -65,8 +65,8 @@ export const MISTBORN: WorldConfig = {
           preguntaOpciones: '¿Qué tipo quieres ser?',
         },
         opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANCIA) },
-        // Options the table does not offer (Xavi will say which), by id: 'nacido-de-la-bruma', 'brumoso:atium'…
-        ocultas: [],
+        // Options the table does not offer, by id (Xavi, 26-10-2026): players can only be mistings for now
+        ocultas: ['nacido-de-la-bruma'],
       },
       { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },
       { id: 'legadoRespuestas:1', indice: 1, titulo: 'Segunda pregunta: impulso', ayuda: 'Qué te empuja a dejar lo que eres e intentar cambiar las cosas.' },

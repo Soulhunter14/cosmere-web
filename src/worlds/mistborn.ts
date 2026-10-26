@@ -58,13 +58,13 @@ export const MISTBORN: WorldConfig = {
       // Two steps, so the director can release the first without the second (Xavi, 26-10-2026)
       {
         id: 'creacion:alomante', clave: 'alomante', titulo: '¿Quieres ser alomante?',
-        ayuda: 'No decide tu camino de nacido del metal (eso lo pone el director), pero ayuda a contar tu historia.',
+        ayuda: 'Si dices que sí y eliges tu metal, tu ficha tendrá ese camino de nacido del metal mientras dure la creación. Con cuál empiezas lo decide el director.',
         opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANTE) },
         ocultas: [],
       },
       {
         id: 'creacion:alomancia', clave: 'alomancia', titulo: '¿Qué tipo de brumoso?',
-        ayuda: 'Qué metal quemas. Solo si respondiste que sí.',
+        ayuda: 'Qué metal quemas: será tu camino Brumoso y tu poder en la ficha. Solo si respondiste que sí.',
         opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANCIA) },
         // Options the table does not offer, by id (Xavi, 26-10-2026): players can only be mistings for now, and the rare and divine
         // metals (group «Raros y divinos» of OPCIONES_ALOMANCIA) wait for the director to allow them

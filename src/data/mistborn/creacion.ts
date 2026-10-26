@@ -4,7 +4,8 @@
  *
  * «¿Qué tipo quieres ser?» (the second question of the alomancia step, 26-10-2026): every allomantic type of Era 1, each with a
  * short definition in our own words (the full rules are in alomancia.ts), so the director can later hide the ones the table does
- * not offer (`ocultas` of the step). A narrative choice: the metalborn path of the sheet is still the director's.
+ * not offer (`ocultas` of the step). While the character is in creation the API makes the sheet follow it (camino Brumoso and its power;
+ * MistbornRules.FichaDeCreacion); the starting path is still the director's.
  */
 import type { OpcionCreacion } from '../../worlds/types'
 import { getMetal, type MetalId } from './metales'

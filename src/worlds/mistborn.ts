@@ -53,9 +53,6 @@ export const MISTBORN: WorldConfig = {
       { id: 'name', titulo: 'Tu nombre', ayuda: 'Cómo se llama tu personaje. Podrás cambiarlo más adelante.' },
       { id: 'legado', titulo: 'Tu trasfondo', ayuda: 'Uno de los seis legados de la Era 1: quién eres el día de la caída.' },
       { id: 'ascendencia', titulo: 'Tu ascendencia', ayuda: 'Humano o kandra. Un kandra sirve bajo un Contrato: anota en tu ficha a quién.' },
-      { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },
-      { id: 'legadoRespuestas:1', indice: 1, titulo: 'Segunda pregunta: impulso', ayuda: 'Qué te empuja a dejar lo que eres e intentar cambiar las cosas.' },
-      { id: 'legadoRespuestas:2', indice: 2, titulo: 'Tercera pregunta: meta', ayuda: 'Qué buscas cuando las cosas cambien.' },
       {
         id: 'creacion:alomancia', clave: 'alomancia', titulo: '¿Quieres ser alomante?',
         ayuda: 'No decide tu camino de nacido del metal (eso lo pone el director), pero ayuda a contar tu historia.',
@@ -63,6 +60,9 @@ export const MISTBORN: WorldConfig = {
         // Options the table does not offer (Xavi will say which), by id: 'nacido-de-la-bruma', 'brumoso:atium'…
         ocultas: [],
       },
+      { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },
+      { id: 'legadoRespuestas:1', indice: 1, titulo: 'Segunda pregunta: impulso', ayuda: 'Qué te empuja a dejar lo que eres e intentar cambiar las cosas.' },
+      { id: 'legadoRespuestas:2', indice: 2, titulo: 'Tercera pregunta: meta', ayuda: 'Qué buscas cuando las cosas cambien.' },
     ],
   },
   // The book's table (T26), read on the sheet, the dice roller (from T43) and the NPC page: the same one Stormlight reads since T50

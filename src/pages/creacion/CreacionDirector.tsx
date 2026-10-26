@@ -1,10 +1,10 @@
 /**
  * The director's view of «Creación de personajes»: the steps of the world with the ones released, the characters in creation with what
  * each one has answered (the thread of their session 0 scene), «Añadir personaje», «Liberar paso», «Volver al paso anterior» and
- * «Personaje creado» (with undo). Every write answers with the whole state; the hub event refreshes the other clients.
+ * «Personaje creado». A created character is followed from its sheet, which can send it back here («Pasar a creación»). Every write
+ * answers with the whole state; the hub event refreshes the other clients.
  */
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, ChevronUp, Circle, Lock, LockOpen, Plus, Undo2, UserCheck, UserX, Users } from 'lucide-react'
 import { creacionApi } from '../../api/creacion'
@@ -30,7 +30,7 @@ const numeroPaso = (t: Tone): CSSProperties => ({
 
 type Confirmacion =
   | { tipo: 'liberar' | 'retroceder'; paso: number; titulo: string }
-  | { tipo: 'completar' | 'deshacer'; id: number; name: string }
+  | { tipo: 'completar'; id: number; name: string }
 
 export interface CreacionDirectorProps {
   cId: number
@@ -60,20 +60,18 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
     onSuccess: (nuevo) => { aplicar(nuevo); setAnadir(false); setOwnerId(null) },
   })
   const completarMutation = useMutation({
-    mutationFn: ({ id, completada }: { id: number; completada: boolean }) =>
-      completada ? creacionApi.completar(cId, id) : creacionApi.deshacer(cId, id),
+    mutationFn: (id: number) => creacionApi.completar(cId, id),
     onSuccess: (nuevo) => { aplicar(nuevo); setConfirmacion(null) },
   })
   const ocupado = pasoMutation.isPending || completarMutation.isPending
   const soloLectura = estado.iniciada
   const enCreacion = estado.personajes.filter((p) => !p.completada)
-  const creados = estado.personajes.filter((p) => p.completada)
   const siguiente = estado.paso < pasos.length ? pasos[estado.paso] : null
 
   const confirmar = () => {
     if (!confirmacion) return
     if ('paso' in confirmacion) pasoMutation.mutate(confirmacion.paso)
-    else completarMutation.mutate({ id: confirmacion.id, completada: confirmacion.tipo === 'completar' })
+    else completarMutation.mutate(confirmacion.id)
   }
   const textoConfirmacion = (x: Confirmacion): { title: string; message: ReactNode; confirmLabel: string; tone: 'brand' | 'danger' } => {
     switch (x.tipo) {
@@ -82,9 +80,7 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
       case 'retroceder':
         return { title: 'Volver al paso anterior', message: <>El paso <strong>{x.paso + 1}</strong> queda bloqueado otra vez. Lo que ya escribieron no se borra.</>, confirmLabel: 'Volver', tone: 'brand' }
       case 'completar':
-        return { title: '¿Personaje creado?', message: <><strong>{x.name}</strong> pasa a «Personajes» y su ficha se rige por las reglas de siempre. Puedes deshacerlo.</>, confirmLabel: 'Personaje creado', tone: 'brand' }
-      case 'deshacer':
-        return { title: 'Deshacer «Personaje creado»', message: <><strong>{x.name}</strong> vuelve a la creación y desaparece de «Personajes» para su jugador.</>, confirmLabel: 'Deshacer', tone: 'danger' }
+        return { title: '¿Personaje creado?', message: <><strong>{x.name}</strong> pasa a «Personajes» y su ficha se rige por las reglas de siempre. Desde su ficha puedes devolverlo a la creación.</>, confirmLabel: 'Personaje creado', tone: 'brand' }
     }
   }
   const tc = confirmacion ? textoConfirmacion(confirmacion) : null
@@ -181,24 +177,6 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
           </ul>
         )}
       </section>
-
-      {creados.length > 0 && (
-        <section aria-labelledby="creacion-creados" style={stack(12)}>
-          <p id="creacion-creados" style={eyebrow}>Creados</p>
-          <ul style={{ listStyle: 'none', ...stack(8) }}>
-            {creados.map((p) => (
-              <li key={p.id} style={{ ...card, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ flex: 1, minWidth: 140, fontWeight: 600, color: c.text, overflowWrap: 'anywhere' }}>{p.name}</span>
-                <PillJugador nombre={p.ownerName} />
-                <Link to={`/campaigns/${cId}/gm/characters/${p.id}`} style={{ fontSize: fs.sm, color: tone.brand.fg }}>Ver ficha</Link>
-                <Button size="sm" variant="ghost" icon={<Undo2 size={14} aria-hidden />} disabled={soloLectura || ocupado} onClick={() => setConfirmacion({ tipo: 'deshacer', id: p.id, name: p.name })}>
-                  Deshacer
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       <Sheet
         open={anadir}

@@ -37,7 +37,7 @@ Secuencia fijada por Xavi el 26-10-2026 (faltan pasos por definir; se añadirán
 | 1 | Nombre | Pone el nombre de su personaje (hasta entonces, «Personaje de <jugador>») | `name` |
 | 2 | Trasfondo | Elige uno de los seis legados (la lista con sus resúmenes, sin la conexión con la Era 2; cada legado que otros personajes ya tienen avisa «Ya lo ha elegido N compañeros», sin nombres). Cambiable cuando el director lo permite («Permitir / Denegar» en su vista; de inicio denegado): cambiarlo reinicia todos los pasos siguientes, con aviso | `legado` |
 | 3 | Ascendencia | Humano o kandra, las de la era de la campaña; un kandra indica bajo qué Contrato sirve | `ascendencia` |
-| 4 | ¿Quieres ser alomante? | Sí / No, cada uno con una definición corta; dato narrativo, no el camino | `creacionDatos.alomante` |
+| 4 | ¿Quieres ser alomante? | Sí / No, cada uno con una definición corta. Mientras el personaje está en creación la ficha sigue a este paso y al siguiente: la API pone el camino Brumoso y su poder (o los quita con «no»); el camino inicial sigue siendo del director | `creacionDatos.alomante` |
 | 5 | ¿Qué tipo de brumoso? | Los brumosos de la Era 1 con una definición corta cada uno, en tres grupos («Para empezar», «Para expertos», «Raros y divinos»; nacido de la bruma, oro y atium ocultos por ahora); solo si el paso 4 es «sí», si no queda como «no aplica» | `creacionDatos.alomancia` |
 | 6 | Primera pregunta | Origen: «¿Por qué eres de este legado?», con los ejemplos debajo | `legadoRespuestas[0]` |
 | 7 | Segunda pregunta | Impulso: «¿Qué te empuja a dejar lo que eres e intentar cambiar las cosas?» | `legadoRespuestas[1]` |
@@ -142,7 +142,7 @@ TEST», despliegue después con migración (pg_dump y `:prev` antes).
 ## 9. Estado (26-10-2026)
 
 Construido en `feature/creacion` (worktrees `cosmere-web-creacion` y `cosmere-api-creacion`), con el paso 7 «¿Quieres ser alomante?»
-que Xavi añadió sobre la marcha (dato narrativo `alomancia` en `Character.creacionDatos`, con todas las opciones alománticas de la
+que Xavi añadió sobre la marcha (dato `alomancia` en `Character.creacionDatos`, que la ficha sigue mientras dura la creación, con todas las opciones alománticas de la
 Era 1; las que no se ofrezcan irán en `ocultas` del paso, en `mistborn.ts`).
 
 - **API:** migración `AddCreacionGuiada` (`Campaigns.CreacionPaso`, `Characters.CreacionCompletada` y `Characters.CreacionDatos`, todas con

@@ -268,13 +268,19 @@ function PasoNombre({ valor, disabled, onGuardar }: { valor: string; disabled: b
   )
 }
 
-/** The legacy; changing it with answers written asks first, because the next legacy's questions are different */
+/**
+ * The legacy. Changing it starts every later step afresh (ancestry, the choices and the three answers), so they open again for the
+ * player; when any of them is answered, it asks first and says so
+ */
 function PasoTrasfondo({ mio, disabled, onGuardar }: { mio: CreacionPersonaje; disabled: boolean; onGuardar: (cambio: Cambio) => void }) {
   const [pendiente, setPendiente] = useState<string | null>(null)
-  const hayRespuestas = mio.legadoRespuestas.some((r) => r.trim() !== '')
+  const hayPosteriores = mio.ascendencia !== ''
+    || Object.values(mio.creacionDatos).some((v) => v !== '')
+    || mio.legadoRespuestas.some((r) => r.trim() !== '')
+  const reiniciar = (legado: string): Cambio => ({ legado, ascendencia: '', creacionDatos: {}, legadoRespuestas: [] })
   const elegir = (id: string) => {
     if (id === mio.legado) return
-    if (hayRespuestas) setPendiente(id)
+    if (hayPosteriores) setPendiente(id)
     else onGuardar({ legado: id })
   }
   return (
@@ -285,9 +291,9 @@ function PasoTrasfondo({ mio, disabled, onGuardar }: { mio: CreacionPersonaje; d
       <ConfirmDialog
         open={pendiente !== null}
         title="¿Cambiar de trasfondo?"
-        message="Las tres preguntas del trasfondo (origen, impulso y meta) son otras con cada legado: se borrarán las respuestas que hayas escrito y tendrás que responderlas de nuevo cuando el director libere esos pasos. El nombre, la ascendencia y la alomancia se conservan."
+        message="Cambiar el trasfondo reinicia todo lo que viene después: la ascendencia, la alomancia y las tres preguntas (origen, impulso y meta). Esos pasos vuelven a quedar pendientes y tendrás que responderlos de nuevo. El nombre se conserva."
         confirmLabel="Cambiar"
-        onConfirm={() => { if (pendiente !== null) onGuardar({ legado: pendiente, legadoRespuestas: [] }); setPendiente(null) }}
+        onConfirm={() => { if (pendiente !== null) onGuardar(reiniciar(pendiente)); setPendiente(null) }}
         onCancel={() => setPendiente(null)}
       />
     </>

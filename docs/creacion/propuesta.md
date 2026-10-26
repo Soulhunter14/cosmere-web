@@ -35,7 +35,7 @@ Secuencia fijada por Xavi el 26-10-2026 (faltan pasos por definir; se añadirán
 | Paso | Título | Qué hace el jugador | Dónde se guarda |
 |---|---|---|---|
 | 1 | Nombre | Pone el nombre de su personaje (hasta entonces, «Personaje de <jugador>») | `name` |
-| 2 | Trasfondo | Elige uno de los seis legados (la lista con sus resúmenes, sin la conexión con la Era 2) | `legado` |
+| 2 | Trasfondo | Elige uno de los seis legados (la lista con sus resúmenes, sin la conexión con la Era 2). Cambiable: cambiarlo reinicia todos los pasos siguientes, con aviso | `legado` |
 | 3 | Ascendencia | Humano o kandra, las de la era de la campaña; un kandra indica bajo qué Contrato sirve | `ascendencia` |
 | 4 | ¿Quieres ser alomante? | Sí / No, cada uno con una definición corta; dato narrativo, no el camino | `creacionDatos.alomante` |
 | 5 | ¿Qué tipo de brumoso? | Los diez brumosos de la Era 1 con una definición corta cada uno (nacido de la bruma oculto por ahora); solo si el paso 4 es «sí», si no queda como «no aplica» | `creacionDatos.alomancia` |

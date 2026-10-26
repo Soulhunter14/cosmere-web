@@ -56,7 +56,7 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
     enabled: chId > 0,
   })
   const [error, setError] = useState<string | null>(null)
-  // A done step folds to what was chosen; on a `cambiable` step, «Cambiar» opens its editor again until the next save
+  // A done step folds to what was chosen; while the director permits changing a `cambiable` step, «Cambiar» opens its editor again until the next save
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({})
   const abrir = (pasoId: string, abierto: boolean) => setAbiertos((cur) => ({ ...cur, [pasoId]: abierto }))
   const guardar = useMutation({
@@ -98,6 +98,8 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
   }
 
   const soloLectura = estado.iniciada
+  // «Cambiar» on an answered step: only the steps the table marks as `cambiable`, and only while the director permits it
+  const puedeCambiar = (paso: PasoCreacion) => !!paso.cambiable && estado.cambiables.includes(paso.id) && !soloLectura
   const ocupado = guardar.isPending
   return (
     <div style={{ ...page, paddingBottom: 48 }}>
@@ -143,11 +145,10 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
                 <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
                   <Circle size={14} aria-hidden /> Responde antes «{requerido?.titulo ?? 'el paso anterior'}».
                 </p>
-              ) : e === 'hecho' && !abiertos[paso.id] ? (
+              ) : e === 'hecho' && !(abiertos[paso.id] && puedeCambiar(paso)) ? (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10 }}>
                   <ResumenPaso paso={paso} mio={mio} />
-                  {/* «Cambiar» only on the steps the table marks as `cambiable`; the rest stay as answered */}
-                  {paso.cambiable && !soloLectura && (
+                  {puedeCambiar(paso) && (
                     <Button size="sm" variant="ghost" icon={<Pencil size={14} aria-hidden />} onClick={() => abrir(paso.id, true)} style={{ flexShrink: 0 }}>
                       Cambiar
                     </Button>

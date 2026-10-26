@@ -220,7 +220,11 @@ export interface OpcionCreacion {
 export type PasoCreacion = {
   titulo: string
   ayuda: string
-  /** Once answered, the player may change it from the folded step («Cambiar»). Default false: Xavi decides per step which ones can be changed */
+  /**
+   * The director may let players change it once answered («Cambiar» on the folded step): the step shows «Permitir / Denegar» in the
+   * director's view and starts denied (`CreacionEstado.cambiables`, checked by the API too). A step without it never offers «Cambiar».
+   * Default false: Xavi decides per step which ones can be changed
+   */
   cambiable?: boolean
 } & (
   | { id: 'name' }

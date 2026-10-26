@@ -52,7 +52,7 @@ export const MISTBORN: WorldConfig = {
   creacion: {
     pasos: [
       { id: 'name', titulo: 'Tu nombre', ayuda: 'Cómo se llama tu personaje. Podrás cambiarlo más adelante.' },
-      // Changeable once answered (Xavi, 26-10-2026): changing it starts every later step afresh (ancestry, choices, answers), after a warning
+      // The director may allow changing it once answered (Xavi, 26-10-2026); a change starts every later step afresh (ancestry, choices, answers), after a warning
       { id: 'legado', titulo: 'Tu trasfondo', ayuda: 'Uno de los seis legados de la Era 1: quién eres el día de la caída.', cambiable: true },
       { id: 'ascendencia', titulo: 'Tu ascendencia', ayuda: 'Humano o kandra. Un kandra sirve bajo un Contrato: anota en tu ficha a quién.' },
       // Two steps, so the director can release the first without the second (Xavi, 26-10-2026)

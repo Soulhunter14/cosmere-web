@@ -35,7 +35,7 @@ Secuencia fijada por Xavi el 26-10-2026 (faltan pasos por definir; se añadirán
 | Paso | Título | Qué hace el jugador | Dónde se guarda |
 |---|---|---|---|
 | 1 | Nombre | Pone el nombre de su personaje (hasta entonces, «Personaje de <jugador>») | `name` |
-| 2 | Trasfondo | Elige uno de los seis legados (la lista con sus resúmenes, sin la conexión con la Era 2). Cambiable: cambiarlo reinicia todos los pasos siguientes, con aviso | `legado` |
+| 2 | Trasfondo | Elige uno de los seis legados (la lista con sus resúmenes, sin la conexión con la Era 2). Cambiable cuando el director lo permite («Permitir / Denegar» en su vista; de inicio denegado): cambiarlo reinicia todos los pasos siguientes, con aviso | `legado` |
 | 3 | Ascendencia | Humano o kandra, las de la era de la campaña; un kandra indica bajo qué Contrato sirve | `ascendencia` |
 | 4 | ¿Quieres ser alomante? | Sí / No, cada uno con una definición corta; dato narrativo, no el camino | `creacionDatos.alomante` |
 | 5 | ¿Qué tipo de brumoso? | Los diez brumosos de la Era 1 con una definición corta cada uno (nacido de la bruma oculto por ahora); solo si el paso 4 es «sí», si no queda como «no aplica» | `creacionDatos.alomancia` |
@@ -85,7 +85,7 @@ Endpoints (`CreacionController`, `campaigns/{id}/creacion`):
   reglas del mundo validan en `CharacterService.Update`: con `CreacionCompletada = false` y jugador, cada campo exige que su
   paso esté liberado (`CreacionPaso >= posición + 1`); se rechaza con 400 y mensaje claro. Con la campaña iniciada, el cierre de
   hoy.
-- Hub: evento `CreacionUpdated` al grupo de la campaña (sin datos) al cambiar el paso, al completar o deshacer, y cuando un
+- Hub: evento `CreacionUpdated` al grupo de la campaña (sin datos) al cambiar el paso, al permitir o denegar cambiar un paso, al completar o deshacer, y cuando un
   jugador guarda legado o respuestas en un personaje en creación (para que la tabla del director se mueva sola).
 - `CampaignResponse.CreacionPaso` y `CharacterResponse.CreacionCompletada` (y los tipos TS a juego).
 

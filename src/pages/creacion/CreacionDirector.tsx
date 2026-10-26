@@ -1,14 +1,15 @@
 /**
  * The director's view of «Creación de personajes»: the steps of the world with the ones released, the characters in creation with what
- * each one has answered (the thread of their session 0 scene), «Añadir personaje», «Liberar paso», «Volver al paso anterior» and
- * «Personaje creado». A created character is followed from its sheet, which can send it back here («Pasar a creación»). Every write
+ * each one has answered (the thread of their session 0 scene), «Añadir personaje», «Liberar paso», «Volver al paso anterior»,
+ * «Permitir / Denegar» changing an answered step (on the steps the world marks `cambiable`) and «Personaje creado». A created character
+ * is followed from its sheet, which can send it back here («Pasar a creación»). Every write
  * answers with the whole state; the hub event refreshes the other clients.
  */
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, ChevronUp, Circle, Lock, LockOpen, Minus, Plus, Undo2, UserCheck, UserX, Users } from 'lucide-react'
 import { creacionApi } from '../../api/creacion'
-import { Button, ConfirmDialog, EmptyState, PageHeader, Sheet } from '../../components/ui'
+import { Button, ConfirmDialog, EmptyState, PageHeader, Segmented, Sheet } from '../../components/ui'
 import { useCampaignStore } from '../../store/campaignStore'
 import { buttonReset, c, card, eyebrow, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
 import type { CampaignDetail, CreacionEstado, CreacionPersonaje, Member } from '../../types'
@@ -63,7 +64,11 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
     mutationFn: (id: number) => creacionApi.completar(cId, id),
     onSuccess: (nuevo) => { aplicar(nuevo); setConfirmacion(null) },
   })
-  const ocupado = pasoMutation.isPending || completarMutation.isPending
+  const cambiableMutation = useMutation({
+    mutationFn: ({ paso, permitido }: { paso: string; permitido: boolean }) => creacionApi.setCambiable(cId, paso, permitido),
+    onSuccess: (nuevo) => aplicar(nuevo),
+  })
+  const ocupado = pasoMutation.isPending || completarMutation.isPending || cambiableMutation.isPending
   const soloLectura = estado.iniciada
   const enCreacion = estado.personajes.filter((p) => !p.completada)
   const siguiente = estado.paso < pasos.length ? pasos[estado.paso] : null
@@ -123,6 +128,23 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
                     </span>
                   </span>
                   <span style={{ display: 'block', fontSize: fs.sm, color: c.muted, lineHeight: 1.45, marginTop: 2 }}>{paso.ayuda}</span>
+                  {/* «Cambiar» for the players on this step once answered, only while the director permits it (the server checks it too) */}
+                  {paso.cambiable && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                      <span style={{ fontSize: fs.sm, color: c.muted }}>Cambiar lo respondido</span>
+                      <Segmented
+                        size="sm"
+                        stretch={false}
+                        ariaLabel={`Cambiar lo respondido en «${paso.titulo}»`}
+                        options={[
+                          { value: 'si', label: 'Permitir', disabled: soloLectura || ocupado },
+                          { value: 'no', label: 'Denegar', disabled: soloLectura || ocupado },
+                        ]}
+                        value={estado.cambiables.includes(paso.id) ? 'si' : 'no'}
+                        onChange={(v) => cambiableMutation.mutate({ paso: paso.id, permitido: v === 'si' })}
+                      />
+                    </span>
+                  )}
                 </span>
               </li>
             )

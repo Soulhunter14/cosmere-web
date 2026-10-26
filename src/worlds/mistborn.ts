@@ -44,6 +44,34 @@ export const MISTBORN: WorldConfig = {
     catalogoDePrecios: true,
     legados: true,
     banda: true,
+    creacionGuiada: true,
+  },
+  // «Creación de personajes» (26-10-2026): the steps the director releases, in the order Xavi set; their ids are `MistbornRules.PasosCreacion`.
+  // More steps are coming: add them at the end here and there. The choices load their options lazily (data/mistborn/creacion.ts)
+  // A step answered stays folded without «Cambiar» unless it says `cambiable: true` (none yet: Xavi will say which)
+  creacion: {
+    pasos: [
+      { id: 'name', titulo: 'Tu nombre', ayuda: 'Cómo se llama tu personaje. Podrás cambiarlo más adelante.' },
+      { id: 'legado', titulo: 'Tu trasfondo', ayuda: 'Uno de los seis legados de la Era 1: quién eres el día de la caída.' },
+      { id: 'ascendencia', titulo: 'Tu ascendencia', ayuda: 'Humano o kandra. Un kandra sirve bajo un Contrato: anota en tu ficha a quién.' },
+      {
+        id: 'creacion:alomancia', clave: 'alomancia', titulo: 'Alomancia',
+        ayuda: 'No decide tu camino de nacido del metal (eso lo pone el director), pero ayuda a contar tu historia.',
+        // Two questions: yes or no, and then the type, each option with its short definition
+        puerta: {
+          pregunta: '¿Quieres ser alomante?',
+          si: { id: 'si', label: 'Sí', descripcion: 'Quemas un metal para despertar un poder: lo que ya eres en secreto, o lo que esta noche despertará.' },
+          no: { id: 'no', label: 'No', descripcion: 'Sin alomancia, al menos por ahora. Nada te impide descubrirla más adelante.' },
+          preguntaOpciones: '¿Qué tipo quieres ser?',
+        },
+        opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANCIA) },
+        // Options the table does not offer, by id (Xavi, 26-10-2026): players can only be mistings for now
+        ocultas: ['nacido-de-la-bruma'],
+      },
+      { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },
+      { id: 'legadoRespuestas:1', indice: 1, titulo: 'Segunda pregunta: impulso', ayuda: 'Qué te empuja a dejar lo que eres e intentar cambiar las cosas.' },
+      { id: 'legadoRespuestas:2', indice: 2, titulo: 'Tercera pregunta: meta', ayuda: 'Qué buscas cuando las cosas cambien.' },
+    ],
   },
   // The book's table (T26), read on the sheet, the dice roller (from T43) and the NPC page: the same one Stormlight reads since T50
   habilidades: HABILIDADES_COSMERE,

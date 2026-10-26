@@ -9,14 +9,10 @@
  * main chunk (§8, risk 6).
  */
 import { useId, useState } from 'react'
-import { Button, Sheet, Textarea } from '../ui'
-import { LEGADOS, getLegado } from '../../data/mistborn/legados'
-import { useEra, useWorldConfig } from '../../store/campaignStore'
-import { c, fs, tone } from '../../theme'
-import { FilaOpcion } from './FilaOpcion'
-
-/** Same limit as `MistbornData.MaxRespuestaLegado` in the API */
-const MAX_RESPUESTA = 2000
+import { Button, Sheet } from '../ui'
+import { getLegado } from '../../data/mistborn/legados'
+import { PasoLegado } from './PasoLegado'
+import { PreguntaLegado } from './PreguntaLegado'
 
 export interface LegadoPickerProps {
   open: boolean
@@ -43,12 +39,7 @@ const mismas = (a: string[], b: string[]) => a.length === b.length && a.every((x
 const borradorDe = (id: string, guardadas: string[]) => (getLegado(id)?.preguntas ?? []).map((_, i) => guardadas[i] ?? '')
 
 export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = 'legado', onConfirm }: LegadoPickerProps) {
-  const cfg = useWorldConfig()
-  const era = useEra()
   const idBase = useId()
-  // The legacies of the era of the campaign; a saved legacy of the other era (an older choice) stays visible so it can be removed
-  const opciones = LEGADOS.filter((l) => !era || l.era === era || l.id === value)
-  const toneDe = (e: string) => cfg.eras?.find((x) => x.id === e)?.tone ?? tone.cuarzo
 
   // The picker is mounted when it opens (the sheet renders it only then), so the initial state is the saved one
   const [paso, setPaso] = useState<'legado' | 'preguntas'>(pasoInicial === 'preguntas' && value ? 'preguntas' : 'legado')
@@ -88,28 +79,15 @@ export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = '
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* The question is the label in sentence case: the uppercase eyebrow of Field is hard to read for a whole sentence */}
           {def.preguntas.map((pregunta, i) => (
-            <div key={pregunta} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <label htmlFor={`${idBase}-${i}`} style={{ fontSize: fs.base, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{pregunta}</label>
-              {def.ejemplos?.[i]?.length ? (
-                <p id={`${idBase}-${i}-ejemplos`} style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.45 }}>
-                  Por ejemplo: {def.ejemplos[i].join(' · ')}.
-                </p>
-              ) : null}
-              <Textarea
-                id={`${idBase}-${i}`}
-                rows={4}
-                maxLength={MAX_RESPUESTA}
-                value={borrador[i] ?? ''}
-                aria-describedby={def.ejemplos?.[i]?.length ? `${idBase}-${i}-ejemplos ${idBase}-${i}-cuenta` : `${idBase}-${i}-cuenta`}
-                data-autofocus={i === 0 || undefined}
-                onChange={(e) => {
-                  const texto = e.target.value
-                  setBorrador((cur) => cur.map((x, j) => (j === i ? texto : x)))
-                }}
-                placeholder="Tu respuesta…"
-              />
-              <p id={`${idBase}-${i}-cuenta`} style={{ fontSize: fs.xs, color: c.subtle, textAlign: 'right' }}>{(borrador[i] ?? '').length}/{MAX_RESPUESTA}</p>
-            </div>
+            <PreguntaLegado
+              key={pregunta}
+              id={`${idBase}-${i}`}
+              pregunta={pregunta}
+              ejemplos={def.ejemplos?.[i]}
+              value={borrador[i] ?? ''}
+              autoFocus={i === 0}
+              onChange={(texto) => setBorrador((cur) => cur.map((x, j) => (j === i ? texto : x)))}
+            />
           ))}
         </div>
       </Sheet>
@@ -135,27 +113,7 @@ export function LegadoPicker({ open, onClose, value, respuestas, pasoInicial = '
         </>
       )}
     >
-      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {opciones.map((l) => {
-          const conexion = l.era === 'era2' ? getLegado(l.conexion) : undefined
-          const t = toneDe(l.era)
-          return (
-            <li key={l.id}>
-              <FilaOpcion titulo={l.nombre} t={t} selected={seleccion === l.id} onClick={() => elegir(l.id)}>
-                <span style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{l.resumen}</span>
-                {conexion && (
-                  <span style={{ fontSize: fs.xs, color: c.subtle, lineHeight: 1.4 }}>
-                    Conectado con {conexion.nombre} ({conexion.era === 'era1' ? 'Era 1' : 'Era 2'})
-                  </span>
-                )}
-              </FilaOpcion>
-            </li>
-          )
-        })}
-        <li>
-          <FilaOpcion titulo="Sin legado" t={tone.cuarzo} selected={seleccion === ''} onClick={() => elegir('')} />
-        </li>
-      </ul>
+      <PasoLegado value={seleccion} onChange={elegir} conSinLegado />
     </Sheet>
   )
 }

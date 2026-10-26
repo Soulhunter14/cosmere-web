@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
+import { Navigate, useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
-  Check, ChevronDown, HeartPulse, Info, Lock, Pencil, Save, Skull, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
+  Check, ChevronDown, HeartPulse, Info, Lock, Pencil, Save, Skull, Sparkle, SquarePen, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
+import { creacionApi } from '../../api/creacion'
 import { metasApi } from '../../api/metas'
 import { useCampaignStore, useCampoCerrado, useEra, useWorldConfig } from '../../store/campaignStore'
 import { AVISO_CERRADO } from '../../lib/cierreCampana'
@@ -632,6 +633,8 @@ export function CharacterDetailPage() {
   const [marcandoMuerte, setMarcandoMuerte] = useState(false)
   const [causaMuerte, setCausaMuerte] = useState('')
   const [confirmarRevivir, setConfirmarRevivir] = useState(false)
+  // «Pasar a creación» (director, worlds with guided creation): the created character goes back to «Creación de personajes»
+  const [confirmarCreacion, setConfirmarCreacion] = useState(false)
   // Flow «al elegir camino» (§7.4): the path that waits for its metals, and the confirmation of a removal or of a change of path
   const [caminoPendiente, setCaminoPendiente] = useState<CaminoPendiente | null>(null)
   // A change of legacy that would drop the answers of the old one, waiting for confirmation
@@ -817,6 +820,16 @@ export function CharacterDetailPage() {
     onSuccess: () => { setMarcandoMuerte(false); setCausaMuerte(''); setEditing(false); setPicker(null) },
     onSettled: alCambiarMuerte,
   })
+  const creacionMutation = useMutation({
+    mutationFn: () => creacionApi.deshacer(cId, chId),
+    onSuccess: () => {
+      setConfirmarCreacion(false)
+      qc.invalidateQueries({ queryKey: ['character', cId, chId] })
+      qc.invalidateQueries({ queryKey: ['characters', cId] })
+      qc.invalidateQueries({ queryKey: ['creacion', cId] })
+    },
+  })
+
   const revivirMutation = useMutation({
     mutationFn: () => charactersApi.revivir(cId, chId),
     onSuccess: () => setConfirmarRevivir(false),
@@ -829,6 +842,9 @@ export function CharacterDetailPage() {
     qc.setQueriesData<Character>({ queryKey: prefijoFicha }, (old) => old && conAccionMesa(old, accion))
     mesaMutation.mutate({ accion, previas })
   }
+
+  // A player's character still in the guided creation is answered in «Creación de personajes», not here
+  if (!isGm && char && !char.creacionCompletada) return <Navigate to={`/campaigns/${cId}/creacion`} replace />
 
   if (isLoading || !char) {
     return (
@@ -923,7 +939,10 @@ export function CharacterDetailPage() {
         style={{ borderRadius: fromTablet(radius.lg), marginTop: fromTablet(16), borderBottom: 'none' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44 }}>
-          <p style={{ ...eyebrow, color: HERO_SOFT }}>{editing ? 'Modo edición' : 'Ficha de personaje'}</p>
+          <p style={{ ...eyebrow, color: HERO_SOFT }}>
+            {editing ? 'Modo edición' : 'Ficha de personaje'}
+            {!char.creacionCompletada && <> · En creación</>}
+          </p>
 
           {/* Edit / Save buttons, and the director's death actions */}
           {isGm && muerto && (
@@ -954,6 +973,19 @@ export function CharacterDetailPage() {
                 </>
               ) : (
                 <>
+                  {isGm && cfg.features.creacionGuiada && !currentCampaign?.iniciadaEn && char.creacionCompletada && !muerto && (
+                    <button
+                      type="button"
+                      className="ui-btn"
+                      aria-label="Pasar a creación"
+                      title="Pasar a creación"
+                      aria-haspopup="dialog"
+                      onClick={() => { creacionMutation.reset(); setConfirmarCreacion(true) }}
+                      style={{ ...heroAction, padding: '0 12px' }}
+                    >
+                      <SquarePen size={16} aria-hidden />
+                    </button>
+                  )}
                   {isGm && (
                     <button
                       type="button"
@@ -2090,6 +2122,19 @@ export function CharacterDetailPage() {
         />
         {morirMutation.isError && <ErrorMessage message="No se ha podido marcar la muerte. Inténtalo de nuevo." style={{ marginTop: 8 }} />}
       </Sheet>
+      <ConfirmDialog
+        open={confirmarCreacion}
+        title={`¿Pasar a ${char.name} a la creación?`}
+        message={<>
+          Vuelve a «Creación de personajes» y desaparece de «Personajes» para su jugador hasta que lo des por creado otra vez. Lo que tiene escrito se conserva.
+          {creacionMutation.isError && <ErrorMessage message="No se ha podido pasar a la creación. Inténtalo de nuevo." style={{ marginTop: 8 }} />}
+        </>}
+        confirmLabel="Pasar a creación"
+        tone="brand"
+        loading={creacionMutation.isPending}
+        onConfirm={() => creacionMutation.mutate()}
+        onCancel={() => setConfirmarCreacion(false)}
+      />
       <ConfirmDialog
         open={confirmarRevivir}
         title={`¿Devolver a ${char.name} a la vida?`}

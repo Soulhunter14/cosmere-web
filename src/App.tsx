@@ -39,6 +39,8 @@ const PantallaPage = lazy(() => import('./pages/pantalla/PantallaPage').then((m)
 const BandaPage = lazy(() => import('./pages/banda/BandaPage').then((m) => ({ default: m.BandaPage })))
 // «La mesa»: what the director shows to the players at the table (own chunk, opened only during play)
 const MesaPage = lazy(() => import('./pages/mesa/MesaPage').then((m) => ({ default: m.MesaPage })))
+// «Creación de personajes»: the director releases the steps and the players fill them in (worlds with `features.creacionGuiada`; own chunk)
+const CreacionPage = lazy(() => import('./pages/creacion/CreacionPage').then((m) => ({ default: m.CreacionPage })))
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -79,6 +81,7 @@ export default function App() {
               <Route path="pantalla" element={<Suspense fallback={<Spinner />}><PantallaPage /></Suspense>} />
               <Route path="banda" element={<Suspense fallback={<Spinner />}><BandaPage /></Suspense>} />
               <Route path="mesa" element={<Suspense fallback={<Spinner />}><MesaPage /></Suspense>} />
+              <Route path="creacion" element={<WorldGate feature="creacionGuiada"><Suspense fallback={<Spinner />}><CreacionPage /></Suspense></WorldGate>} />
               <Route path="settings" element={<CampaignSettingsPage />} />
               {/* Detail routes — kept for direct navigation from list pages */}
               <Route path="characters/:characterId" element={<CharacterDetailPage />} />

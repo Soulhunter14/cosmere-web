@@ -763,6 +763,8 @@ export interface CreacionEstado {
   pasos: string[]
   /** The campaign has started: the creation is read-only */
   iniciada: boolean
+  /** Steps the director lets players change once answered (field ids, e.g. `legado`); any other step keeps its answer */
+  cambiables: string[]
   /** Every non-NPC character for the director; only their own for a player */
   personajes: CreacionPersonaje[]
 }

@@ -32,14 +32,6 @@ export function useOpcionesPaso(paso: PasoCreacion | undefined): OpcionCreacion[
   return data.filter((o) => !ocultas.includes(o.id))
 }
 
-/** Visible label of the value of a `creacion:<clave>` step: the gate's answer, «Sí: <tipo>» when the type is chosen, or `''` */
-export function etiquetaDato(paso: PasoCreacion, opciones: OpcionCreacion[], valor: string): string {
-  if (valor === '') return ''
-  const puerta = 'puerta' in paso ? paso.puerta : undefined
-  if (puerta) {
-    if (valor === puerta.no.id) return puerta.no.label
-    if (valor === puerta.si.id) return `${puerta.si.label} (tipo por elegir)`
-    return `${puerta.si.label}: ${opciones.find((o) => o.id === valor)?.label ?? valor}`
-  }
-  return opciones.find((o) => o.id === valor)?.label ?? valor
-}
+/** Visible label of the value of a `creacion:<clave>` step, or `''` */
+export const etiquetaDato = (opciones: OpcionCreacion[], valor: string): string =>
+  valor === '' ? '' : opciones.find((o) => o.id === valor)?.label ?? valor

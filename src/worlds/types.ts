@@ -210,6 +210,8 @@ export interface OpcionCreacion {
   id: string
   label: string
   descripcion?: string
+  /** Heading the option is listed under in the player's list (groups keep the order of first appearance); without it, no heading */
+  grupo?: string
 }
 
 /**
@@ -220,7 +222,11 @@ export interface OpcionCreacion {
 export type PasoCreacion = {
   titulo: string
   ayuda: string
-  /** Once answered, the player may change it from the folded step («Cambiar»). Default false: Xavi decides per step which ones can be changed */
+  /**
+   * The director may let players change it once answered («Cambiar» on the folded step): the step shows «Permitir / Denegar» in the
+   * director's view and starts denied (`CreacionEstado.cambiables`, checked by the API too). A step without it never offers «Cambiar».
+   * Default false: Xavi decides per step which ones can be changed
+   */
   cambiable?: boolean
 } & (
   | { id: 'name' }
@@ -233,10 +239,10 @@ export type PasoCreacion = {
     opciones: { cargar: () => Promise<OpcionCreacion[]> }
     ocultas: string[]
     /**
-     * A yes/no question before the options: «no» stores `no.id` and ends the step; «sí» stores `si.id` until an option is chosen under
-     * `preguntaOpciones` (the step is done only then). Without it the options are the whole step
+     * Only when another choice has this value (the type of misting after «¿Quieres ser alomante?» = `si`): while that choice is empty the
+     * step waits for it, and with another value it is skipped («No aplica», `siNo` explains why) and counts as done
      */
-    puerta?: { pregunta: string; si: OpcionCreacion; no: OpcionCreacion; preguntaOpciones: string }
+    requiere?: { clave: string; valor: string; siNo: string }
   }
 )
 

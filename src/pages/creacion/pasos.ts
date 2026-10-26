@@ -5,7 +5,8 @@
 import type { CreacionPersonaje } from '../../types'
 import type { PasoCreacion } from '../../worlds/types'
 
-export type EstadoPaso = 'bloqueado' | 'pendiente' | 'hecho'
+/** `omitido`: the step does not apply to this character (what it requires was answered otherwise) and counts as done */
+export type EstadoPaso = 'bloqueado' | 'pendiente' | 'hecho' | 'omitido'
 
 /** The provisional name the API gives a character of the guided creation («Personaje de <jugador>»): the name step is not done until the player changes it */
 export const esNombreProvisional = (name: string): boolean => name.trim() === '' || /^Personaje de /.test(name.trim())
@@ -16,17 +17,27 @@ export function pasoHecho(paso: PasoCreacion, p: CreacionPersonaje): boolean {
   if (paso.id === 'legado') return p.legado !== ''
   if (paso.id === 'ascendencia') return p.ascendencia !== ''
   if ('indice' in paso) return (p.legadoRespuestas[paso.indice] ?? '').trim() !== ''
-  if ('clave' in paso) {
-    // With a yes/no gate, «sí» alone is not an answer yet: the type is still to be chosen
-    const valor = p.creacionDatos[paso.clave] ?? ''
-    return valor !== '' && !(paso.puerta && valor === paso.puerta.si.id)
-  }
+  if ('clave' in paso) return (p.creacionDatos[paso.clave] ?? '') !== ''
   return false
 }
 
-/** Locked while the director has not released it; then pending or done */
-export const estadoPaso = (indice: number, pasoLiberado: number, hecho: boolean): EstadoPaso =>
-  indice >= pasoLiberado ? 'bloqueado' : hecho ? 'hecho' : 'pendiente'
+/**
+ * Whether the step applies to the character: `si` always, or when the choice it requires has the right value; `espera` while that choice
+ * is still unanswered; `no` when it was answered otherwise (the step is skipped)
+ */
+export function pasoAplica(paso: PasoCreacion, p: CreacionPersonaje): 'si' | 'espera' | 'no' {
+  if (!('requiere' in paso) || !paso.requiere) return 'si'
+  const valor = p.creacionDatos[paso.requiere.clave] ?? ''
+  return valor === '' ? 'espera' : valor === paso.requiere.valor ? 'si' : 'no'
+}
+
+/** Locked while the director has not released it; then skipped, done or pending */
+export const estadoPaso = (indice: number, pasoLiberado: number, hecho: boolean, aplica: 'si' | 'espera' | 'no' = 'si'): EstadoPaso =>
+  indice >= pasoLiberado ? 'bloqueado' : aplica === 'no' ? 'omitido' : hecho ? 'hecho' : 'pendiente'
+
+/** Steps the character has behind: done, or skipped because they do not apply */
+export const pasosResueltos = (pasos: PasoCreacion[], p: CreacionPersonaje): number =>
+  pasos.filter((paso) => pasoAplica(paso, p) === 'no' || pasoHecho(paso, p)).length
 
 /** The world's steps (client data) and the API's (world rules) must agree: adding a step is one line on each side */
 export const pasosCoinciden = (cfg: PasoCreacion[], api: string[]): boolean =>

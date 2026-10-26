@@ -1,25 +1,26 @@
 /**
  * The director's view of «Creación de personajes»: the steps of the world with the ones released, the characters in creation with what
- * each one has answered (the thread of their session 0 scene), «Añadir personaje», «Liberar paso», «Volver al paso anterior» and
- * «Personaje creado». A created character is followed from its sheet, which can send it back here («Pasar a creación»). Every write
+ * each one has answered (the thread of their session 0 scene), «Añadir personaje», «Liberar paso», «Volver al paso anterior»,
+ * «Permitir / Denegar» changing an answered step (on the steps the world marks `cambiable`) and «Personaje creado». A created character
+ * is followed from its sheet, which can send it back here («Pasar a creación»). Every write
  * answers with the whole state; the hub event refreshes the other clients.
  */
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronUp, Circle, Lock, LockOpen, Plus, Undo2, UserCheck, UserX, Users } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Circle, Lock, LockOpen, Minus, Plus, Undo2, UserCheck, UserX, Users } from 'lucide-react'
 import { creacionApi } from '../../api/creacion'
-import { Button, ConfirmDialog, EmptyState, PageHeader, Sheet } from '../../components/ui'
+import { Button, ConfirmDialog, EmptyState, PageHeader, Segmented, Sheet } from '../../components/ui'
 import { useCampaignStore } from '../../store/campaignStore'
 import { buttonReset, c, card, eyebrow, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
 import type { CampaignDetail, CreacionEstado, CreacionPersonaje, Member } from '../../types'
 import type { PasoCreacion } from '../../worlds/types'
 import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
-import { estadoPaso, pasoHecho, pasosCoinciden, type EstadoPaso } from './pasos'
+import { estadoPaso, pasoAplica, pasoHecho, pasosCoinciden, pasosResueltos, type EstadoPaso } from './pasos'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
-const TONO_ESTADO: Record<EstadoPaso, Tone> = { bloqueado: tone.cuarzo, pendiente: tone.topacio, hecho: tone.esmeralda }
-const TEXTO_ESTADO: Record<EstadoPaso, string> = { bloqueado: 'bloqueado', pendiente: 'pendiente', hecho: 'hecho' }
-const ICONO_ESTADO = { bloqueado: Lock, pendiente: Circle, hecho: Check } as const
+const TONO_ESTADO: Record<EstadoPaso, Tone> = { bloqueado: tone.cuarzo, pendiente: tone.topacio, hecho: tone.esmeralda, omitido: tone.cuarzo }
+const TEXTO_ESTADO: Record<EstadoPaso, string> = { bloqueado: 'bloqueado', pendiente: 'pendiente', hecho: 'hecho', omitido: 'no aplica' }
+const ICONO_ESTADO = { bloqueado: Lock, pendiente: Circle, hecho: Check, omitido: Minus } as const
 
 const numeroPaso = (t: Tone): CSSProperties => ({
   width: 28, height: 28, flexShrink: 0, borderRadius: radius.md,
@@ -63,7 +64,11 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
     mutationFn: (id: number) => creacionApi.completar(cId, id),
     onSuccess: (nuevo) => { aplicar(nuevo); setConfirmacion(null) },
   })
-  const ocupado = pasoMutation.isPending || completarMutation.isPending
+  const cambiableMutation = useMutation({
+    mutationFn: ({ paso, permitido }: { paso: string; permitido: boolean }) => creacionApi.setCambiable(cId, paso, permitido),
+    onSuccess: (nuevo) => aplicar(nuevo),
+  })
+  const ocupado = pasoMutation.isPending || completarMutation.isPending || cambiableMutation.isPending
   const soloLectura = estado.iniciada
   const enCreacion = estado.personajes.filter((p) => !p.completada)
   const siguiente = estado.paso < pasos.length ? pasos[estado.paso] : null
@@ -123,6 +128,23 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
                     </span>
                   </span>
                   <span style={{ display: 'block', fontSize: fs.sm, color: c.muted, lineHeight: 1.45, marginTop: 2 }}>{paso.ayuda}</span>
+                  {/* «Cambiar» for the players on this step once answered, only while the director permits it (the server checks it too) */}
+                  {paso.cambiable && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                      <span style={{ fontSize: fs.sm, color: c.muted }}>Cambiar lo respondido</span>
+                      <Segmented
+                        size="sm"
+                        stretch={false}
+                        ariaLabel={`Cambiar lo respondido en «${paso.titulo}»`}
+                        options={[
+                          { value: 'si', label: 'Permitir', disabled: soloLectura || ocupado },
+                          { value: 'no', label: 'Denegar', disabled: soloLectura || ocupado },
+                        ]}
+                        value={estado.cambiables.includes(paso.id) ? 'si' : 'no'}
+                        onChange={(v) => cambiableMutation.mutate({ paso: paso.id, permitido: v === 'si' })}
+                      />
+                    </span>
+                  )}
                 </span>
               </li>
             )
@@ -268,7 +290,7 @@ function TarjetaPersonaje({ p, pasos, pasoLiberado, disabled, onCompletar }: {
   onCompletar: () => void
 }) {
   const [abierto, setAbierto] = useState(false)
-  const hechos = pasos.filter((paso) => pasoHecho(paso, p)).length
+  const hechos = pasosResueltos(pasos, p)
   return (
     <li style={{ ...card, padding: 14, ...stack(10) }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -278,7 +300,7 @@ function TarjetaPersonaje({ p, pasos, pasoLiberado, disabled, onCompletar }: {
       </div>
       <ol aria-label="Pasos" style={{ listStyle: 'none', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {pasos.map((paso, i) => {
-          const e = estadoPaso(i, pasoLiberado, pasoHecho(paso, p))
+          const e = estadoPaso(i, pasoLiberado, pasoHecho(paso, p), pasoAplica(paso, p))
           const Icono = ICONO_ESTADO[e]
           return (
             <li key={paso.id}>
@@ -326,13 +348,14 @@ function FilaRespuesta({ paso, p }: { paso: PasoCreacion; p: CreacionPersonaje }
     etiqueta = def?.preguntas[paso.indice] ?? paso.titulo
     valor = p.legadoRespuestas[paso.indice] ?? ''
   } else if ('clave' in paso) {
-    valor = etiquetaDato(paso, opciones, p.creacionDatos[paso.clave] ?? '')
+    valor = etiquetaDato(opciones, p.creacionDatos[paso.clave] ?? '')
   }
+  const noAplica = pasoAplica(paso, p) === 'no'
   return (
     <div>
       <dt style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.4 }}>{etiqueta}</dt>
       <dd style={{ margin: 0, fontSize: fs.sm, color: valor ? c.text : c.subtle, fontStyle: valor ? 'normal' : 'italic', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-        {valor || 'Sin responder'}
+        {valor || (noAplica ? 'No aplica' : 'Sin responder')}
       </dd>
     </div>
   )

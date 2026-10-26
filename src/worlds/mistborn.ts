@@ -52,21 +52,24 @@ export const MISTBORN: WorldConfig = {
   creacion: {
     pasos: [
       { id: 'name', titulo: 'Tu nombre', ayuda: 'Cómo se llama tu personaje. Podrás cambiarlo más adelante.' },
-      { id: 'legado', titulo: 'Tu trasfondo', ayuda: 'Uno de los seis legados de la Era 1: quién eres el día de la caída.' },
+      // The director may allow changing it once answered (Xavi, 26-10-2026); a change starts every later step afresh (ancestry, choices, answers), after a warning
+      { id: 'legado', titulo: 'Tu trasfondo', ayuda: 'Uno de los seis legados de la Era 1: quién eres el día de la caída.', cambiable: true },
       { id: 'ascendencia', titulo: 'Tu ascendencia', ayuda: 'Humano o kandra. Un kandra sirve bajo un Contrato: anota en tu ficha a quién.' },
+      // Two steps, so the director can release the first without the second (Xavi, 26-10-2026)
       {
-        id: 'creacion:alomancia', clave: 'alomancia', titulo: 'Alomancia',
+        id: 'creacion:alomante', clave: 'alomante', titulo: '¿Quieres ser alomante?',
         ayuda: 'No decide tu camino de nacido del metal (eso lo pone el director), pero ayuda a contar tu historia.',
-        // Two questions: yes or no, and then the type, each option with its short definition
-        puerta: {
-          pregunta: '¿Quieres ser alomante?',
-          si: { id: 'si', label: 'Sí', descripcion: 'Quemas un metal para despertar un poder: lo que ya eres en secreto, o lo que esta noche despertará.' },
-          no: { id: 'no', label: 'No', descripcion: 'Sin alomancia, al menos por ahora. Nada te impide descubrirla más adelante.' },
-          preguntaOpciones: '¿Qué tipo quieres ser?',
-        },
+        opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANTE) },
+        ocultas: [],
+      },
+      {
+        id: 'creacion:alomancia', clave: 'alomancia', titulo: '¿Qué tipo de brumoso?',
+        ayuda: 'Qué metal quemas. Solo si respondiste que sí.',
         opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANCIA) },
-        // Options the table does not offer, by id (Xavi, 26-10-2026): players can only be mistings for now
-        ocultas: ['nacido-de-la-bruma'],
+        // Options the table does not offer, by id (Xavi, 26-10-2026): players can only be mistings for now, and the rare and divine
+        // metals (group «Raros y divinos» of OPCIONES_ALOMANCIA) wait for the director to allow them
+        ocultas: ['nacido-de-la-bruma', 'brumoso:oro', 'brumoso:atium'],
+        requiere: { clave: 'alomante', valor: 'si', siNo: 'Respondiste que no quieres ser alomante.' },
       },
       { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },
       { id: 'legadoRespuestas:1', indice: 1, titulo: 'Segunda pregunta: impulso', ayuda: 'Qué te empuja a dejar lo que eres e intentar cambiar las cosas.' },

@@ -3,8 +3,9 @@ import type { CreacionEstado } from '../types'
 
 /**
  * Guided character creation (section «Creación de personajes», src/pages/creacion): the director releases the world's steps one by one,
- * adds characters assigned to players and marks them created; players fill their steps with the usual PUT of characters, which the
- * server checks against the released steps. Every write answers with the whole state and wakes the campaign with `CreacionUpdated`.
+ * permits or denies changing the answered ones, adds characters assigned to players and marks them created; players fill their steps
+ * with the usual PUT of characters, which the server checks against the released and the changeable steps. Every write answers with
+ * the whole state and wakes the campaign with `CreacionUpdated`.
  */
 export const creacionApi = {
   get: (campaignId: number) =>
@@ -12,6 +13,9 @@ export const creacionApi = {
 
   setPaso: (campaignId: number, paso: number) =>
     client.put<CreacionEstado>(`/campaigns/${campaignId}/creacion/paso`, { paso }).then((r) => r.data),
+
+  setCambiable: (campaignId: number, paso: string, permitido: boolean) =>
+    client.put<CreacionEstado>(`/campaigns/${campaignId}/creacion/cambiable`, { paso, permitido }).then((r) => r.data),
 
   addPersonaje: (campaignId: number, ownerId: number) =>
     client.post<CreacionEstado>(`/campaigns/${campaignId}/creacion/personajes`, { ownerId }).then((r) => r.data),

@@ -3,28 +3,28 @@
  * from here (the name, the legacy, the ancestry, the questions of the legacy, the choices); the server checks the released steps too.
  * Once the director marks «Personaje creado», a card sends the player to the sheet.
  */
-import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Check, Circle, Lock, Pencil, Save, Users } from 'lucide-react'
+import { Check, Circle, Lock, Minus, Pencil, Save, Users } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { Button, ConfirmDialog, EmptyState, ErrorMessage, Input, PageHeader, Spinner } from '../../components/ui'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
-import { buttonReset, c, card, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
+import { type Tone, buttonReset, c, card, eyebrow, fs, page, pill, radius, titleText, tone } from '../../theme'
 import type { Character, CreacionEstado, CreacionPersonaje, UpdateCharacterRequest } from '../../types'
 import type { OpcionCreacion, PasoCreacion } from '../../worlds/types'
 import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
-import { conRespuesta, esNombreProvisional, estadoPaso, pasoHecho, type EstadoPaso } from './pasos'
+import { conRespuesta, esNombreProvisional, estadoPaso, pasoAplica, pasoHecho, type EstadoPaso } from './pasos'
 
 // Mistborn-only pieces (they import the legacies BY FILE): lazy, like the rest of components/mistborn
 const PasoLegado = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.PasoLegado })))
 const PreguntaLegado = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.PreguntaLegado })))
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
-const TONO_ESTADO: Record<EstadoPaso, Tone> = { bloqueado: tone.cuarzo, pendiente: tone.topacio, hecho: tone.esmeralda }
-const TEXTO_ESTADO: Record<EstadoPaso, string> = { bloqueado: 'Bloqueado', pendiente: 'Pendiente', hecho: 'Hecho' }
-const ICONO_ESTADO = { bloqueado: Lock, pendiente: Circle, hecho: Check } as const
+const TONO_ESTADO: Record<EstadoPaso, Tone> = { bloqueado: tone.cuarzo, pendiente: tone.topacio, hecho: tone.esmeralda, omitido: tone.cuarzo }
+const TEXTO_ESTADO: Record<EstadoPaso, string> = { bloqueado: 'Bloqueado', pendiente: 'Pendiente', hecho: 'Hecho', omitido: 'No aplica' }
+const ICONO_ESTADO = { bloqueado: Lock, pendiente: Circle, hecho: Check, omitido: Minus } as const
 
 type Cambio = Partial<Pick<UpdateCharacterRequest, 'name' | 'legado' | 'ascendencia' | 'legadoRespuestas' | 'creacionDatos'>>
 
@@ -56,7 +56,7 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
     enabled: chId > 0,
   })
   const [error, setError] = useState<string | null>(null)
-  // A done step folds to what was chosen; on a `cambiable` step, «Cambiar» opens its editor again until the next save
+  // A done step folds to what was chosen; while the director permits changing a `cambiable` step, «Cambiar» opens its editor again until the next save
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({})
   const abrir = (pasoId: string, abierto: boolean) => setAbiertos((cur) => ({ ...cur, [pasoId]: abierto }))
   const guardar = useMutation({
@@ -98,6 +98,8 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
   }
 
   const soloLectura = estado.iniciada
+  // «Cambiar» on an answered step: only the steps the table marks as `cambiable`, and only while the director permits it
+  const puedeCambiar = (paso: PasoCreacion) => !!paso.cambiable && estado.cambiables.includes(paso.id) && !soloLectura
   const ocupado = guardar.isPending
   return (
     <div style={{ ...page, paddingBottom: 48 }}>
@@ -114,8 +116,11 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
 
       <ol style={{ listStyle: 'none', ...stack(12) }}>
         {pasos.map((paso, i) => {
-          const e = estadoPaso(i, estado.paso, pasoHecho(paso, mio))
+          const aplica = pasoAplica(paso, mio)
+          const e = estadoPaso(i, estado.paso, pasoHecho(paso, mio), aplica)
           const Icono = ICONO_ESTADO[e]
+          // The step that this one waits for (its title, for the notice)
+          const requerido = 'requiere' in paso && paso.requiere ? pasos.find((x) => 'clave' in x && x.clave === paso.requiere!.clave) : undefined
           return (
             <li key={paso.id} style={{ ...card, padding: 14, opacity: e === 'bloqueado' ? 0.7 : 1 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -132,11 +137,18 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
                 <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
                   <Lock size={14} aria-hidden /> El director aún no ha liberado este paso.
                 </p>
-              ) : e === 'hecho' && !abiertos[paso.id] ? (
+              ) : e === 'omitido' ? (
+                <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
+                  <Minus size={14} aria-hidden /> {'requiere' in paso && paso.requiere ? paso.requiere.siNo : 'Este paso no aplica a tu personaje.'}
+                </p>
+              ) : aplica === 'espera' ? (
+                <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
+                  <Circle size={14} aria-hidden /> Responde antes «{requerido?.titulo ?? 'el paso anterior'}».
+                </p>
+              ) : e === 'hecho' && !(abiertos[paso.id] && puedeCambiar(paso)) ? (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10 }}>
                   <ResumenPaso paso={paso} mio={mio} />
-                  {/* «Cambiar» only on the steps the table marks as `cambiable`; the rest stay as answered */}
-                  {paso.cambiable && !soloLectura && (
+                  {puedeCambiar(paso) && (
                     <Button size="sm" variant="ghost" icon={<Pencil size={14} aria-hidden />} onClick={() => abrir(paso.id, true)} style={{ flexShrink: 0 }}>
                       Cambiar
                     </Button>
@@ -188,7 +200,7 @@ function ResumenPaso({ paso, mio }: { paso: PasoCreacion; mio: CreacionPersonaje
     etiqueta = def?.preguntas[paso.indice] ?? null
     valor = mio.legadoRespuestas[paso.indice] ?? ''
   } else if ('clave' in paso) {
-    valor = etiquetaDato(paso, opciones, mio.creacionDatos[paso.clave] ?? '')
+    valor = etiquetaDato(opciones, mio.creacionDatos[paso.clave] ?? '')
   }
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -257,13 +269,19 @@ function PasoNombre({ valor, disabled, onGuardar }: { valor: string; disabled: b
   )
 }
 
-/** The legacy; changing it with answers written asks first, because the next legacy's questions are different */
+/**
+ * The legacy. Changing it starts every later step afresh (ancestry, the choices and the three answers), so they open again for the
+ * player; when any of them is answered, it asks first and says so
+ */
 function PasoTrasfondo({ mio, disabled, onGuardar }: { mio: CreacionPersonaje; disabled: boolean; onGuardar: (cambio: Cambio) => void }) {
   const [pendiente, setPendiente] = useState<string | null>(null)
-  const hayRespuestas = mio.legadoRespuestas.some((r) => r.trim() !== '')
+  const hayPosteriores = mio.ascendencia !== ''
+    || Object.values(mio.creacionDatos).some((v) => v !== '')
+    || mio.legadoRespuestas.some((r) => r.trim() !== '')
+  const reiniciar = (legado: string): Cambio => ({ legado, ascendencia: '', creacionDatos: {}, legadoRespuestas: [] })
   const elegir = (id: string) => {
     if (id === mio.legado) return
-    if (hayRespuestas) setPendiente(id)
+    if (hayPosteriores) setPendiente(id)
     else onGuardar({ legado: id })
   }
   return (
@@ -274,9 +292,9 @@ function PasoTrasfondo({ mio, disabled, onGuardar }: { mio: CreacionPersonaje; d
       <ConfirmDialog
         open={pendiente !== null}
         title="¿Cambiar de trasfondo?"
-        message="Las preguntas del nuevo trasfondo son otras: se borrarán las respuestas que escribiste para el anterior."
+        message="Cambiar el trasfondo reinicia todo lo que viene después: la ascendencia, la alomancia y las tres preguntas (origen, impulso y meta). Esos pasos vuelven a quedar pendientes y tendrás que responderlos de nuevo. El nombre se conserva."
         confirmLabel="Cambiar"
-        onConfirm={() => { if (pendiente !== null) onGuardar({ legado: pendiente, legadoRespuestas: [] }); setPendiente(null) }}
+        onConfirm={() => { if (pendiente !== null) onGuardar(reiniciar(pendiente)); setPendiente(null) }}
         onCancel={() => setPendiente(null)}
       />
     </>
@@ -344,74 +362,64 @@ function PasoPregunta({ indice, mio, disabled, onGuardar }: { indice: number; mi
   )
 }
 
-/**
- * A step that is a choice among the world's options (the ones the table hides are left out), every option with its short definition.
- * With a gate («¿Quieres ser alomante?»), «no» ends the step and «sí» opens the second question with the types
- */
+/** A step that is a choice among the world's options (the ones the table hides are left out), every option with its short definition */
 function PasoDato({ paso, valor, disabled, onChange }: { paso: PasoCreacion; valor: string; disabled: boolean; onChange: (id: string) => void }) {
   const opciones = useOpcionesPaso(paso)
-  const puerta = 'puerta' in paso ? paso.puerta : undefined
-  if (!puerta) {
-    return <ListaOpciones nombre={paso.titulo} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
-  }
-  const respuesta = valor === '' ? '' : valor === puerta.no.id ? puerta.no.id : puerta.si.id
-  return (
-    <div style={stack(14)}>
-      <Pregunta texto={puerta.pregunta}>
-        <ListaOpciones
-          nombre={puerta.pregunta}
-          opciones={[puerta.si, puerta.no]}
-          valor={respuesta}
-          disabled={disabled}
-          onChange={(id) => { if (id !== respuesta) onChange(id) }}
-        />
-      </Pregunta>
-      {respuesta === puerta.si.id && (
-        <Pregunta texto={puerta.preguntaOpciones}>
-          <ListaOpciones nombre={puerta.preguntaOpciones} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
-        </Pregunta>
-      )}
-    </div>
-  )
+  return <ListaOpciones nombre={paso.titulo} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
 }
 
-function Pregunta({ texto, children }: { texto: string; children: ReactNode }) {
-  return (
-    <div style={stack(8)}>
-      <p style={{ fontSize: fs.base, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{texto}</p>
-      {children}
-    </div>
-  )
-}
-
-/** Option cards: the label and, under it, the short definition; the chosen one takes the brand tone */
+/**
+ * Option cards: the label and, under it, the short definition; the chosen one takes the brand tone. Options with a `grupo` are listed
+ * under its heading (groups in order of first appearance), so a long list reads in parts
+ */
 function ListaOpciones({ nombre, opciones, valor, disabled, onChange }: { nombre: string; opciones: OpcionCreacion[]; valor: string; disabled: boolean; onChange: (id: string) => void }) {
   return (
-    <ul aria-label={nombre} style={{ listStyle: 'none', ...stack(8) }}>
-      {opciones.map((o) => {
-        const selected = valor === o.id
-        return (
-          <li key={o.id}>
-            <button
-              type="button"
-              aria-pressed={selected}
-              disabled={disabled}
-              onClick={() => onChange(o.id)}
-              className="ui-card ui-card--interactive"
-              style={{
-                ...buttonReset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, minHeight: 52, padding: '10px 14px',
-                borderRadius: radius.lg, border: `1px solid ${selected ? tone.brand.border : c.border}`, background: selected ? tone.brand.bg : c.s1,
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, color: c.text }}>{o.label}</span>
-                {o.descripcion && <span style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{o.descripcion}</span>}
-              </span>
-              {selected && <Check size={18} aria-hidden style={{ color: tone.brand.fg, flexShrink: 0, marginTop: 2 }} />}
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+    <div role="group" aria-label={nombre} style={stack(14)}>
+      {agrupar(opciones).map((g) => (
+        <div key={g.titulo ?? ''} style={stack(8)}>
+          {g.titulo && <p style={eyebrow}>{g.titulo}</p>}
+          <ul aria-label={g.titulo ? `${nombre}: ${g.titulo}` : nombre} style={{ listStyle: 'none', ...stack(8) }}>
+            {g.opciones.map((o) => {
+              const selected = valor === o.id
+              return (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={disabled}
+                    onClick={() => onChange(o.id)}
+                    className="ui-card ui-card--interactive"
+                    style={{
+                      ...buttonReset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, minHeight: 52, padding: '10px 14px',
+                      borderRadius: radius.lg, border: `1px solid ${selected ? tone.brand.border : c.border}`, background: selected ? tone.brand.bg : c.s1,
+                    }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontWeight: 600, color: c.text }}>{o.label}</span>
+                      {o.descripcion && <span style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{o.descripcion}</span>}
+                    </span>
+                    {selected && <Check size={18} aria-hidden style={{ color: tone.brand.fg, flexShrink: 0, marginTop: 2 }} />}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   )
+}
+
+/** The options split by `grupo`, keeping the order in which each group first appears (the ungrouped ones form a group without heading) */
+function agrupar(opciones: OpcionCreacion[]): { titulo?: string; opciones: OpcionCreacion[] }[] {
+  const grupos: { titulo?: string; opciones: OpcionCreacion[] }[] = []
+  for (const o of opciones) {
+    let g = grupos.find((x) => x.titulo === o.grupo)
+    if (!g) {
+      g = { titulo: o.grupo, opciones: [] }
+      grupos.push(g)
+    }
+    g.opciones.push(o)
+  }
+  return grupos
 }

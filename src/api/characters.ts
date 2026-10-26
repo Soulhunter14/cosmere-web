@@ -5,9 +5,11 @@ import type { Character, CreateCharacterRequest, RecursosPatch, UpdateCharacterR
 type MistbornFields = 'caminoMetal' | 'caminoInicial' | 'poderes' | 'recursos' | 'bendiciones' | 'derivadosSet' | 'bonosAtributos' | 'clavos'
 // And the death fields: an API older than AddCharacterMuerte does not send them either
 type MuerteFields = 'muerto' | 'muertoEn' | 'causaMuerte' | 'equipoAlMorir'
+// And the guided-creation fields: an API older than AddCreacionGuiada does not send them (a character is then created)
+type CreacionFields = 'creacionCompletada' | 'creacionDatos'
 
 // A character as it arrives from the wire: an API older than T11 (parallel worktrees in development) does not send the Mistborn fields
-type CharacterWire = Omit<Character, MistbornFields | MuerteFields> & Partial<Pick<Character, MistbornFields | MuerteFields>>
+type CharacterWire = Omit<Character, MistbornFields | MuerteFields | CreacionFields> & Partial<Pick<Character, MistbornFields | MuerteFields | CreacionFields>>
 
 /**
  * Gives every character response the Mistborn fields with their empty value (§5.4), so that `poderes.some(...)`,
@@ -27,6 +29,8 @@ export const normalizeCharacter = (c: CharacterWire): Character => ({
   muertoEn: c.muertoEn ?? null,
   causaMuerte: c.causaMuerte ?? '',
   equipoAlMorir: c.equipoAlMorir ?? null,
+  creacionCompletada: c.creacionCompletada ?? true,
+  creacionDatos: c.creacionDatos ?? {},
 })
 
 export const charactersApi = {

@@ -1,11 +1,12 @@
 import { useState, type CSSProperties } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid, Columns3, Projector, Warehouse } from 'lucide-react'
+import { Users, Sword, LogOut, ChevronLeft, Settings2, House, BookOpen, Globe, Bell, LayoutGrid, Columns3, Projector, Warehouse, SquarePen } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useCampaignStore, useWorldConfig } from '../store/campaignStore'
 import { useAuthStore } from '../store/authStore'
 import { notesApi } from '../api/notes'
+import { charactersApi } from '../api/characters'
 import { Avatar, IconButton, Sheet } from './ui'
 import { BrandGlyph, BrandMark } from './BrandMark'
 import { WorldBadge } from './WorldBadge'
@@ -25,6 +26,7 @@ const SECTION_LABELS: Record<string, string> = {
   catalog: 'Catálogo',
   settings: 'Ajustes',
   banda: 'Banda',
+  creacion: 'Creación',
   mesa: 'Mesa',
 }
 
@@ -50,6 +52,20 @@ export function Sidebar() {
     ? [{ to: 'banda', label: 'Banda', icon: Warehouse, soloAncho: true }]
     : []
 
+  // «Creación de personajes» (worlds with guided creation): for a player, it takes the place of «Personaje» while their character walks
+  // its steps; for the director it lives next to «Personajes» while the campaign is being prepared (desktop and tablet; the phone reaches
+  // it from «Personajes», whose bar is full)
+  const userId = useAuthStore((s) => s.user?.id ?? null)
+  const { data: personajes = [] } = useQuery({
+    queryKey: ['characters', currentCampaign?.id],
+    queryFn: () => charactersApi.getAll(currentCampaign!.id),
+    enabled: !!currentCampaign && !isGm && features.creacionGuiada,
+  })
+  const enCreacion = !isGm && features.creacionGuiada && personajes.some((p) => p.ownerId === userId && !p.creacionCompletada)
+  const creacionGm: NavItem[] = isGm && features.creacionGuiada && !currentCampaign?.iniciadaEn
+    ? [{ to: 'creacion', label: 'Creación', icon: SquarePen, soloAncho: true }]
+    : []
+
   const navItems: NavItem[] = isGm
     ? [
         { to: 'home', label: 'Inicio', icon: House },
@@ -59,7 +75,7 @@ export function Sidebar() {
       ]
     : [
         { to: 'home', label: 'Inicio', icon: House },
-        { to: 'personajes', label: 'Personaje', icon: Users },
+        enCreacion ? { to: 'creacion', label: 'Creación', icon: SquarePen } : { to: 'personajes', label: 'Personaje', icon: Users },
         // «La mesa»: what the director shows during play (the party's health, the enemies, the images)
         { to: 'mesa', label: 'Mesa', icon: Projector },
         { to: 'historia', label: 'Partida', icon: BookOpen },
@@ -69,6 +85,7 @@ export function Sidebar() {
 
   const gmNavItems = [
     { to: 'personajes', label: 'Personajes', icon: Users },
+    ...creacionGm,
     { to: 'gm', label: 'Director', icon: Sword },
     // «Pantalla del director» (a three-panel screen glyph): only on the desktop sidebar and the tablet rail; the phone bottom bar
     // already has five items and reaches it from Director

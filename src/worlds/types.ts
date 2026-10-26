@@ -127,6 +127,8 @@ export interface WorldConfig {
     legados: boolean
     /** «La banda»: the crew sheet (refuges, upgrades, workers, contacts) as a section of the app; its catalog is `banda` below */
     banda: boolean
+    /** «Creación de personajes»: the director releases the steps of `creacion.pasos` one by one and the players fill them in (route `creacion`) */
+    creacionGuiada: boolean
   }
   /** The 18 standard skills: the character sheet, the dice roller and the NPC page all read this table */
   habilidades: HabilidadDef[]
@@ -196,7 +198,32 @@ export interface WorldConfig {
    * bundle; `null` = the world has no crew sheet (`features.banda` false)
    */
   banda: { cargar: () => Promise<CatalogoBanda> } | null
+  /**
+   * Guided character creation (`features.creacionGuiada`): the steps the director releases one by one, in order. Their ids are the field
+   * ids of the API (`IWorldRules.PasosCreacion`), so adding a step is one line here and one there; `null` = the world creates characters as always
+   */
+  creacion: { pasos: PasoCreacion[] } | null
 }
+
+/** One option of a creation step that is a choice (`creacion:<clave>`) */
+export interface OpcionCreacion {
+  id: string
+  label: string
+  descripcion?: string
+}
+
+/**
+ * A step of the guided creation: what it asks and where the answer goes. `id` is the field id of the API: `name`, `legado`, `ascendencia`,
+ * `legadoRespuestas:<indice>` (one answer of the legacy) or `creacion:<clave>` (a choice kept in `Character.creacionDatos`, whose options
+ * load lazily and can be hidden by the table)
+ */
+export type PasoCreacion = { titulo: string; ayuda: string } & (
+  | { id: 'name' }
+  | { id: 'legado' }
+  | { id: 'ascendencia' }
+  | { id: `legadoRespuestas:${number}`; indice: number }
+  | { id: `creacion:${string}`; clave: string; opciones: { cargar: () => Promise<OpcionCreacion[]> }; ocultas: string[] }
+)
 
 export interface WorldData {
   /** null until T34a; heroic paths, Investida paths and powers live INSIDE TalentRules (§7.7), not duplicated here */

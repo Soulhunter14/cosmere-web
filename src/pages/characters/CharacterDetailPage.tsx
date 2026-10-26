@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
+import { Navigate, useParams, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'
 import {
   Check, ChevronDown, HeartPulse, Info, Lock, Pencil, Save, Skull, Sparkle, Swords, TriangleAlert, UserRound, X, Zap, type LucideIcon,
@@ -829,6 +829,9 @@ export function CharacterDetailPage() {
     qc.setQueriesData<Character>({ queryKey: prefijoFicha }, (old) => old && conAccionMesa(old, accion))
     mesaMutation.mutate({ accion, previas })
   }
+
+  // A player's character still in the guided creation is answered in «Creación de personajes», not here
+  if (!isGm && char && !char.creacionCompletada) return <Navigate to={`/campaigns/${cId}/creacion`} replace />
 
   if (isLoading || !char) {
     return (

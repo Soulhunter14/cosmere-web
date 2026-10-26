@@ -44,6 +44,26 @@ export const MISTBORN: WorldConfig = {
     catalogoDePrecios: true,
     legados: true,
     banda: true,
+    creacionGuiada: true,
+  },
+  // «Creación de personajes» (26-10-2026): the steps the director releases, in the order Xavi set; their ids are `MistbornRules.PasosCreacion`.
+  // More steps are coming: add them at the end here and there. The choices load their options lazily (data/mistborn/creacion.ts)
+  creacion: {
+    pasos: [
+      { id: 'name', titulo: 'Tu nombre', ayuda: 'Cómo se llama tu personaje. Podrás cambiarlo más adelante.' },
+      { id: 'legado', titulo: 'Tu trasfondo', ayuda: 'Uno de los seis legados de la Era 1: quién eres el día de la caída.' },
+      { id: 'ascendencia', titulo: 'Tu ascendencia', ayuda: 'Humano o kandra. Un kandra sirve bajo un Contrato: anota en tu ficha a quién.' },
+      { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },
+      { id: 'legadoRespuestas:1', indice: 1, titulo: 'Segunda pregunta: impulso', ayuda: 'Qué te empuja a dejar lo que eres e intentar cambiar las cosas.' },
+      { id: 'legadoRespuestas:2', indice: 2, titulo: 'Tercera pregunta: meta', ayuda: 'Qué buscas cuando las cosas cambien.' },
+      {
+        id: 'creacion:alomancia', clave: 'alomancia', titulo: '¿Quieres ser alomante?',
+        ayuda: 'No decide tu camino de nacido del metal (eso lo pone el director), pero ayuda a contar tu historia.',
+        opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANCIA) },
+        // Options the table does not offer (Xavi will say which), by id: 'nacido-de-la-bruma', 'brumoso:atium'…
+        ocultas: [],
+      },
+    ],
   },
   // The book's table (T26), read on the sheet, the dice roller (from T43) and the NPC page: the same one Stormlight reads since T50
   habilidades: HABILIDADES_COSMERE,

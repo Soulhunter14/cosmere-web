@@ -32,3 +32,8 @@ export { LegadoCard } from './LegadoCard'
 export type { LegadoCardProps } from './LegadoCard'
 export { LegadoPicker } from './LegadoPicker'
 export type { LegadoPickerProps } from './LegadoPicker'
+// The pieces of the legacy shared with the guided creation (pages/creacion): the list of legacies and one question with its examples
+export { PasoLegado } from './PasoLegado'
+export type { PasoLegadoProps } from './PasoLegado'
+export { PreguntaLegado, MAX_RESPUESTA_LEGADO } from './PreguntaLegado'
+export type { PreguntaLegadoProps } from './PreguntaLegado'

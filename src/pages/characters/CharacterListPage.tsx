@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, ChevronRight, Users, UserCheck, UserX, UserCog, Check } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, Users, UserCheck, UserX, UserCog, Check, SquarePen } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { useCampaignStore } from '../../store/campaignStore'
+import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { useAuthStore } from '../../store/authStore'
 import { Avatar, Button, ConfirmDialog, EmptyState, Field, IconButton, Input, PageHeader, Segmented, Sheet, Spinner } from '../../components/ui'
 import type { CampaignDetail, Member } from '../../types'
@@ -74,7 +74,7 @@ function CharacterCard({
   players,
   index = 0,
 }: {
-  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; caminoMetal: string; maxHealth: number; ownerId?: number; muerto: boolean }
+  character: { id: number; name: string; level: number; ascendencia: string; caminoHeroico: string; caminoRadiante: string; caminoMetal: string; maxHealth: number; ownerId?: number; muerto: boolean; creacionCompletada: boolean }
   isGm: boolean
   ownerName?: string
   onOpen: () => void
@@ -126,6 +126,9 @@ function CharacterCard({
               {character.name}
             </span>
             {character.muerto && <EtiquetaMuerto style={{ alignSelf: 'flex-start' }} />}
+            {isGm && !character.creacionCompletada && (
+              <span style={{ ...pill(tone.topacio), alignSelf: 'flex-start' }}><SquarePen size={12} aria-hidden /> En creación</span>
+            )}
 
             {/* Path badges */}
             <CharacterIdentityPills character={character} />
@@ -219,6 +222,7 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { isGm, currentCampaign } = useCampaignStore()
+  const { features } = useWorldConfig()
   const { user } = useAuthStore()
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -265,15 +269,20 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
 
   if (isLoading) return <Spinner />
 
+  // A player sees only created characters: one still in the guided creation lives in «Creación de personajes»
+  const visibles = isGm ? (characters ?? []) : (characters ?? []).filter((c) => c.creacionCompletada)
+  const soloEnCreacion = !isGm && visibles.length === 0 && (characters?.length ?? 0) > 0
+
   // Player with no character
-  if (!isGm && (!characters || characters.length === 0)) {
+  if (!isGm && visibles.length === 0) {
     return (
       <div style={{ ...page, paddingBottom: 48 }}>
         <PageHeader title="Mi personaje" />
         <EmptyState
-          icon={<Users size={22} aria-hidden />}
-          title="Sin personaje asignado"
-          description="El GM aún no te ha asignado un personaje."
+          icon={soloEnCreacion ? <SquarePen size={22} aria-hidden /> : <Users size={22} aria-hidden />}
+          title={soloEnCreacion ? 'Tu personaje está en creación' : 'Sin personaje asignado'}
+          description={soloEnCreacion ? 'Sigue sus pasos en «Creación de personajes»; cuando el director lo dé por creado, aparecerá aquí.' : 'El GM aún no te ha asignado un personaje.'}
+          action={soloEnCreacion ? <Button icon={<SquarePen size={16} aria-hidden />} onClick={() => navigate(`/campaigns/${id}/creacion`)}>Ir a la creación</Button> : undefined}
         />
       </div>
     )
@@ -294,10 +303,18 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
           ? `${characters?.length ?? 0} personaje${(characters?.length ?? 0) !== 1 ? 's' : ''}`
           : characters?.find((c) => c.ownerId === user?.id)?.name ?? ''}
         actions={isGm && (
+          <>
+            {features.creacionGuiada && !currentCampaign?.iniciadaEn && (
+              <Button variant="secondary" icon={<SquarePen size={16} aria-hidden />} onClick={() => navigate(`/campaigns/${id}/creacion`)}>
+                <span className="hide-mobile">Creación de personajes</span>
+                <span className="only-mobile">Creación</span>
+              </Button>
+            )}
           <Button icon={<Plus size={16} aria-hidden />} onClick={() => setCreating(true)} aria-haspopup="dialog">
             <span className="hide-mobile">Nuevo personaje</span>
             <span className="only-mobile">Nuevo</span>
           </Button>
+          </>
         )}
       />
 
@@ -398,7 +415,7 @@ export function CharacterListPage({ makeDetailPath }: { makeDetailPath?: (charId
       {/* Character list */}
       {!!characters?.length && (
         <ul role="list" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {vivosPrimero(characters).map((c, i) => (
+          {vivosPrimero(visibles).map((c, i) => (
             <CharacterCard
               key={c.id}
               index={i}

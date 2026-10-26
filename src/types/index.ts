@@ -31,6 +31,8 @@ export interface Campaign {
   iniciadaEn?: string | null
   /** Character fields (camelCase) that a started campaign locks for players (`CierreCampana.Campos` in the API); always the full list */
   camposDeCierre?: string[]
+  /** Guided character creation (section «Creación de personajes»): steps the director has released, 0 = not opened; the steps are the world's (`WorldConfig.creacion`) and `GET …/creacion` repeats their ids */
+  creacionPaso?: number
   /**
    * Whether the viewer may open «La banda»: the director always; a player only when the director has shared the crew sheet with
    * them. Only the campaign detail carries it; absent = hidden
@@ -213,6 +215,10 @@ export interface Character {
   legado: string
   /** Answers to the two questions of the legacy, in their order: `[]` = unanswered, always `[]` in Stormlight */
   legadoRespuestas: string[]
+  /** Guided creation (section «Creación de personajes»): `false` while the character walks its steps; characters made from «Personajes» are born created */
+  creacionCompletada: boolean
+  /** Data of the creation steps that are not sheet fields (key → value; e.g. `alomancia`): `{}` without any, always `{}` in Stormlight */
+  creacionDatos: Record<string, string>
   /** Dead (core, both worlds): the sheet is read-only for everyone and the gear left it for `equipoAlMorir`. Only the director sets it */
   muerto: boolean
   /** When the director marked the death (ISO), `null` while alive */
@@ -247,7 +253,7 @@ export type UpdateCharacterRequest = Omit<Character,
   'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |
   'salud' | 'investidura' | 'movimiento' | 'desvioCalculado' |
   'recursos' | 'derivadosSet' | 'bonosAtributos' |
-  'muerto' | 'muertoEn' | 'causaMuerte' | 'equipoAlMorir'
+  'muerto' | 'muertoEn' | 'causaMuerte' | 'equipoAlMorir' | 'creacionCompletada'
 >
 
 // PATCH …/recursos (Nacidos de la bruma, §5.2): only the keys that are present are written
@@ -731,4 +737,32 @@ export interface SaveEncyclopediaTextRequest {
   title: string
   /** At most 300 000 characters */
   md: string
+}
+
+// ── Guided character creation (section «Creación de personajes», src/pages/creacion; API: campaigns/{id}/creacion) ──
+
+/** A character as the creation state lists it: what it has answered, for the director's table and the player's steps */
+export interface CreacionPersonaje {
+  id: number
+  name: string
+  ownerId?: number | null
+  ownerName?: string | null
+  legado: string
+  ascendencia: string
+  legadoRespuestas: string[]
+  creacionDatos: Record<string, string>
+  /** «Personaje creado»: the sheet is in «Personajes» already */
+  completada: boolean
+  updatedAt: string
+}
+
+export interface CreacionEstado {
+  /** Steps released by the director (0 = not opened) */
+  paso: number
+  /** The world's steps, in order, as the field ids of the API (`name`, `legado`, `ascendencia`, `legadoRespuestas:0`…, `creacion:alomancia`); the client's `WorldConfig.creacion.pasos` must list the same ids */
+  pasos: string[]
+  /** The campaign has started: the creation is read-only */
+  iniciada: boolean
+  /** Every non-NPC character for the director; only their own for a player */
+  personajes: CreacionPersonaje[]
 }

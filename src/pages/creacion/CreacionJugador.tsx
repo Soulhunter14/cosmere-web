@@ -3,11 +3,11 @@
  * from here (the name, the legacy, the ancestry, the questions of the legacy, the choices); the server checks the released steps too.
  * Once the director marks «Personaje creado», a card sends the player to the sheet.
  */
-import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from 'react'
+import { lazy, Suspense, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Check, Circle, Lock, Pencil, Save, Users } from 'lucide-react'
+import { Check, Circle, Lock, Minus, Pencil, Save, Users } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { Button, ConfirmDialog, EmptyState, ErrorMessage, Input, PageHeader, Spinner } from '../../components/ui'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
@@ -15,16 +15,16 @@ import { buttonReset, c, card, fs, page, pill, radius, titleText, tone, type Ton
 import type { Character, CreacionEstado, CreacionPersonaje, UpdateCharacterRequest } from '../../types'
 import type { OpcionCreacion, PasoCreacion } from '../../worlds/types'
 import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
-import { conRespuesta, esNombreProvisional, estadoPaso, pasoHecho, type EstadoPaso } from './pasos'
+import { conRespuesta, esNombreProvisional, estadoPaso, pasoAplica, pasoHecho, type EstadoPaso } from './pasos'
 
 // Mistborn-only pieces (they import the legacies BY FILE): lazy, like the rest of components/mistborn
 const PasoLegado = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.PasoLegado })))
 const PreguntaLegado = lazy(() => import('../../components/mistborn').then((m) => ({ default: m.PreguntaLegado })))
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
-const TONO_ESTADO: Record<EstadoPaso, Tone> = { bloqueado: tone.cuarzo, pendiente: tone.topacio, hecho: tone.esmeralda }
-const TEXTO_ESTADO: Record<EstadoPaso, string> = { bloqueado: 'Bloqueado', pendiente: 'Pendiente', hecho: 'Hecho' }
-const ICONO_ESTADO = { bloqueado: Lock, pendiente: Circle, hecho: Check } as const
+const TONO_ESTADO: Record<EstadoPaso, Tone> = { bloqueado: tone.cuarzo, pendiente: tone.topacio, hecho: tone.esmeralda, omitido: tone.cuarzo }
+const TEXTO_ESTADO: Record<EstadoPaso, string> = { bloqueado: 'Bloqueado', pendiente: 'Pendiente', hecho: 'Hecho', omitido: 'No aplica' }
+const ICONO_ESTADO = { bloqueado: Lock, pendiente: Circle, hecho: Check, omitido: Minus } as const
 
 type Cambio = Partial<Pick<UpdateCharacterRequest, 'name' | 'legado' | 'ascendencia' | 'legadoRespuestas' | 'creacionDatos'>>
 
@@ -114,8 +114,11 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
 
       <ol style={{ listStyle: 'none', ...stack(12) }}>
         {pasos.map((paso, i) => {
-          const e = estadoPaso(i, estado.paso, pasoHecho(paso, mio))
+          const aplica = pasoAplica(paso, mio)
+          const e = estadoPaso(i, estado.paso, pasoHecho(paso, mio), aplica)
           const Icono = ICONO_ESTADO[e]
+          // The step that this one waits for (its title, for the notice)
+          const requerido = 'requiere' in paso && paso.requiere ? pasos.find((x) => 'clave' in x && x.clave === paso.requiere!.clave) : undefined
           return (
             <li key={paso.id} style={{ ...card, padding: 14, opacity: e === 'bloqueado' ? 0.7 : 1 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -131,6 +134,14 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
               {e === 'bloqueado' ? (
                 <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
                   <Lock size={14} aria-hidden /> El director aún no ha liberado este paso.
+                </p>
+              ) : e === 'omitido' ? (
+                <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
+                  <Minus size={14} aria-hidden /> {'requiere' in paso && paso.requiere ? paso.requiere.siNo : 'Este paso no aplica a tu personaje.'}
+                </p>
+              ) : aplica === 'espera' ? (
+                <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
+                  <Circle size={14} aria-hidden /> Responde antes «{requerido?.titulo ?? 'el paso anterior'}».
                 </p>
               ) : e === 'hecho' && !abiertos[paso.id] ? (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10 }}>
@@ -188,7 +199,7 @@ function ResumenPaso({ paso, mio }: { paso: PasoCreacion; mio: CreacionPersonaje
     etiqueta = def?.preguntas[paso.indice] ?? null
     valor = mio.legadoRespuestas[paso.indice] ?? ''
   } else if ('clave' in paso) {
-    valor = etiquetaDato(paso, opciones, mio.creacionDatos[paso.clave] ?? '')
+    valor = etiquetaDato(opciones, mio.creacionDatos[paso.clave] ?? '')
   }
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -274,7 +285,7 @@ function PasoTrasfondo({ mio, disabled, onGuardar }: { mio: CreacionPersonaje; d
       <ConfirmDialog
         open={pendiente !== null}
         title="¿Cambiar de trasfondo?"
-        message="Las preguntas del nuevo trasfondo son otras: se borrarán las respuestas que escribiste para el anterior."
+        message="Las tres preguntas del trasfondo (origen, impulso y meta) son otras con cada legado: se borrarán las respuestas que hayas escrito y tendrás que responderlas de nuevo cuando el director libere esos pasos. El nombre, la ascendencia y la alomancia se conservan."
         confirmLabel="Cambiar"
         onConfirm={() => { if (pendiente !== null) onGuardar({ legado: pendiente, legadoRespuestas: [] }); setPendiente(null) }}
         onCancel={() => setPendiente(null)}
@@ -344,44 +355,10 @@ function PasoPregunta({ indice, mio, disabled, onGuardar }: { indice: number; mi
   )
 }
 
-/**
- * A step that is a choice among the world's options (the ones the table hides are left out), every option with its short definition.
- * With a gate («¿Quieres ser alomante?»), «no» ends the step and «sí» opens the second question with the types
- */
+/** A step that is a choice among the world's options (the ones the table hides are left out), every option with its short definition */
 function PasoDato({ paso, valor, disabled, onChange }: { paso: PasoCreacion; valor: string; disabled: boolean; onChange: (id: string) => void }) {
   const opciones = useOpcionesPaso(paso)
-  const puerta = 'puerta' in paso ? paso.puerta : undefined
-  if (!puerta) {
-    return <ListaOpciones nombre={paso.titulo} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
-  }
-  const respuesta = valor === '' ? '' : valor === puerta.no.id ? puerta.no.id : puerta.si.id
-  return (
-    <div style={stack(14)}>
-      <Pregunta texto={puerta.pregunta}>
-        <ListaOpciones
-          nombre={puerta.pregunta}
-          opciones={[puerta.si, puerta.no]}
-          valor={respuesta}
-          disabled={disabled}
-          onChange={(id) => { if (id !== respuesta) onChange(id) }}
-        />
-      </Pregunta>
-      {respuesta === puerta.si.id && (
-        <Pregunta texto={puerta.preguntaOpciones}>
-          <ListaOpciones nombre={puerta.preguntaOpciones} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
-        </Pregunta>
-      )}
-    </div>
-  )
-}
-
-function Pregunta({ texto, children }: { texto: string; children: ReactNode }) {
-  return (
-    <div style={stack(8)}>
-      <p style={{ fontSize: fs.base, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{texto}</p>
-      {children}
-    </div>
-  )
+  return <ListaOpciones nombre={paso.titulo} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
 }
 
 /** Option cards: the label and, under it, the short definition; the chosen one takes the brand tone */

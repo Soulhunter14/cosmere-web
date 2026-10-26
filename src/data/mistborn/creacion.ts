@@ -23,6 +23,13 @@ const DEFINICION: Partial<Record<MetalId, string>> = {
   atium: 'ves unos instantes del futuro: casi nadie logra tocarte.',
 }
 
+/** «¿Quieres ser alomante?» (its own step, so the director can release it before the type) */
+export const OPCIONES_ALOMANTE: OpcionCreacion[] = [
+  { id: 'si', label: 'Sí', descripcion: 'Quemas un metal para despertar un poder: lo que ya eres en secreto, o lo que esta noche despertará.' },
+  { id: 'no', label: 'No', descripcion: 'Sin alomancia, al menos por ahora. Nada te impide descubrirla más adelante.' },
+]
+
+/** «¿Qué tipo de brumoso?»: the step requires «sí» in the one above */
 export const OPCIONES_ALOMANCIA: OpcionCreacion[] = [
   {
     id: 'nacido-de-la-bruma', label: 'Nacido de la bruma',

@@ -233,10 +233,10 @@ export type PasoCreacion = {
     opciones: { cargar: () => Promise<OpcionCreacion[]> }
     ocultas: string[]
     /**
-     * A yes/no question before the options: «no» stores `no.id` and ends the step; «sí» stores `si.id` until an option is chosen under
-     * `preguntaOpciones` (the step is done only then). Without it the options are the whole step
+     * Only when another choice has this value (the type of misting after «¿Quieres ser alomante?» = `si`): while that choice is empty the
+     * step waits for it, and with another value it is skipped («No aplica», `siNo` explains why) and counts as done
      */
-    puerta?: { pregunta: string; si: OpcionCreacion; no: OpcionCreacion; preguntaOpciones: string }
+    requiere?: { clave: string; valor: string; siNo: string }
   }
 )
 

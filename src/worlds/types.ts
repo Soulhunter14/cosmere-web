@@ -210,6 +210,8 @@ export interface OpcionCreacion {
   id: string
   label: string
   descripcion?: string
+  /** Heading the option is listed under in the player's list (groups keep the order of first appearance); without it, no heading */
+  grupo?: string
 }
 
 /**

@@ -38,7 +38,7 @@ Secuencia fijada por Xavi el 26-10-2026 (faltan pasos por definir; se añadirán
 | 2 | Trasfondo | Elige uno de los seis legados (la lista con sus resúmenes, sin la conexión con la Era 2). Cambiable cuando el director lo permite («Permitir / Denegar» en su vista; de inicio denegado): cambiarlo reinicia todos los pasos siguientes, con aviso | `legado` |
 | 3 | Ascendencia | Humano o kandra, las de la era de la campaña; un kandra indica bajo qué Contrato sirve | `ascendencia` |
 | 4 | ¿Quieres ser alomante? | Sí / No, cada uno con una definición corta; dato narrativo, no el camino | `creacionDatos.alomante` |
-| 5 | ¿Qué tipo de brumoso? | Los diez brumosos de la Era 1 con una definición corta cada uno (nacido de la bruma oculto por ahora); solo si el paso 4 es «sí», si no queda como «no aplica» | `creacionDatos.alomancia` |
+| 5 | ¿Qué tipo de brumoso? | Los brumosos de la Era 1 con una definición corta cada uno, en tres grupos («Para empezar», «Para expertos», «Raros y divinos»; nacido de la bruma, oro y atium ocultos por ahora); solo si el paso 4 es «sí», si no queda como «no aplica» | `creacionDatos.alomancia` |
 | 6 | Primera pregunta | Origen: «¿Por qué eres de este legado?», con los ejemplos debajo | `legadoRespuestas[0]` |
 | 7 | Segunda pregunta | Impulso: «¿Qué te empuja a dejar lo que eres e intentar cambiar las cosas?» | `legadoRespuestas[1]` |
 | 8 | Tercera pregunta | Meta: «¿Qué buscas cuando las cosas cambien?» | `legadoRespuestas[2]` |

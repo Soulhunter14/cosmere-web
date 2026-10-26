@@ -11,7 +11,7 @@ import { Check, Circle, Lock, Minus, Pencil, Save, Users } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { Button, ConfirmDialog, EmptyState, ErrorMessage, Input, PageHeader, Spinner } from '../../components/ui'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
-import { buttonReset, c, card, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
+import { type Tone, buttonReset, c, card, eyebrow, fs, page, pill, radius, titleText, tone } from '../../theme'
 import type { Character, CreacionEstado, CreacionPersonaje, UpdateCharacterRequest } from '../../types'
 import type { OpcionCreacion, PasoCreacion } from '../../worlds/types'
 import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
@@ -368,34 +368,58 @@ function PasoDato({ paso, valor, disabled, onChange }: { paso: PasoCreacion; val
   return <ListaOpciones nombre={paso.titulo} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
 }
 
-/** Option cards: the label and, under it, the short definition; the chosen one takes the brand tone */
+/**
+ * Option cards: the label and, under it, the short definition; the chosen one takes the brand tone. Options with a `grupo` are listed
+ * under its heading (groups in order of first appearance), so a long list reads in parts
+ */
 function ListaOpciones({ nombre, opciones, valor, disabled, onChange }: { nombre: string; opciones: OpcionCreacion[]; valor: string; disabled: boolean; onChange: (id: string) => void }) {
   return (
-    <ul aria-label={nombre} style={{ listStyle: 'none', ...stack(8) }}>
-      {opciones.map((o) => {
-        const selected = valor === o.id
-        return (
-          <li key={o.id}>
-            <button
-              type="button"
-              aria-pressed={selected}
-              disabled={disabled}
-              onClick={() => onChange(o.id)}
-              className="ui-card ui-card--interactive"
-              style={{
-                ...buttonReset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, minHeight: 52, padding: '10px 14px',
-                borderRadius: radius.lg, border: `1px solid ${selected ? tone.brand.border : c.border}`, background: selected ? tone.brand.bg : c.s1,
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, color: c.text }}>{o.label}</span>
-                {o.descripcion && <span style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{o.descripcion}</span>}
-              </span>
-              {selected && <Check size={18} aria-hidden style={{ color: tone.brand.fg, flexShrink: 0, marginTop: 2 }} />}
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+    <div role="group" aria-label={nombre} style={stack(14)}>
+      {agrupar(opciones).map((g) => (
+        <div key={g.titulo ?? ''} style={stack(8)}>
+          {g.titulo && <p style={eyebrow}>{g.titulo}</p>}
+          <ul aria-label={g.titulo ? `${nombre}: ${g.titulo}` : nombre} style={{ listStyle: 'none', ...stack(8) }}>
+            {g.opciones.map((o) => {
+              const selected = valor === o.id
+              return (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={disabled}
+                    onClick={() => onChange(o.id)}
+                    className="ui-card ui-card--interactive"
+                    style={{
+                      ...buttonReset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, minHeight: 52, padding: '10px 14px',
+                      borderRadius: radius.lg, border: `1px solid ${selected ? tone.brand.border : c.border}`, background: selected ? tone.brand.bg : c.s1,
+                    }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontWeight: 600, color: c.text }}>{o.label}</span>
+                      {o.descripcion && <span style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{o.descripcion}</span>}
+                    </span>
+                    {selected && <Check size={18} aria-hidden style={{ color: tone.brand.fg, flexShrink: 0, marginTop: 2 }} />}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   )
+}
+
+/** The options split by `grupo`, keeping the order in which each group first appears (the ungrouped ones form a group without heading) */
+function agrupar(opciones: OpcionCreacion[]): { titulo?: string; opciones: OpcionCreacion[] }[] {
+  const grupos: { titulo?: string; opciones: OpcionCreacion[] }[] = []
+  for (const o of opciones) {
+    let g = grupos.find((x) => x.titulo === o.grupo)
+    if (!g) {
+      g = { titulo: o.grupo, opciones: [] }
+      grupos.push(g)
+    }
+    g.opciones.push(o)
+  }
+  return grupos
 }

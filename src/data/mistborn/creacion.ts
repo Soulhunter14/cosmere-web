@@ -7,7 +7,7 @@
  * not offer (`ocultas` of the step). A narrative choice: the metalborn path of the sheet is still the director's.
  */
 import type { OpcionCreacion } from '../../worlds/types'
-import { METALES, type MetalId } from './metales'
+import { getMetal, type MetalId } from './metales'
 
 /** What each misting of Era 1 does, in one line (the misting name comes from METALES.nombreBrumoso) */
 const DEFINICION: Partial<Record<MetalId, string>> = {
@@ -29,15 +29,31 @@ export const OPCIONES_ALOMANTE: OpcionCreacion[] = [
   { id: 'no', label: 'No', descripcion: 'Sin alomancia, al menos por ahora. Nada te impide descubrirla más adelante.' },
 ]
 
-/** «¿Qué tipo de brumoso?»: the step requires «sí» in the one above */
+/**
+ * «¿Qué tipo de brumoso?» (the step requires «sí» in the one above), in three groups to ease the choice (Xavi, 26-10-2026). The handbook
+ * marks no misting as «solo recomendado para jugadores experimentados» (only Feruquimista and Nacido de la bruma, L.19 / PDF 25): the groups
+ * are ours, by how often the metal is burnt at the table and how rare it is. The eight common metals are always available (L.167 / PDF 173);
+ * the oro misting stayed a secret of the Ministry until the end of Era 1 (L.167-168 / PDF 173-174) and atium is the divine metal, scarce
+ * and dear, so the step hides that group (`ocultas`) until the director says otherwise.
+ */
+const GRUPOS: { titulo: string; metales: MetalId[] }[] = [
+  // Common metals with a direct effect in almost any scene
+  { titulo: 'Para empezar', metales: ['peltre', 'estano', 'acero', 'hierro', 'cinc', 'laton'] },
+  // Common too, but support metals: their value depends on the scene and on the player looking for it
+  { titulo: 'Para expertos', metales: ['cobre', 'bronce'] },
+  // The book does not take them for granted in Era 1 (see above)
+  { titulo: 'Raros y divinos', metales: ['oro', 'atium'] },
+]
+
 export const OPCIONES_ALOMANCIA: OpcionCreacion[] = [
-  {
-    id: 'nacido-de-la-bruma', label: 'Nacido de la bruma',
-    descripcion: 'Quemas todos los metales. Muy raro: solo si el director y el jugador lo pactan, y como mucho uno en la mesa.',
-  },
-  ...METALES.filter((m) => m.eras.includes('era1')).map((m) => ({
+  ...GRUPOS.flatMap((g) => g.metales.map(getMetal).map((m) => ({
     id: `brumoso:${m.id}`,
     label: `Brumoso de ${m.nombre.toLowerCase()}`,
     descripcion: `${m.nombreBrumoso}: ${DEFINICION[m.id] ?? 'quema solo este metal.'}`,
-  })),
+    grupo: g.titulo,
+  }))),
+  {
+    id: 'nacido-de-la-bruma', label: 'Nacido de la bruma', grupo: 'Raros y divinos',
+    descripcion: 'Quemas todos los metales. Muy raro: solo si el director y el jugador lo pactan, y como mucho uno en la mesa.',
+  },
 ]

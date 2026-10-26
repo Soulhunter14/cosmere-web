@@ -66,8 +66,9 @@ export const MISTBORN: WorldConfig = {
         id: 'creacion:alomancia', clave: 'alomancia', titulo: '¿Qué tipo de brumoso?',
         ayuda: 'Qué metal quemas. Solo si respondiste que sí.',
         opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANCIA) },
-        // Options the table does not offer, by id (Xavi, 26-10-2026): players can only be mistings for now
-        ocultas: ['nacido-de-la-bruma'],
+        // Options the table does not offer, by id (Xavi, 26-10-2026): players can only be mistings for now, and the rare and divine
+        // metals (group «Raros y divinos» of OPCIONES_ALOMANCIA) wait for the director to allow them
+        ocultas: ['nacido-de-la-bruma', 'brumoso:oro', 'brumoso:atium'],
         requiere: { clave: 'alomante', valor: 'si', siNo: 'Respondiste que no quieres ser alomante.' },
       },
       { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },

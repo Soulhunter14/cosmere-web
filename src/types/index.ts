@@ -765,6 +765,8 @@ export interface CreacionEstado {
   iniciada: boolean
   /** Steps the director lets players change once answered (field ids, e.g. `legado`); any other step keeps its answer */
   cambiables: string[]
+  /** How many characters of the other members (alive, not NPC, created or in creation) have each legacy (id → count); for the director, every character */
+  legadosElegidos: Record<string, number>
   /** Every non-NPC character for the director; only their own for a player */
   personajes: CreacionPersonaje[]
 }

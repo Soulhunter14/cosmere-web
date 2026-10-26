@@ -147,7 +147,7 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
                 </p>
               ) : e === 'hecho' && !(abiertos[paso.id] && puedeCambiar(paso)) ? (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10 }}>
-                  <ResumenPaso paso={paso} mio={mio} />
+                  <ResumenPaso paso={paso} mio={mio} elegidos={estado.legadosElegidos} />
                   {puedeCambiar(paso) && (
                     <Button size="sm" variant="ghost" icon={<Pencil size={14} aria-hidden />} onClick={() => abrir(paso.id, true)} style={{ flexShrink: 0 }}>
                       Cambiar
@@ -160,6 +160,7 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
                     key={`${mio.id}:${mio.legado}`}
                     paso={paso}
                     mio={mio}
+                    elegidos={estado.legadosElegidos}
                     disabled={soloLectura || ocupado}
                     onGuardar={(cambio) => guardar.mutate({ cambio, pasoId: paso.id })}
                   />
@@ -186,7 +187,7 @@ const numeroPaso = (t: Tone): CSSProperties => ({
 })
 
 /** A done step, folded: only what was chosen (the question of the legacy as a small label when it is an answer) */
-function ResumenPaso({ paso, mio }: { paso: PasoCreacion; mio: CreacionPersonaje }) {
+function ResumenPaso({ paso, mio, elegidos }: { paso: PasoCreacion; mio: CreacionPersonaje; elegidos: Record<string, number> }) {
   const cfg = useWorldConfig()
   const legados = useLegados()
   const opciones = useOpcionesPaso(paso)
@@ -208,15 +209,21 @@ function ResumenPaso({ paso, mio }: { paso: PasoCreacion; mio: CreacionPersonaje
       <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.base, color: c.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
         <Check size={16} aria-hidden style={{ color: tone.esmeralda.fg, flexShrink: 0, marginTop: 3 }} />
         <span>{valor}</span>
+        {/* The legacy others also have: the same notice as in the list, so the folded step keeps saying it */}
+        {paso.id === 'legado' && (elegidos[mio.legado] ?? 0) > 0 && (
+          <span style={{ ...pill(tone.topacio), flexShrink: 0, marginTop: 1 }}>
+            <Users size={12} aria-hidden /> {elegidos[mio.legado] === 1 ? 'También lo tiene 1 compañero' : `También lo tienen ${elegidos[mio.legado]} compañeros`}
+          </span>
+        )}
       </p>
     </div>
   )
 }
 
 /** The editor of one released step, by its kind. The editors with a draft are keyed by the saved value: a save or a change from elsewhere starts them afresh */
-function CuerpoPaso({ paso, mio, disabled, onGuardar }: { paso: PasoCreacion; mio: CreacionPersonaje; disabled: boolean; onGuardar: (cambio: Cambio) => void }) {
+function CuerpoPaso({ paso, mio, elegidos, disabled, onGuardar }: { paso: PasoCreacion; mio: CreacionPersonaje; elegidos: Record<string, number>; disabled: boolean; onGuardar: (cambio: Cambio) => void }) {
   if (paso.id === 'name') return <PasoNombre key={mio.name} valor={mio.name} disabled={disabled} onGuardar={(name) => onGuardar({ name })} />
-  if (paso.id === 'legado') return <PasoTrasfondo mio={mio} disabled={disabled} onGuardar={onGuardar} />
+  if (paso.id === 'legado') return <PasoTrasfondo mio={mio} elegidos={elegidos} disabled={disabled} onGuardar={onGuardar} />
   if (paso.id === 'ascendencia') return <PasoAscendencia valor={mio.ascendencia} disabled={disabled} onChange={(ascendencia) => onGuardar({ ascendencia })} />
   if ('indice' in paso) {
     const guardado = mio.legadoRespuestas[paso.indice] ?? ''
@@ -273,7 +280,7 @@ function PasoNombre({ valor, disabled, onGuardar }: { valor: string; disabled: b
  * The legacy. Changing it starts every later step afresh (ancestry, the choices and the three answers), so they open again for the
  * player; when any of them is answered, it asks first and says so
  */
-function PasoTrasfondo({ mio, disabled, onGuardar }: { mio: CreacionPersonaje; disabled: boolean; onGuardar: (cambio: Cambio) => void }) {
+function PasoTrasfondo({ mio, elegidos, disabled, onGuardar }: { mio: CreacionPersonaje; elegidos: Record<string, number>; disabled: boolean; onGuardar: (cambio: Cambio) => void }) {
   const [pendiente, setPendiente] = useState<string | null>(null)
   const hayPosteriores = mio.ascendencia !== ''
     || Object.values(mio.creacionDatos).some((v) => v !== '')
@@ -287,7 +294,7 @@ function PasoTrasfondo({ mio, disabled, onGuardar }: { mio: CreacionPersonaje; d
   return (
     <>
       <Suspense fallback={<Spinner />}>
-        <PasoLegado value={mio.legado} disabled={disabled} onChange={elegir} />
+        <PasoLegado value={mio.legado} disabled={disabled} onChange={elegir} elegidos={elegidos} />
       </Suspense>
       <ConfirmDialog
         open={pendiente !== null}

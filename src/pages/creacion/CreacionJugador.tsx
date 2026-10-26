@@ -9,12 +9,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { Check, Circle, Lock, Pencil, Save, Users } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
-import { Button, ConfirmDialog, EmptyState, ErrorMessage, Input, PageHeader, Select, Spinner } from '../../components/ui'
+import { Button, ConfirmDialog, EmptyState, ErrorMessage, Input, PageHeader, Spinner } from '../../components/ui'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
 import { buttonReset, c, card, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
 import type { Character, CreacionEstado, CreacionPersonaje, UpdateCharacterRequest } from '../../types'
-import type { PasoCreacion } from '../../worlds/types'
-import { etiquetaOpcion, useLegados, useOpcionesPaso } from './hooks'
+import type { OpcionCreacion, PasoCreacion } from '../../worlds/types'
+import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
 import { conRespuesta, esNombreProvisional, estadoPaso, pasoHecho, type EstadoPaso } from './pasos'
 
 // Mistborn-only pieces (they import the legacies BY FILE): lazy, like the rest of components/mistborn
@@ -188,7 +188,7 @@ function ResumenPaso({ paso, mio }: { paso: PasoCreacion; mio: CreacionPersonaje
     etiqueta = def?.preguntas[paso.indice] ?? null
     valor = mio.legadoRespuestas[paso.indice] ?? ''
   } else if ('clave' in paso) {
-    valor = etiquetaOpcion(opciones, mio.creacionDatos[paso.clave] ?? '')
+    valor = etiquetaDato(paso, opciones, mio.creacionDatos[paso.clave] ?? '')
   }
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -344,21 +344,74 @@ function PasoPregunta({ indice, mio, disabled, onGuardar }: { indice: number; mi
   )
 }
 
-/** A step that is a choice among the world's options (the ones the table hides are left out) */
+/**
+ * A step that is a choice among the world's options (the ones the table hides are left out), every option with its short definition.
+ * With a gate («¿Quieres ser alomante?»), «no» ends the step and «sí» opens the second question with the types
+ */
 function PasoDato({ paso, valor, disabled, onChange }: { paso: PasoCreacion; valor: string; disabled: boolean; onChange: (id: string) => void }) {
   const opciones = useOpcionesPaso(paso)
-  const elegida = opciones.find((o) => o.id === valor)
+  const puerta = 'puerta' in paso ? paso.puerta : undefined
+  if (!puerta) {
+    return <ListaOpciones nombre={paso.titulo} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
+  }
+  const respuesta = valor === '' ? '' : valor === puerta.no.id ? puerta.no.id : puerta.si.id
   return (
-    <div style={stack(8)}>
-      <Select value={valor} disabled={disabled || opciones.length === 0} aria-label={paso.titulo} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Elige…</option>
-        {opciones.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-      </Select>
-      {elegida?.descripcion && <Descripcion>{elegida.descripcion}</Descripcion>}
+    <div style={stack(14)}>
+      <Pregunta texto={puerta.pregunta}>
+        <ListaOpciones
+          nombre={puerta.pregunta}
+          opciones={[puerta.si, puerta.no]}
+          valor={respuesta}
+          disabled={disabled}
+          onChange={(id) => { if (id !== respuesta) onChange(id) }}
+        />
+      </Pregunta>
+      {respuesta === puerta.si.id && (
+        <Pregunta texto={puerta.preguntaOpciones}>
+          <ListaOpciones nombre={puerta.preguntaOpciones} opciones={opciones} valor={valor} disabled={disabled} onChange={onChange} />
+        </Pregunta>
+      )}
     </div>
   )
 }
 
-function Descripcion({ children }: { children: ReactNode }) {
-  return <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{children}</p>
+function Pregunta({ texto, children }: { texto: string; children: ReactNode }) {
+  return (
+    <div style={stack(8)}>
+      <p style={{ fontSize: fs.base, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{texto}</p>
+      {children}
+    </div>
+  )
+}
+
+/** Option cards: the label and, under it, the short definition; the chosen one takes the brand tone */
+function ListaOpciones({ nombre, opciones, valor, disabled, onChange }: { nombre: string; opciones: OpcionCreacion[]; valor: string; disabled: boolean; onChange: (id: string) => void }) {
+  return (
+    <ul aria-label={nombre} style={{ listStyle: 'none', ...stack(8) }}>
+      {opciones.map((o) => {
+        const selected = valor === o.id
+        return (
+          <li key={o.id}>
+            <button
+              type="button"
+              aria-pressed={selected}
+              disabled={disabled}
+              onClick={() => onChange(o.id)}
+              className="ui-card ui-card--interactive"
+              style={{
+                ...buttonReset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, minHeight: 52, padding: '10px 14px',
+                borderRadius: radius.lg, border: `1px solid ${selected ? tone.brand.border : c.border}`, background: selected ? tone.brand.bg : c.s1,
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 0, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontWeight: 600, color: c.text }}>{o.label}</span>
+                {o.descripcion && <span style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>{o.descripcion}</span>}
+              </span>
+              {selected && <Check size={18} aria-hidden style={{ color: tone.brand.fg, flexShrink: 0, marginTop: 2 }} />}
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
 }

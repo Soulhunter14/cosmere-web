@@ -55,8 +55,15 @@ export const MISTBORN: WorldConfig = {
       { id: 'legado', titulo: 'Tu trasfondo', ayuda: 'Uno de los seis legados de la Era 1: quién eres el día de la caída.' },
       { id: 'ascendencia', titulo: 'Tu ascendencia', ayuda: 'Humano o kandra. Un kandra sirve bajo un Contrato: anota en tu ficha a quién.' },
       {
-        id: 'creacion:alomancia', clave: 'alomancia', titulo: '¿Quieres ser alomante?',
+        id: 'creacion:alomancia', clave: 'alomancia', titulo: 'Alomancia',
         ayuda: 'No decide tu camino de nacido del metal (eso lo pone el director), pero ayuda a contar tu historia.',
+        // Two questions: yes or no, and then the type, each option with its short definition
+        puerta: {
+          pregunta: '¿Quieres ser alomante?',
+          si: { id: 'si', label: 'Sí', descripcion: 'Quemas un metal para despertar un poder: lo que ya eres en secreto, o lo que esta noche despertará.' },
+          no: { id: 'no', label: 'No', descripcion: 'Sin alomancia, al menos por ahora. Nada te impide descubrirla más adelante.' },
+          preguntaOpciones: '¿Qué tipo quieres ser?',
+        },
         opciones: { cargar: () => import('../data/mistborn/creacion').then((m) => m.OPCIONES_ALOMANCIA) },
         // Options the table does not offer (Xavi will say which), by id: 'nacido-de-la-bruma', 'brumoso:atium'…
         ocultas: [],

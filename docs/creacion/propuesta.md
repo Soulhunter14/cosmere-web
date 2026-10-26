@@ -37,7 +37,7 @@ Secuencia fijada por Xavi el 26-10-2026 (faltan pasos por definir; se añadirán
 | 1 | Nombre | Pone el nombre de su personaje (hasta entonces, «Personaje de <jugador>») | `name` |
 | 2 | Trasfondo | Elige uno de los seis legados (la lista con sus resúmenes, sin la conexión con la Era 2) | `legado` |
 | 3 | Ascendencia | Humano o kandra, las de la era de la campaña; un kandra indica bajo qué Contrato sirve | `ascendencia` |
-| 4 | ¿Quieres ser alomante? | Un desplegable con todas las opciones alománticas de la Era 1 (no, nacido de la bruma, brumoso de cada metal); dato narrativo, no el camino | `creacionDatos.alomancia` |
+| 4 | Alomancia | Dos preguntas: «¿Quieres ser alomante?» (Sí / No) y, si es que sí, «¿Qué tipo quieres ser?» con todas las opciones alománticas de la Era 1 (nacido de la bruma, brumoso de cada metal), cada una con una definición corta; dato narrativo, no el camino | `creacionDatos.alomancia` (`no`, `si` o el tipo) |
 | 5 | Primera pregunta | Origen: «¿Por qué eres de este legado?», con los ejemplos debajo | `legadoRespuestas[0]` |
 | 6 | Segunda pregunta | Impulso: «¿Qué te empuja a dejar lo que eres e intentar cambiar las cosas?» | `legadoRespuestas[1]` |
 | 7 | Tercera pregunta | Meta: «¿Qué buscas cuando las cosas cambien?» | `legadoRespuestas[2]` |

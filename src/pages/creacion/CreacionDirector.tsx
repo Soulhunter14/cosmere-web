@@ -13,7 +13,7 @@ import { useCampaignStore } from '../../store/campaignStore'
 import { buttonReset, c, card, eyebrow, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
 import type { CampaignDetail, CreacionEstado, CreacionPersonaje, Member } from '../../types'
 import type { PasoCreacion } from '../../worlds/types'
-import { etiquetaOpcion, useLegados, useOpcionesPaso } from './hooks'
+import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
 import { estadoPaso, pasoHecho, pasosCoinciden, type EstadoPaso } from './pasos'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
@@ -326,8 +326,7 @@ function FilaRespuesta({ paso, p }: { paso: PasoCreacion; p: CreacionPersonaje }
     etiqueta = def?.preguntas[paso.indice] ?? paso.titulo
     valor = p.legadoRespuestas[paso.indice] ?? ''
   } else if ('clave' in paso) {
-    const id = p.creacionDatos[paso.clave] ?? ''
-    valor = id ? etiquetaOpcion(opciones, id) : ''
+    valor = etiquetaDato(paso, opciones, p.creacionDatos[paso.clave] ?? '')
   }
   return (
     <div>

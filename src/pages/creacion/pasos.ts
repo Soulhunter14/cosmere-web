@@ -16,7 +16,11 @@ export function pasoHecho(paso: PasoCreacion, p: CreacionPersonaje): boolean {
   if (paso.id === 'legado') return p.legado !== ''
   if (paso.id === 'ascendencia') return p.ascendencia !== ''
   if ('indice' in paso) return (p.legadoRespuestas[paso.indice] ?? '').trim() !== ''
-  if ('clave' in paso) return (p.creacionDatos[paso.clave] ?? '') !== ''
+  if ('clave' in paso) {
+    // With a yes/no gate, «sí» alone is not an answer yet: the type is still to be chosen
+    const valor = p.creacionDatos[paso.clave] ?? ''
+    return valor !== '' && !(paso.puerta && valor === paso.puerta.si.id)
+  }
   return false
 }
 

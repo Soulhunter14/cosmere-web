@@ -227,7 +227,17 @@ export type PasoCreacion = {
   | { id: 'legado' }
   | { id: 'ascendencia' }
   | { id: `legadoRespuestas:${number}`; indice: number }
-  | { id: `creacion:${string}`; clave: string; opciones: { cargar: () => Promise<OpcionCreacion[]> }; ocultas: string[] }
+  | {
+    id: `creacion:${string}`
+    clave: string
+    opciones: { cargar: () => Promise<OpcionCreacion[]> }
+    ocultas: string[]
+    /**
+     * A yes/no question before the options: «no» stores `no.id` and ends the step; «sí» stores `si.id` until an option is chosen under
+     * `preguntaOpciones` (the step is done only then). Without it the options are the whole step
+     */
+    puerta?: { pregunta: string; si: OpcionCreacion; no: OpcionCreacion; preguntaOpciones: string }
+  }
 )
 
 export interface WorldData {

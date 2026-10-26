@@ -1221,7 +1221,9 @@ export function CharacterDetailPage() {
                     )}
                   </div>
                   {/* Which of the two paths the character started from: the director switches it (immediate save, outside edit mode, like
-                      the metalborn path); everyone else reads it. With one path the choice is that path, or still «sin elegir» */}
+                      the metalborn path); everyone else reads it. With one path the choice is that path, or still «sin elegir». With a
+                      metalborn path the switch goes through its flow (caminoMetalFlujo): the main talent moves in or out of the list and
+                      the free degree of its starting skill goes up or down; with only a heroic path there is nothing else to move */}
                   {conInicial && opcionesInicial.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
                       <span style={eyebrow}>Camino inicial</span>
@@ -1229,9 +1231,17 @@ export function CharacterDetailPage() {
                         size="sm"
                         stretch={false}
                         ariaLabel="Camino inicial"
-                        options={opcionesInicial.map((o) => ({ ...o, disabled: !gmActivo || editing || identidadMutation.isPending }))}
+                        options={opcionesInicial.map((o) => ({ ...o, disabled: !gmActivo || editing || identidadMutation.isPending || caminoOcupado }))}
                         value={inicial}
-                        onChange={(v) => identidadMutation.mutate({ caminoInicial: v as Character['caminoInicial'] })}
+                        onChange={(v) => {
+                          const caminoInicial = v === 'metal' ? 'metal' : 'heroico'
+                          if (invDef && caminoInv?.field === 'caminoMetal') {
+                            aplicarCaminoMetal.reset()
+                            aplicarCaminoMetal.mutate({ camino: f.caminoMetal, seleccion: { caminoInicial, poderes: null, paraMeta: [] } })
+                          } else {
+                            identidadMutation.mutate({ caminoInicial })
+                          }
+                        }}
                       />
                       {inicial === '' && <span style={{ fontSize: fs.sm, color: c.muted }}>Sin elegir.</span>}
                     </div>

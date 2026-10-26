@@ -129,6 +129,8 @@ export interface WorldConfig {
     banda: boolean
     /** «Creación de personajes»: the director releases the steps of `creacion.pasos` one by one and the players fill them in (route `creacion`) */
     creacionGuiada: boolean
+    /** The sheet marks which of the two paths (heroic, Investida) the character started from and lets the director switch it («Camino inicial», Mistborn) */
+    caminoInicial: boolean
   }
   /** The 18 standard skills: the character sheet, the dice roller and the NPC page all read this table */
   habilidades: HabilidadDef[]

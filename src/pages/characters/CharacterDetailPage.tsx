@@ -264,13 +264,15 @@ function IconBox({ t, children }: { t?: Tone; children: ReactNode }) {
 }
 
 /** Identity row (Ascendencia / Camino / Orden). A button that opens its picker while editing. */
-function IdentityItem({ label, value, t, media, onPick, index }: {
+function IdentityItem({ label, value, t, media, onPick, index, tag }: {
   label: string
   value?: string
   t?: Tone
   media: ReactNode
   onPick?: () => void
   index: number
+  /** Small pill beside the label («Inicial» on the path the character started from) */
+  tag?: string
 }) {
   const body: CSSProperties = {
     ...tile,
@@ -281,7 +283,10 @@ function IdentityItem({ label, value, t, media, onPick, index }: {
     <>
       {media}
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ ...eyebrow, display: 'block' }}>{label}</span>
+        <span style={{ ...eyebrow, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {label}
+          {tag && <span style={pill(t ?? tone.cuarzo)}>{tag}</span>}
+        </span>
         <span
           style={{
             display: 'block', marginTop: 2,
@@ -683,9 +688,9 @@ export function CharacterDetailPage() {
   const optimista = (cambio: Partial<Character>) => qc.setQueriesData<Character>({ queryKey: prefijoFicha }, (old) => old && { ...old, ...cambio })
   const restaurar = (ctx: { previas: [QueryKey, Character | undefined][] } | undefined) => ctx?.previas.forEach(([key, data]) => qc.setQueryData(key, data))
 
-  // The Blessings (T27) and the legacy. The metalborn path has its own mutations below: it also writes talents, skills and powers and creates goals
+  // The Blessings (T27), the legacy and the starting path. The metalborn path has its own mutations below: it also writes talents, skills and powers and creates goals
   const identidadMutation = useMutation({
-    mutationFn: (cambio: Partial<Pick<Character, 'bendiciones' | 'legado' | 'legadoRespuestas'>>) => {
+    mutationFn: (cambio: Partial<Pick<Character, 'bendiciones' | 'legado' | 'legadoRespuestas' | 'caminoInicial'>>) => {
       const base = qc.getQueryData<Character>(['character', cId, chId, false]) ?? char
       if (!base) return Promise.reject(new Error('The character is not loaded'))
       return charactersApi.update(cId, chId, { ...base, ...cambio } as UpdateCharacterRequest)
@@ -1144,6 +1149,15 @@ export function CharacterDetailPage() {
               const invDef = caminoInv?.caminos.find((p) => p.id === f[caminoInv.field])
               const pathTone = path ? toneFrom(path.color) : undefined
               const invTone = invDef ? toneFrom(invDef.color) : undefined
+              // «Camino inicial» (features.caminoInicial): the path the character started from, marked on its card and switched by the
+              // director outside edit mode with an immediate save. The server keeps it consistent with the paths the character has
+              const conInicial = cfg.features.caminoInicial
+              const inicial = conInicial ? f.caminoInicial : ''
+              const etiquetaInv = caminoInv ? caminoInv.label.replace(/^camino de /i, '') : ''
+              const opcionesInicial: { value: string; label: string }[] = [
+                ...(path ? [{ value: 'heroico', label: 'Heroico' }] : []),
+                ...(invDef && etiquetaInv ? [{ value: 'metal', label: etiquetaInv.charAt(0).toUpperCase() + etiquetaInv.slice(1) }] : []),
+              ]
               // A radiant order is changed by the director in edit mode, with the rest of the form. A metalborn path is assigned by the
               // director OUTSIDE edit mode, with an immediate save (§7.4 rule 5, Q6); not again while the previous save is running
               const invPick = caminoInv?.field === 'caminoMetal'
@@ -1174,6 +1188,7 @@ export function CharacterDetailPage() {
                       label="Camino"
                       value={path?.name}
                       t={pathTone}
+                      tag={inicial === 'heroico' ? 'Inicial' : undefined}
                       media={<IconBox t={pathTone}><HeroicPathIcon id={path?.id} size={20} /></IconBox>}
                       onPick={editing && isGm ? () => setPicker('heroico') : undefined}
                     />
@@ -1183,6 +1198,7 @@ export function CharacterDetailPage() {
                         label={caminoInv.label}
                         value={invDef?.nombre}
                         t={invTone}
+                        tag={inicial === 'metal' ? 'Inicial' : undefined}
                         media={invDef
                           ? (caminoInv.insignia
                             ? cfg.iconos.caminoInvestido(invDef.id, 40)
@@ -1204,6 +1220,32 @@ export function CharacterDetailPage() {
                       </div>
                     )}
                   </div>
+                  {/* Which of the two paths the character started from: the director switches it (immediate save, outside edit mode, like
+                      the metalborn path); everyone else reads it. With one path the choice is that path, or still «sin elegir». With a
+                      metalborn path the switch goes through its flow (caminoMetalFlujo): the main talent moves in or out of the list and
+                      the free degree of its starting skill goes up or down; with only a heroic path there is nothing else to move */}
+                  {conInicial && opcionesInicial.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                      <span style={eyebrow}>Camino inicial</span>
+                      <Segmented
+                        size="sm"
+                        stretch={false}
+                        ariaLabel="Camino inicial"
+                        options={opcionesInicial.map((o) => ({ ...o, disabled: !gmActivo || editing || identidadMutation.isPending || caminoOcupado }))}
+                        value={inicial}
+                        onChange={(v) => {
+                          const caminoInicial = v === 'metal' ? 'metal' : 'heroico'
+                          if (invDef && caminoInv?.field === 'caminoMetal') {
+                            aplicarCaminoMetal.reset()
+                            aplicarCaminoMetal.mutate({ camino: f.caminoMetal, seleccion: { caminoInicial, poderes: null, paraMeta: [] } })
+                          } else {
+                            identidadMutation.mutate({ caminoInicial })
+                          }
+                        }}
+                      />
+                      {inicial === '' && <span style={{ fontSize: fs.sm, color: c.muted }}>Sin elegir.</span>}
+                    </div>
+                  )}
                   {/* The immediate save of the Investida path failed: the optimistic copy was already rolled back */}
                   {caminoInv && (aplicarCaminoMetal.isError || quitarCaminoMetal.isError) && (
                     <ErrorMessage

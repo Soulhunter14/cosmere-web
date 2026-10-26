@@ -217,7 +217,12 @@ export interface OpcionCreacion {
  * `legadoRespuestas:<indice>` (one answer of the legacy) or `creacion:<clave>` (a choice kept in `Character.creacionDatos`, whose options
  * load lazily and can be hidden by the table)
  */
-export type PasoCreacion = { titulo: string; ayuda: string } & (
+export type PasoCreacion = {
+  titulo: string
+  ayuda: string
+  /** Once answered, the player may change it from the folded step («Cambiar»). Default false: Xavi decides per step which ones can be changed */
+  cambiable?: boolean
+} & (
   | { id: 'name' }
   | { id: 'legado' }
   | { id: 'ascendencia' }

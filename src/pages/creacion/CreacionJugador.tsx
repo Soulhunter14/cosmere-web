@@ -7,14 +7,14 @@ import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from 're
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
-import { Check, Circle, Lock, Save, Users } from 'lucide-react'
+import { Check, Circle, Lock, Pencil, Save, Users } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { Button, ConfirmDialog, EmptyState, ErrorMessage, Input, PageHeader, Select, Spinner } from '../../components/ui'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
 import { buttonReset, c, card, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
 import type { Character, CreacionEstado, CreacionPersonaje, UpdateCharacterRequest } from '../../types'
 import type { PasoCreacion } from '../../worlds/types'
-import { useLegados, useOpcionesPaso } from './hooks'
+import { etiquetaOpcion, useLegados, useOpcionesPaso } from './hooks'
 import { conRespuesta, esNombreProvisional, estadoPaso, pasoHecho, type EstadoPaso } from './pasos'
 
 // Mistborn-only pieces (they import the legacies BY FILE): lazy, like the rest of components/mistborn
@@ -56,17 +56,21 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
     enabled: chId > 0,
   })
   const [error, setError] = useState<string | null>(null)
+  // A done step folds to what was chosen; on a `cambiable` step, «Cambiar» opens its editor again until the next save
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({})
+  const abrir = (pasoId: string, abierto: boolean) => setAbiertos((cur) => ({ ...cur, [pasoId]: abierto }))
   const guardar = useMutation({
-    mutationFn: (cambio: Cambio) => {
+    mutationFn: ({ cambio }: { cambio: Cambio; pasoId: string }) => {
       if (!char) return Promise.reject(new Error('Tu personaje aún no se ha cargado. Vuelve a intentarlo.'))
       return charactersApi.update(cId, chId, { ...char, ...cambio } as UpdateCharacterRequest)
     },
     onMutate: () => setError(null),
     onError: (e) => setError(mensajeDe(e)),
-    onSuccess: (actualizado) => {
+    onSuccess: (actualizado, { pasoId }) => {
       qc.setQueryData(['character', cId, chId, false], actualizado)
       qc.invalidateQueries({ queryKey: ['creacion', cId] })
       qc.invalidateQueries({ queryKey: ['characters', cId] })
+      abrir(pasoId, false)
     },
   })
 
@@ -128,6 +132,16 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
                 <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: fs.sm, color: c.muted, marginTop: 10 }}>
                   <Lock size={14} aria-hidden /> El director aún no ha liberado este paso.
                 </p>
+              ) : e === 'hecho' && !abiertos[paso.id] ? (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 10 }}>
+                  <ResumenPaso paso={paso} mio={mio} />
+                  {/* «Cambiar» only on the steps the table marks as `cambiable`; the rest stay as answered */}
+                  {paso.cambiable && !soloLectura && (
+                    <Button size="sm" variant="ghost" icon={<Pencil size={14} aria-hidden />} onClick={() => abrir(paso.id, true)} style={{ flexShrink: 0 }}>
+                      Cambiar
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <div style={{ marginTop: 12 }}>
                   <CuerpoPaso
@@ -135,8 +149,13 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
                     paso={paso}
                     mio={mio}
                     disabled={soloLectura || ocupado}
-                    onGuardar={(cambio) => guardar.mutate(cambio)}
+                    onGuardar={(cambio) => guardar.mutate({ cambio, pasoId: paso.id })}
                   />
+                  {e === 'hecho' && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                      <Button size="sm" variant="ghost" onClick={() => abrir(paso.id, false)}>Dejarlo como está</Button>
+                    </div>
+                  )}
                 </div>
               )}
             </li>
@@ -153,6 +172,34 @@ const numeroPaso = (t: Tone): CSSProperties => ({
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   fontWeight: 700, fontSize: fs.sm, fontVariantNumeric: 'tabular-nums',
 })
+
+/** A done step, folded: only what was chosen (the question of the legacy as a small label when it is an answer) */
+function ResumenPaso({ paso, mio }: { paso: PasoCreacion; mio: CreacionPersonaje }) {
+  const cfg = useWorldConfig()
+  const legados = useLegados()
+  const opciones = useOpcionesPaso(paso)
+  const def = legados.find((l) => l.id === mio.legado)
+  let etiqueta: string | null = null
+  let valor = ''
+  if (paso.id === 'name') valor = mio.name
+  else if (paso.id === 'legado') valor = def?.nombre ?? mio.legado
+  else if (paso.id === 'ascendencia') valor = cfg.ascendencias.find((a) => a.id === mio.ascendencia)?.label ?? mio.ascendencia
+  else if ('indice' in paso) {
+    etiqueta = def?.preguntas[paso.indice] ?? null
+    valor = mio.legadoRespuestas[paso.indice] ?? ''
+  } else if ('clave' in paso) {
+    valor = etiquetaOpcion(opciones, mio.creacionDatos[paso.clave] ?? '')
+  }
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      {etiqueta && <p style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.4, marginBottom: 2 }}>{etiqueta}</p>}
+      <p style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: fs.base, color: c.text, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+        <Check size={16} aria-hidden style={{ color: tone.esmeralda.fg, flexShrink: 0, marginTop: 3 }} />
+        <span>{valor}</span>
+      </p>
+    </div>
+  )
+}
 
 /** The editor of one released step, by its kind. The editors with a draft are keyed by the saved value: a save or a change from elsewhere starts them afresh */
 function CuerpoPaso({ paso, mio, disabled, onGuardar }: { paso: PasoCreacion; mio: CreacionPersonaje; disabled: boolean; onGuardar: (cambio: Cambio) => void }) {

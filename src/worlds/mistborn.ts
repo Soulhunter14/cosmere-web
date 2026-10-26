@@ -48,6 +48,7 @@ export const MISTBORN: WorldConfig = {
   },
   // «Creación de personajes» (26-10-2026): the steps the director releases, in the order Xavi set; their ids are `MistbornRules.PasosCreacion`.
   // More steps are coming: add them at the end here and there. The choices load their options lazily (data/mistborn/creacion.ts)
+  // A step answered stays folded without «Cambiar» unless it says `cambiable: true` (none yet: Xavi will say which)
   creacion: {
     pasos: [
       { id: 'name', titulo: 'Tu nombre', ayuda: 'Cómo se llama tu personaje. Podrás cambiarlo más adelante.' },

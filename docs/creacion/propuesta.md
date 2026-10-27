@@ -41,7 +41,7 @@ Secuencia fijada por Xavi el 26-10-2026 (faltan pasos por definir; se añadirán
 | 5 | ¿Qué tipo de brumoso? | Los brumosos de la Era 1 con una definición corta cada uno, en tres grupos («Para empezar», «Para expertos», «Raros y divinos»; nacido de la bruma, oro y atium ocultos por ahora); solo si el paso 4 es «sí», si no queda como «no aplica» | `creacionDatos.alomancia` |
 | 6 | Primera pregunta | Origen: «¿Por qué eres de este legado?», con los ejemplos debajo | `legadoRespuestas[0]` |
 | 7 | Segunda pregunta | Impulso: «¿Qué te empuja a dejar lo que eres e intentar cambiar las cosas?» | `legadoRespuestas[1]` |
-| 8 | Tercera pregunta | Meta: «¿Qué buscas cuando las cosas cambien?» | `legadoRespuestas[2]` |
+| 8 | Tercera pregunta: tu primera meta | Un logro, un misterio o una deuda, dicho como algo que se pueda tachar, con una pregunta por legado («¿Qué cuenta te llevas pendiente de la celda…?», 27-10-2026); al marcar «Personaje creado» la API la convierte en la primera meta de la ficha (título = la primera frase, una vez por título; deshacer no la borra) | `legadoRespuestas[2]` → `Meta` |
 | … | (pendientes) | | |
 | Fin | Personaje creado | Lo marca el director; la ficha pasa a «Personajes» | `creacionCompletada` |
 

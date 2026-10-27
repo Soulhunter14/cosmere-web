@@ -5,7 +5,9 @@
  * characters and gets one of its two starting rewards, depending on what that character did during the adventure.
  *
  * The Era 1 questions are this table's own (24 Oct 2026), three per legacy: where the character comes from (origin), what pushes it to
- * leave what it is and try to change things (impulse) and what it seeks once things change (goal). They are the thread of each
+ * leave what it is and try to change things (impulse) and its first goal (27 Oct 2026: a thing to achieve, a mystery to solve or a debt
+ * to settle, said as something that can be crossed out, in the register of the sheet's Metas; the API turns that answer into the
+ * character's first Meta at «Personaje creado»). They are the thread of each
  * character's session 0 scene; the book's two questions are answered by playing that session («La caída», biblia de campaña). The
  * backstory is written before the character knows it will belong to a crew, so no Era 1 text names Enge's crew, and the Era 1 cards do
  * not show their Era 2 link for now. The Era 2 legacies keep the book's two questions.
@@ -60,7 +62,7 @@ export const LEGADOS: LegadoDef[] = [
     preguntas: [
       '¿Cómo acabaste en una celda del Ministerio?',
       '¿Qué te empuja a querer cambiar las cosas, y no solo salir de aquí?',
-      '¿Qué buscas cuando las cosas cambien?',
+      '¿Qué cuenta te llevas pendiente de la celda: una persona, un nombre, algo que recuperar?',
     ],
     ejemplos: [
       [
@@ -76,10 +78,10 @@ export const LEGADOS: LegadoDef[] = [
         'Que nadie tenga que dar un nombre falso para seguir vivo',
       ],
       [
-        'Que las celdas se abran para quien no hizo nada',
-        'Un nombre limpio y una calle donde nadie me mire de reojo',
-        'Cobrarme lo que me quitaron, con intereses',
-        'Que la gente de mi calle coma sin robar',
+        'Encontrar a quien me vendió y mirarle a la cara',
+        'Sacar de dentro a quien entró conmigo',
+        'Recuperar lo que me quitaron al detenerme',
+        'Borrar mi número de los registros del Ministerio',
       ],
     ],
     pericia: 'Pericia de utilidad Fuerzas del orden o pericia cultural Bajos fondos: lo que aprendió dentro del sistema.',
@@ -93,7 +95,7 @@ export const LEGADOS: LegadoDef[] = [
     preguntas: [
       '¿Quién te puso una pluma en la mano, y por qué sigues escribiendo?',
       '¿Qué te empuja a dejar de escribir lo que te mandan y a escribir lo que pasa?',
-      '¿Qué buscas con tu crónica, cuando las cosas cambien?',
+      '¿Qué quieres terminar de escribir, encontrar o poner a salvo?',
     ],
     ejemplos: [
       [
@@ -108,10 +110,10 @@ export const LEGADOS: LegadoDef[] = [
         'Que la historia de verdad se cuenta junto al fuego, y nadie la anota',
       ],
       [
-        'Que la verdad sobreviva a quien la escribió',
-        'Salvar lo que otros quieren quemar',
-        'Que quien venga después entienda lo que pasó hoy',
-        'Un sitio donde escribir sin pedir permiso',
+        'Terminar la crónica que me hicieron tachar y esconderla donde el Ministerio no llegue',
+        'Recuperar el nombre que borraron y escribirlo donde alguien lo lea',
+        'Encontrar al guardador que me enseñó',
+        'Reunir en un solo registro lo que vi hoy, con nombres',
       ],
     ],
     pericia: 'Pericia cultural Peregrina o Dominio de Terris: sus viajes o el lugar donde reunió sus registros.',
@@ -125,7 +127,7 @@ export const LEGADOS: LegadoDef[] = [
     preguntas: [
       '¿Por qué entraste en el Ministerio de Acero?',
       '¿Qué te empuja a dejar de servir al Ministerio e intentar cambiar las cosas?',
-      '¿Qué buscas cuando las cosas cambien?',
+      '¿Qué expediente quieres cerrar: un papel que recuperar, un nombre que borrar, una verdad que sacar?',
     ],
     ejemplos: [
       [
@@ -141,10 +143,10 @@ export const LEGADOS: LegadoDef[] = [
         'Saber lo que hace el Cantón de la Inquisición con los nombres de sus listas',
       ],
       [
-        'Que nadie vuelva a morir por una firma',
-        'Sacar a la luz lo que el Ministerio enterró',
-        'Una ley que valga igual para skaa y nobles',
-        'Pagar lo mío: que me juzguen, y que sirva de algo',
+        'Recuperar o destruir el expediente que firmé',
+        'Encontrar a la persona de la súplica que no atendí',
+        'Averiguar qué hace el Cantón de la Inquisición con los nombres de sus listas',
+        'Sacar mi nombre de los libros del Ministerio',
       ],
     ],
     pericia: 'Pericia de utilidad Ministerio de Acero o pericia cultural Dominios Interiores: según trabajara más con el Ministerio o con la nobleza.',
@@ -158,7 +160,7 @@ export const LEGADOS: LegadoDef[] = [
     preguntas: [
       '¿Qué lugar ocupas en tu casa, y por qué nunca encajaste en él?',
       '¿Qué te empuja a romper con tu casa e intentar cambiar las cosas?',
-      '¿Qué buscas fuera de la fortaleza, cuando las cosas cambien?',
+      '¿Qué quieres sacar de tu casa: una persona, un papel, una deuda?',
     ],
     ejemplos: [
       [
@@ -174,10 +176,10 @@ export const LEGADOS: LegadoDef[] = [
         'Que la casa está acabada y nadie quiere decirlo en voz alta',
       ],
       [
-        'Un mundo donde el apellido no decida quién manda',
-        'Recuperar mi casa, pero con otras reglas',
-        'Que mi familia pague lo que firmó',
-        'Valer por lo que hago, no por lo que heredé',
+        'Leer el pacto que me enseñaron a no leer',
+        'Sacar de la fortaleza a la persona de abajo que me importa',
+        'Romper el compromiso con la casa a la que me prometieron',
+        'Poner lo que sé de mi casa en manos de quien pueda usarlo',
       ],
     ],
     pericia: 'Pericia cultural Alta sociedad o Luthadel (la segunda, si representó a su familia en la política de la capital).',
@@ -191,7 +193,7 @@ export const LEGADOS: LegadoDef[] = [
     preguntas: [
       '¿Cómo acabaste en la calle?',
       '¿Qué te empuja a dejar de robar para otros e intentar cambiar las cosas?',
-      '¿Qué buscas cuando las cosas cambien?',
+      '¿Qué golpe, qué persona o qué deuda te sacaría de la calle?',
     ],
     ejemplos: [
       [
@@ -207,10 +209,10 @@ export const LEGADOS: LegadoDef[] = [
         'Ver que media ciudad se queda quieta por miedo',
       ],
       [
-        'Sentarme a la mesa de los que hoy miran desde los carruajes',
-        'Que en los Laberintos nadie tenga que robar para comer',
-        'Que los míos estén bien, cueste lo que cueste',
-        'Una red que trabaje para la calle, no contra ella',
+        'Encontrar al crío de la red que se llevaron',
+        'Saber quién era el noble que me pagó por lo que no era un robo, y por qué',
+        'Dar el golpe que me saque de los Laberintos para siempre',
+        'Reunir a los míos bajo un techo que no sea de nadie más',
       ],
     ],
     pericia: 'Pericia cultural Bajos fondos; quien aspire a la nobleza (o a suplantar nobles y estafar) puede tomar Alta sociedad en su lugar.',
@@ -224,7 +226,7 @@ export const LEGADOS: LegadoDef[] = [
     preguntas: [
       '¿Por qué te uniste al ejército?',
       '¿Qué te empuja a colgar la librea e intentar cambiar las cosas?',
-      '¿Qué buscas, si consigues dejar de obedecer?',
+      '¿Qué cuenta te llevas pendiente del ejército: una persona, una orden, una deuda?',
     ],
     ejemplos: [
       [
@@ -240,10 +242,10 @@ export const LEGADOS: LegadoDef[] = [
         'Un señor al que llevo años sirviendo y que no sabe el mío',
       ],
       [
-        'Una causa por la que valga la pena pelear',
-        'Que nadie vuelva a mandar cargar contra gente desarmada',
-        'Proteger a quien no pueda defenderse',
-        'Que las decisiones las tome yo',
+        'Encontrar a quien me dio la orden que no cumplí',
+        'Volver al pueblo que quemamos y hacer algo por los que quedan',
+        'Sacar a mi camarada de la unidad antes de que lo manden al frente',
+        'Dejar escrito lo que hubo detrás de la victoria, con nombres',
       ],
     ],
     pericia: 'Pericia de utilidad Vida militar o pericia cultural Dominios Exteriores: según las guarniciones donde sirvió.',

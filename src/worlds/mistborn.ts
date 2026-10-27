@@ -74,7 +74,10 @@ export const MISTBORN: WorldConfig = {
       },
       { id: 'legadoRespuestas:0', indice: 0, titulo: 'Primera pregunta: origen', ayuda: 'Por qué eres de este legado.' },
       { id: 'legadoRespuestas:1', indice: 1, titulo: 'Segunda pregunta: impulso', ayuda: 'Qué te empuja a dejar lo que eres e intentar cambiar las cosas.' },
-      { id: 'legadoRespuestas:2', indice: 2, titulo: 'Tercera pregunta: meta', ayuda: 'Qué buscas cuando las cosas cambien.' },
+      {
+        id: 'legadoRespuestas:2', indice: 2, titulo: 'Tercera pregunta: tu primera meta',
+        ayuda: 'Un logro, un misterio o una deuda: dilo como algo que se pueda tachar, sabrás el día que lo consigas. Si quieres, añade por dónde empezarías. Al crear el personaje será tu primera meta.',
+      },
     ],
   },
   // The book's table (T26), read on the sheet, the dice roller (from T43) and the NPC page: the same one Stormlight reads since T50

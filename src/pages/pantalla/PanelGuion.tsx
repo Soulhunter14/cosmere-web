@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowDown, ArrowUp, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Plus,
-  ScrollText, Signpost, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
+  ScrollText, Signpost, Square, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { diaryApi } from '../../api/diary'
@@ -30,6 +30,8 @@ import { ESCENA_META } from './meta'
 import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, NavegadorEscenas, TecladoNumerico, Tesela } from './piezas'
 import { ALTO_MIN_ESCENA, BAJO_LA_BARRA, irAEscena } from './escenas'
 import { DecisionGuion } from './DecisionGuion'
+import { DialogoTerminarSesion } from './SesionCreacion'
+import { useAccionesSesionCreacion } from './sesionCreacionAcciones'
 import { esSesionDeCreacion, useCreacionPantalla } from './creacionPantalla'
 import { vivos } from '../../lib/personajes'
 
@@ -336,6 +338,11 @@ function DetalleGuion({
   vecinas: EscenaPropia[]
 }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
+  const { irA } = usePaneles()
+  // With every scene played, the session ends from here (the creation session included)
+  const acc = useAccionesSesionCreacion()
+  const [terminando, setTerminando] = useState(false)
+  const todasJugadas = estado.escenasPropias.length > 0 && estado.escenasPropias.every((x) => !!estado.marcas[claveEscenaPropia(x.id)])
   const e = leerEscena(esc.md)
   const lista = vecinas
   const i = lista.findIndex((x) => x.id === esc.id)
@@ -434,6 +441,35 @@ function DetalleGuion({
           </Button>
         )}
       </nav>
+
+      {jugada && todasJugadas && estado.sesion && (
+        <section aria-label="Fin de la sesión" style={{ ...stack(10), padding: 14, borderRadius: radius.md, background: tone.gold.bg, border: `1px solid ${tone.gold.border}` }}>
+          <p style={{ ...eyebrow, color: tone.gold.fg }}>Fin de la sesión</p>
+          <p style={{ fontSize: fs.sm, color: c.text, lineHeight: 1.45 }}>
+            Todas las escenas están jugadas.{' '}
+            {acc.esCreacion
+              ? 'Al terminar la sesión de creación, lo decidido queda en cada ficha y la campaña la da por jugada; después, «Personaje creado» en Creación.'
+              : 'Al terminar, la sesión pasa a «Sesiones anteriores» con sus anotaciones, desde donde sale el prompt de la crónica.'}
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Button variant="gold" icon={<Square size={15} aria-hidden />} onClick={() => setTerminando(true)} disabled={acc.ocupado} aria-haspopup="dialog">
+              {acc.esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => irA('bitacora')}>Antes, anotar algo en Bitácora</Button>
+          </div>
+          {acc.aviso && <p role="status" style={{ fontSize: fs.sm, color: c.muted }}>{acc.aviso}</p>}
+          <DialogoTerminarSesion
+            open={terminando}
+            esCreacion={acc.esCreacion}
+            sinCrear={acc.sinCrear}
+            jugadas={estado.escenasPropias.length}
+            pendientes={0}
+            ocupado={acc.ocupado}
+            onConfirm={(todas) => { void acc.terminar(todas).then((ok) => { if (ok) setTerminando(false) }) }}
+            onCancel={() => setTerminando(false)}
+          />
+        </section>
+      )}
     </article>
   )
 }

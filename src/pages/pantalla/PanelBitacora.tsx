@@ -1,7 +1,8 @@
 import { useState, type CSSProperties } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ClipboardCopy, Copy, Download, NotebookPen, Pencil, Play, Square, Trash2 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
+import { creacionApi } from '../../api/creacion'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
 import { Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, Sheet, Stepper, Textarea } from '../../components/ui'
 import { c, eyebrow, font, fs, numeral, pill, radius, shadow, tone } from '../../theme'
@@ -12,6 +13,9 @@ import { archivarEscena, escribirGuion } from './guion'
 import { nombreBase } from './encuentro'
 import { ETIQUETAS_APUNTE, EVENTO_META } from './meta'
 import { Tesela } from './piezas'
+import { esSesionDeCreacion, personajesEnCreacion, useCreacionPantalla } from './creacionPantalla'
+import { SeccionSesionCreacion } from './SesionCreacion'
+import { enviarTodos, mensajeDe, useUltimo } from './sincronizacion'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -37,6 +41,13 @@ export function PanelBitacora() {
   const [aviso, setAviso] = useState<string | null>(null)
 
   const sesion = estado.sesion
+  const qc = useQueryClient()
+  const { creacion } = useCreacionPantalla(cId)
+  // The screen's current document, for the sends that run after a pause
+  const ultimo = useUltimo(estado)
+  const [ocupado, setOcupado] = useState(false)
+  const esCreacion = esSesionDeCreacion(sesion?.id, creacion)
+  const sinCrear = esCreacion ? personajesEnCreacion(creacion).map((p) => p.name) : []
   const sugerido = numeroSiguiente(estado, ultimoDiario)
   const numero = numeroElegido ?? sugerido
   const jugadas = escenasJugadas(estado).length
@@ -46,6 +57,37 @@ export function PanelBitacora() {
     actualizar((b) => { b.sesion = nuevaSesion(numero, tituloNuevo.trim()) })
     setNumeroElegido(null)
     setTituloNuevo('')
+  }
+  /** The creation session: the campaign registers it first (409 if it was played already), then the table session 0 opens */
+  const empezarCreacion = async () => {
+    const s = nuevaSesion(0, 'Sesión de creación')
+    setOcupado(true)
+    try {
+      qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'iniciar', { mesaId: s.id, guion: estado.guionTitulo }))
+      actualizar((b) => { b.sesion = s })
+      setAviso('Sesión de creación en marcha: lo que decida la mesa se guarda en cada personaje.')
+    } catch (e) {
+      setAviso(mensajeDe(e))
+    } finally {
+      setOcupado(false)
+    }
+  }
+  /** Ends the table session; the creation session is closed in the campaign first, with its decisions sent */
+  const terminar = async () => {
+    setOcupado(true)
+    try {
+      if (esCreacion) {
+        await enviarTodos(cId, () => ultimo.current, true)
+        qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'terminar'))
+      }
+      actualizar((b) => terminarSesion(b, (esc) => archivarEscena(b, esc)))
+      setTerminando(false)
+      setAviso(esCreacion ? 'Sesión de creación terminada. Marca «Personaje creado» en Creación a quien le falte.' : null)
+    } catch (e) {
+      setAviso(mensajeDe(e))
+    } finally {
+      setOcupado(false)
+    }
   }
 
   const anotarApunte = () => {
@@ -81,7 +123,7 @@ export function PanelBitacora() {
         <section aria-label="Sesión de juego" style={{ ...tarjeta, ...stack(10) }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ ...eyebrow, color: 'var(--gold)' }}>Sesión en curso</p>
+              <p style={{ ...eyebrow, color: 'var(--gold)' }}>{esCreacion ? 'Sesión de creación en curso' : 'Sesión en curso'}</p>
               <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, color: c.text, lineHeight: 1.2 }}>{tituloSesion(sesion)}</h2>
               <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2 }}>
                 Desde las {hora(sesion.iniciadaEn)} · {duracion(sesion.iniciadaEn, ahora)} · {sesion.eventos.length} anotacion{sesion.eventos.length === 1 ? '' : 'es'}
@@ -98,6 +140,8 @@ export function PanelBitacora() {
           </div>
         </section>
       ) : (
+        <>
+        <SeccionSesionCreacion onEmpezar={() => { void empezarCreacion() }} ocupado={ocupado} />
         <section aria-label="Empezar sesión" style={{ ...tarjeta, ...stack(12) }}>
           <div>
             <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, color: c.text }}>Sesión de juego</h2>
@@ -118,6 +162,7 @@ export function PanelBitacora() {
             <Button icon={<Play size={16} aria-hidden />} onClick={empezar}>Empezar sesión</Button>
           </div>
         </section>
+        </>
       )}
 
       {/* Always in the DOM (a live region must exist before it changes); out of the flow while empty */}
@@ -212,12 +257,15 @@ export function PanelBitacora() {
         icon="warning"
         title="¿Terminar la sesión?"
         message={
+          (esCreacion
+            ? `Termina también la sesión de creación, que no se puede volver a jugar.${sinCrear.length ? ` ${sinCrear.join(', ')} ${sinCrear.length === 1 ? 'sigue' : 'siguen'} en creación: márcalos creados en Creación.` : ''} `
+            : '') +
           'Se guarda en «Sesiones anteriores» con sus anotaciones; desde allí puedes copiar el prompt de la crónica. ' +
           (jugadas ? `Se lleva ${jugadas === 1 ? 'la escena jugada' : `las ${jugadas} escenas jugadas`}` : 'No tiene escenas jugadas') +
           (pendientes ? `; ${pendientes === 1 ? 'la que queda sin jugar pasa' : `las ${pendientes} sin jugar pasan`} a la siguiente sesión.` : '.')
         }
-        confirmLabel="Terminar sesión"
-        onConfirm={() => { actualizar((b) => terminarSesion(b, (esc) => archivarEscena(b, esc))); setTerminando(false); setAviso(null) }}
+        confirmLabel={esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
+        onConfirm={() => { if (!ocupado) void terminar() }}
         onCancel={() => setTerminando(false)}
       />
       <ConfirmDialog

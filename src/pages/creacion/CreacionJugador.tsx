@@ -12,7 +12,7 @@ import { charactersApi } from '../../api/characters'
 import { Button, ConfirmDialog, EmptyState, ErrorMessage, Input, PageHeader, Spinner } from '../../components/ui'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
 import { type Tone, buttonReset, c, card, eyebrow, fs, page, pill, radius, titleText, tone } from '../../theme'
-import type { Character, CreacionEstado, CreacionPersonaje, UpdateCharacterRequest } from '../../types'
+import type { Character, CreacionEstado, CreacionPersonaje, RespuestaPasoRequest, UpdateCharacterRequest } from '../../types'
 import type { OpcionCreacion, PasoCreacion } from '../../worlds/types'
 import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
 import { conRespuesta, esNombreProvisional, estadoPaso, pasoAplica, pasoHecho, type EstadoPaso } from './pasos'
@@ -27,6 +27,17 @@ const TEXTO_ESTADO: Record<EstadoPaso, string> = { bloqueado: 'Bloqueado', pendi
 const ICONO_ESTADO = { bloqueado: Lock, pendiente: Circle, hecho: Check, omitido: Minus } as const
 
 type Cambio = Partial<Pick<UpdateCharacterRequest, 'name' | 'legado' | 'ascendencia' | 'legadoRespuestas' | 'creacionDatos'>>
+type LegadoDef = ReturnType<typeof useLegados>[number]
+
+/** The question the player saw in the step, for the record of answers the API keeps (`RespuestaPersonaje`: what was asked, as asked) */
+function preguntaDePaso(paso: PasoCreacion, cambio: Cambio, def: LegadoDef | undefined): RespuestaPasoRequest {
+  if ('indice' in paso) return { paso: paso.id, pregunta: def?.preguntas[paso.indice] ?? paso.titulo, tipoRespuesta: 'texto' }
+  if ('clave' in paso) {
+    const valor = cambio.creacionDatos?.[paso.clave] ?? ''
+    return { paso: paso.id, pregunta: paso.titulo, tipoRespuesta: valor === 'si' || valor === 'no' ? 'si-no' : 'eleccion' }
+  }
+  return { paso: paso.id, pregunta: paso.titulo, tipoRespuesta: paso.id === 'name' ? 'texto' : 'eleccion' }
+}
 
 /** The server's message of a refused save (a step not released yet), or a generic one */
 function mensajeDe(e: unknown): string {
@@ -56,13 +67,18 @@ export function CreacionJugador({ cId, estado, pasos, userId }: CreacionJugadorP
     enabled: chId > 0,
   })
   const [error, setError] = useState<string | null>(null)
+  const legados = useLegados()
   // A done step folds to what was chosen; while the director permits changing a `cambiable` step, «Cambiar» opens its editor again until the next save
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({})
   const abrir = (pasoId: string, abierto: boolean) => setAbiertos((cur) => ({ ...cur, [pasoId]: abierto }))
   const guardar = useMutation({
-    mutationFn: ({ cambio }: { cambio: Cambio; pasoId: string }) => {
+    mutationFn: ({ cambio, pasoId }: { cambio: Cambio; pasoId: string }) => {
       if (!char) return Promise.reject(new Error('Tu personaje aún no se ha cargado. Vuelve a intentarlo.'))
-      return charactersApi.update(cId, chId, { ...char, ...cambio } as UpdateCharacterRequest)
+      // The question as the player saw it goes with the answer: the API records what was asked, not only what was answered
+      const paso = pasos.find((p) => p.id === pasoId)
+      const def = legados.find((l) => l.id === (cambio.legado ?? mio?.legado ?? ''))
+      const respuestas = paso ? [preguntaDePaso(paso, cambio, def)] : []
+      return charactersApi.update(cId, chId, { ...char, ...cambio, respuestas } as UpdateCharacterRequest)
     },
     onMutate: () => setError(null),
     onError: (e) => setError(mensajeDe(e)),

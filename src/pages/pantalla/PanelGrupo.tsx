@@ -17,6 +17,8 @@ import { anadirPersonajes, asegurarEncuentro, destinoAnadir } from './encuentro'
 import { personajeEnCombate } from './estado'
 import { BarraRecurso } from './piezas'
 import { RegistroDecisiones } from './DecisionGuion'
+import { useCreacionPantalla } from './creacionPantalla'
+import { TarjetaCreacion } from './SesionCreacion'
 import { vivos } from '../../lib/personajes'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
@@ -85,8 +87,11 @@ export function PanelGrupo() {
 }
 
 function TarjetaPj({ ch, enEncuentro, onAnadir }: { ch: Character; enEncuentro: boolean; onAnadir: () => void }) {
-  const { cId, estado } = usePantalla()
+  const { cId, estado, actualizar } = usePantalla()
   const cfg = useWorldConfig()
+  const { creacion, pasos, activa } = useCreacionPantalla(cId)
+  // While the creation session is prepared or played, a character still in creation shows its answers and the director's notes
+  const enCreacion = activa ? creacion?.personajes.find((p) => p.id === ch.id && !p.completada) : undefined
   const bonos = cfg.features.bonosServidor ? ch.bonosAtributos : {}
   const habilidades = habilidadesDe(ch, cfg.habilidades, bonos)
   const extra = personalizadas(ch, bonos)
@@ -137,6 +142,15 @@ function TarjetaPj({ ch, enEncuentro, onAnadir }: { ch: Character; enEncuentro: 
         </p>
       )}
 
+      {enCreacion && (
+        <TarjetaCreacion
+          p={enCreacion}
+          pasos={pasos}
+          headingLevel={4}
+          notas={estado.preparacionCreacion[String(ch.id)] ?? ''}
+          onNotas={(t) => actualizar((b) => { b.preparacionCreacion[String(ch.id)] = t })}
+        />
+      )}
       <Disclosure headingLevel={4} title="Habilidades" style={{ boxShadow: 'none' }}>
         <ul style={{ ...listReset, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '4px 12px' }}>
           {[...cfg.habilidades.map((h) => ({ nombre: h.label, mod: habilidades[h.field] ?? 0 })), ...extra].map((h) => (

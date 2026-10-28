@@ -1,5 +1,5 @@
 import client from './client'
-import type { CreacionEstado } from '../types'
+import type { CreacionEstado, DecisionesPersonajeRequest, RespuestaPersonaje } from '../types'
 
 /**
  * Guided character creation (section «Creación de personajes», src/pages/creacion): the director releases the world's steps one by one,
@@ -25,4 +25,16 @@ export const creacionApi = {
 
   deshacer: (campaignId: number, characterId: number) =>
     client.delete<CreacionEstado>(`/campaigns/${campaignId}/creacion/personajes/${characterId}/completar`).then((r) => r.data),
+
+  /** The creation session (director): `preparar`, `iniciar` (with the screen's table session and script) or `terminar`; 409 out of order */
+  sesion: (campaignId: number, accion: 'preparar' | 'iniciar' | 'terminar', body: { mesaId?: string; guion?: string } = {}) =>
+    client.post<CreacionEstado>(`/campaigns/${campaignId}/creacion/sesion/${accion}`, body).then((r) => r.data),
+
+  /** The record of answers of a character: every row for the director, the creation rows for its owner */
+  getRespuestas: (campaignId: number, characterId: number) =>
+    client.get<RespuestaPersonaje[]>(`/campaigns/${campaignId}/characters/${characterId}/respuestas`).then((r) => r.data),
+
+  /** Replaces the character's script decisions with the list sent (director); answers with every row of the character */
+  putDecisiones: (campaignId: number, characterId: number, body: DecisionesPersonajeRequest) =>
+    client.put<RespuestaPersonaje[]>(`/campaigns/${campaignId}/characters/${characterId}/respuestas/decisiones`, body).then((r) => r.data),
 }

@@ -1848,6 +1848,31 @@ export function CharacterDetailPage() {
             {identidadMutation.isError && picker === null && cfg.features.legados && (
               <ErrorMessage message="No se ha podido guardar el cambio. Inténtalo de nuevo." />
             )}
+            {cfg.features.pericias && (
+              <Card padding="16px 18px" className="rise" style={cardRise(0)}>
+                <h2 style={{ fontFamily: font.display, fontSize: fs.lg + 1, fontWeight: 600, color: c.text, marginBottom: 8 }}>
+                  {editing ? <label htmlFor={`${fieldId}-pericias`}>Pericias</label> : 'Pericias'}
+                </h2>
+                {editing ? (
+                  <>
+                    <Textarea
+                      id={`${fieldId}-pericias`}
+                      rows={3}
+                      value={(form?.pericias ?? []).join('\n')}
+                      onChange={(e) => setForm((prev) => prev ? { ...prev, pericias: e.target.value.split('\n') } : prev)}
+                      placeholder={'Una por línea: Bajos fondos, Luthadel…'}
+                    />
+                    <p style={{ fontSize: fs.xs, color: c.subtle, marginTop: 6 }}>Una por línea. Las de la sesión de creación llegan solas con «Aplicar a la ficha».</p>
+                  </>
+                ) : (f.pericias ?? []).length > 0 ? (
+                  <p style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {(f.pericias ?? []).map((p) => <span key={p} style={pill(tone.esmeralda)}>{p}</span>)}
+                  </p>
+                ) : (
+                  <p style={{ fontFamily: font.display, fontSize: fs.md + 1, color: c.subtle, lineHeight: 1.55 }}>—</p>
+                )}
+              </Card>
+            )}
             {BACKGROUND_FIELDS.map(([k, label], i) => {
               const inputId = `${fieldId}-${k}`
               const value = strField(f, k)

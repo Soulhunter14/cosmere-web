@@ -205,6 +205,8 @@ export interface Character {
   recursos: Record<string, number>
   /** Kandra Blessings: `consciencia`, `potencia`, `presencia`, `estabilidad`, `fortaleza` (at most 2, no duplicates) */
   bendiciones: string[]
+  /** Expertises of the sheet (free text); the creation session's come with «Aplicar a la ficha» */
+  pericias: string[]
   /** World-specific derived stats (`alomancia.limite`, `poder.cobre.cargasMax`…), computed by the server */
   derivadosSet: Record<string, StatDesglose>
   /** Attribute bonuses of any origin, without zeros; the sheet and the dice roller add them only when `features.bonosServidor` is true */
@@ -248,13 +250,23 @@ export interface EquipoGuardado {
 export type CreateCharacterRequest = Pick<Character, 'name' | 'playerName' | 'level' | 'ascendencia' | 'caminoHeroico' | 'caminoRadiante' | 'caminoMetal' | 'caminoInicial'> & { ownerId?: number }
 // `poderes`, `bendiciones` and `caminoInicial` do travel in the PUT; `recursos` (and the table state of each power) go with PATCH …/recursos
 // `clavos` travels too (T49b), but only the director's list is written: for anyone else the server keeps the saved one
+/** Guided creation: the question the player saw in a step this request answers, for the record of answers (`RespuestaPersonaje`) */
+export interface RespuestaPasoRequest {
+  paso: string
+  pregunta: string
+  tipoRespuesta?: 'texto' | 'opcion' | 'si-no' | 'eleccion'
+}
+
 export type UpdateCharacterRequest = Omit<Character,
   'id' | 'campaignId' | 'createdAt' | 'updatedAt' | 'metas' |
   'concentracion' | 'defensaFisica' | 'defensaCognitiva' | 'defensaEspiritual' |
   'salud' | 'investidura' | 'movimiento' | 'desvioCalculado' |
   'recursos' | 'derivadosSet' | 'bonosAtributos' |
   'muerto' | 'muertoEn' | 'causaMuerte' | 'equipoAlMorir' | 'creacionCompletada'
->
+> & {
+  /** Only while the character is in the guided creation; ignored otherwise */
+  respuestas?: RespuestaPasoRequest[]
+}
 
 // PATCH …/recursos (Nacidos de la bruma, §5.2): only the keys that are present are written
 export interface RecursosPatch {
@@ -741,6 +753,75 @@ export interface SaveEncyclopediaTextRequest {
 
 // ── Guided character creation (section «Creación de personajes», src/pages/creacion; API: campaigns/{id}/creacion) ──
 
+/**
+ * A question answered by (or about) a character, as the API records it (`CharacterRespuestas`): one row per question and character.
+ * `paso` rows come from the guided creation (clave = the step id); `decision` rows from the director's script (clave = `decision:grupo|escena|pregunta`),
+ * with the option's effects and test in `detalle`. `origen` says where it was answered: the creation page, the screen while the creation
+ * session was running, or the screen afterwards.
+ */
+export interface RespuestaPersonaje {
+  id: number
+  characterId: number
+  clave: string
+  tipoPregunta: 'paso' | 'decision' | string
+  pregunta: string
+  tipoRespuesta: 'texto' | 'opcion' | 'si-no' | 'eleccion' | string
+  respuesta: string
+  detalle: Record<string, unknown>
+  origen: 'creacion' | 'sesion-creacion' | 'sesion' | string
+  sesionId: string
+  sesionTitulo: string
+  respondidaEn: string
+  aplicadaEn: string | null
+}
+
+/** The creation session of a campaign (the session 0 of the director's screen, played once): pendiente → preparando → en-curso → jugada */
+export interface SesionCreacion {
+  estado: 'pendiente' | 'preparando' | 'en-curso' | 'jugada' | string
+  preparadaEn: string | null
+  iniciadaEn: string | null
+  terminadaEn: string | null
+  guion: string
+  mesaId: string
+}
+
+/** One decision of the director's script for a character, as the screen sends it (`PUT …/respuestas/decisiones`, the whole list each time) */
+export interface DecisionRespuestaRequest {
+  clave: string
+  pregunta: string
+  respuesta: string
+  tipoRespuesta?: 'opcion'
+  detalle?: Record<string, unknown>
+}
+
+export interface DecisionesPersonajeRequest {
+  sesionId: string
+  sesionTitulo: string
+  decisiones: DecisionRespuestaRequest[]
+}
+
+/** «Aplicar a la ficha»: what the pending decisions give, summed by the screen (`pantalla/aplicar.ts`); the API writes it and marks the rows */
+export interface AplicarRespuestasRequest {
+  claves: string[]
+  /** attribute field (`fuerza`…) → points */
+  atributos: Record<string, number>
+  /** skill field (`atletismo`, `armasLigeras`…) or the name of a custom skill → ranks */
+  habilidades: Record<string, number>
+  pericias: string[]
+  metas: string[]
+  objetos: string[]
+  caminoRecomendado: string
+  metalRecomendado: string
+}
+
+export interface AplicarRespuestasResponse {
+  respuestas: RespuestaPersonaje[]
+  /** Readable lines of what was written («Fuerza 1 → 2», «Pericia Bajos fondos»…) */
+  aplicado: string[]
+  /** What found no place on the sheet, to note by hand */
+  ignorado: string[]
+}
+
 /** A character as the creation state lists it: what it has answered, for the director's table and the player's steps */
 export interface CreacionPersonaje {
   id: number
@@ -754,6 +835,8 @@ export interface CreacionPersonaje {
   /** «Personaje creado»: the sheet is in «Personajes» already */
   completada: boolean
   updatedAt: string
+  /** The record of answers: every row for the director, the creation rows for the player */
+  respuestas: RespuestaPersonaje[]
 }
 
 export interface CreacionEstado {
@@ -767,6 +850,8 @@ export interface CreacionEstado {
   cambiables: string[]
   /** How many characters of the other members (alive, not NPC, created or in creation) have each legacy (id → count); for the director, every character */
   legadosElegidos: Record<string, number>
+  /** The creation session of the campaign (the director starts and ends it from the screen) */
+  sesion: SesionCreacion
   /** Every non-NPC character for the director; only their own for a player */
   personajes: CreacionPersonaje[]
 }

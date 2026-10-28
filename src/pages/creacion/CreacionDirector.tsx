@@ -6,16 +6,17 @@
  * answers with the whole state; the hub event refreshes the other clients.
  */
 import { useState, type CSSProperties, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, ChevronUp, Circle, Lock, LockOpen, Minus, Plus, Undo2, UserCheck, UserX, Users } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Circle, Film, Lock, LockOpen, Minus, Plus, Undo2, UserCheck, UserX, Users } from 'lucide-react'
 import { creacionApi } from '../../api/creacion'
 import { Button, ConfirmDialog, EmptyState, PageHeader, Segmented, Sheet } from '../../components/ui'
 import { useCampaignStore } from '../../store/campaignStore'
 import { buttonReset, c, card, eyebrow, fs, page, pill, radius, titleText, tone, type Tone } from '../../theme'
-import type { CampaignDetail, CreacionEstado, CreacionPersonaje, Member } from '../../types'
+import type { CampaignDetail, CreacionEstado, CreacionPersonaje, Member, SesionCreacion } from '../../types'
 import type { PasoCreacion } from '../../worlds/types'
-import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
 import { estadoPaso, pasoAplica, pasoHecho, pasosCoinciden, pasosResueltos, type EstadoPaso } from './pasos'
+import { DecisionesMesa, FilaRespuesta } from './Respuestas'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const TONO_ESTADO: Record<EstadoPaso, Tone> = { bloqueado: tone.cuarzo, pendiente: tone.topacio, hecho: tone.esmeralda, omitido: tone.cuarzo }
@@ -103,6 +104,7 @@ export function CreacionDirector({ cId, estado, pasos }: CreacionDirectorProps) 
         )}
       />
 
+      <TarjetaSesion sesion={estado.sesion} />
       {soloLectura && (
         <Aviso>La campaña ya está iniciada: la creación queda en solo lectura. Para seguir con ella, reabre la preparación en Ajustes.</Aviso>
       )}
@@ -326,37 +328,47 @@ function TarjetaPersonaje({ p, pasos, pasoLiberado, disabled, onCompletar }: {
         <Button size="sm" variant="secondary" icon={<Check size={14} aria-hidden />} disabled={disabled} onClick={onCompletar}>Personaje creado</Button>
       </div>
       {abierto && (
-        <dl style={{ ...stack(8), margin: 0, paddingTop: 10, borderTop: `1px solid ${c.border}` }}>
-          {pasos.map((paso) => <FilaRespuesta key={paso.id} paso={paso} p={p} />)}
-        </dl>
+        <>
+          <dl style={{ ...stack(8), margin: 0, paddingTop: 10, borderTop: `1px solid ${c.border}` }}>
+            {pasos.map((paso) => <FilaRespuesta key={paso.id} paso={paso} p={p} />)}
+          </dl>
+          <DecisionesMesa respuestas={p.respuestas} />
+        </>
       )}
     </li>
   )
 }
 
-/** One step of a character as the director reads it: the title (or the legacy's question) and the answer */
-function FilaRespuesta({ paso, p }: { paso: PasoCreacion; p: CreacionPersonaje }) {
-  const legados = useLegados()
-  const opciones = useOpcionesPaso(paso)
-  const def = legados.find((l) => l.id === p.legado)
-  let etiqueta: string = paso.titulo
-  let valor = ''
-  if (paso.id === 'name') valor = p.name
-  else if (paso.id === 'legado') valor = def?.nombre ?? p.legado
-  else if (paso.id === 'ascendencia') valor = p.ascendencia
-  else if ('indice' in paso) {
-    etiqueta = def?.preguntas[paso.indice] ?? paso.titulo
-    valor = p.legadoRespuestas[paso.indice] ?? ''
-  } else if ('clave' in paso) {
-    valor = etiquetaDato(opciones, p.creacionDatos[paso.clave] ?? '')
+
+// ── The creation session and what the table decided ──────────────────────────
+
+const TEXTO_SESION: Record<string, string> = { pendiente: 'Pendiente', preparando: 'En preparación', 'en-curso': 'En curso', jugada: 'Jugada' }
+const TONO_SESION: Record<string, Tone> = { pendiente: tone.cuarzo, preparando: tone.topacio, 'en-curso': tone.brand, jugada: tone.esmeralda }
+const fechaCorta = (iso: string | null): string =>
+  iso ? new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+
+function textoSesion(s: SesionCreacion): string {
+  const guion = s.guion ? ` con «${s.guion}»` : ''
+  switch (s.estado) {
+    case 'preparando': return `Se prepara en la pantalla del director desde el ${fechaCorta(s.preparadaEn)}: las respuestas de cada personaje están a mano allí.`
+    case 'en-curso': return `En curso desde el ${fechaCorta(s.iniciadaEn)}${guion}. Lo que la mesa decide se guarda en cada personaje.`
+    case 'jugada': return `Jugada el ${fechaCorta(s.terminadaEn)}${guion}. Se juega una sola vez.`
+    default: return 'La sesión 0 de la pantalla del director: se juega una sola vez y sus decisiones se guardan en la creación de cada personaje. Se prepara y se empieza desde la pantalla.'
   }
-  const noAplica = pasoAplica(paso, p) === 'no'
+}
+
+/** The creation session of the campaign: its state and dates, with the way to the screen where it is prepared, started and ended */
+function TarjetaSesion({ sesion }: { sesion: SesionCreacion }) {
+  const t = TONO_SESION[sesion.estado] ?? tone.cuarzo
   return (
-    <div>
-      <dt style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.4 }}>{etiqueta}</dt>
-      <dd style={{ margin: 0, fontSize: fs.sm, color: valor ? c.text : c.subtle, fontStyle: valor ? 'normal' : 'italic', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-        {valor || (noAplica ? 'No aplica' : 'Sin responder')}
-      </dd>
-    </div>
+    <section aria-label="Sesión de creación" style={{ ...card, padding: '12px 14px', marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <Film size={18} aria-hidden style={{ color: t.fg, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <p style={{ ...eyebrow, marginBottom: 2 }}>Sesión de creación</p>
+        <p style={{ fontSize: fs.sm, color: c.text, lineHeight: 1.45 }}>{textoSesion(sesion)}</p>
+      </div>
+      <span style={pill(t)}>{TEXTO_SESION[sesion.estado] ?? sesion.estado}</span>
+      <Link to="../pantalla" style={{ fontSize: fs.sm, color: tone.brand.fg, textDecoration: 'none', whiteSpace: 'nowrap' }}>Pantalla del director</Link>
+    </section>
   )
 }

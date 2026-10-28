@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Check, Eye, EyeOff, ListChecks, Signpost, Trash2, X } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, Eye, EyeOff, ListChecks, Save, Signpost, Sparkles, Trash2, X } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { useWorldConfig } from '../../store/campaignStore'
-import { ConfirmDialog, Disclosure, IconButton, Switch } from '../../components/ui'
+import { Button, ConfirmDialog, Disclosure, IconButton, Switch } from '../../components/ui'
 import { c, eyebrow, font, fs, pill, radius, shadow, tone, type Tone } from '../../theme'
 import { foldText as normalizar } from '../../lib/catalogo'
 import type { Character } from '../../types'
@@ -13,6 +13,10 @@ import { acortar, leerDecision, pruebaDeOpcion, type Bloque, type OpcionDecision
 import { EFECTOS_HOJA, EFECTOS_SECRETOS, ETIQUETA_EFECTO, quienesDeciden, registroDecisiones, resumenHoja, type Quien, type RegistroPersonaje, type Suma } from './decisiones'
 import { Apartado, Conmutador, EnLinea, LeerEnVozAlta } from './piezas'
 import { vivos } from '../../lib/personajes'
+import { hora } from './exportar'
+import { enviarTodos, mensajeDe, personajeDeClave, programar, useSincronizacion, useUltimo, type EstadoEnvio } from './sincronizacion'
+import { aplicarAFicha, claveRegistro, decisionesAplicadas, decisionesPendientes } from './aplicar'
+import { useCreacionPantalla } from './creacionPantalla'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -101,6 +105,9 @@ export function DecisionGuion({
   soloLectura?: boolean
 }) {
   const { cId, estado, actualizar, ultimoDiario } = usePantalla()
+  // Each change goes to the character's record of answers in the API (sincronizacion), read from the current document after a pause
+  const ultimo = useUltimo(estado)
+  const sincronizar = (q: Quien) => programar(cId, q.characterId, () => ultimo.current)
   // Only the living decide from now on; what the dead decided stays in the record
   const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), enabled: !soloLectura, select: vivos })
   const [marcas, setMarcas] = useVerMarcas()
@@ -111,7 +118,7 @@ export function DecisionGuion({
   const eleccionDe = (q: Quien) => (soloLectura ? undefined : estado.decisiones[clave(q)])
   const eligio = (q: Quien, op: OpcionDecision) => normalizar(eleccionDe(q)?.opcion ?? '') === normalizar(op.texto)
 
-  const elegir = (q: Quien, op: OpcionDecision) =>
+  const elegir = (q: Quien, op: OpcionDecision) => {
     actualizar((b) => {
       const k = clave(q)
       if (normalizar(b.decisiones[k]?.opcion ?? '') === normalizar(op.texto)) {
@@ -125,8 +132,10 @@ export function DecisionGuion({
       const hoja = resumenHoja(op.efectos)
       anotar(b, { tipo: 'avance', etiqueta: 'Decisión', texto: `${q.nombre}, ${d.pregunta}: ${acortar(op.texto)}${hoja ? ` (${hoja})` : ''}` }, ultimoDiario)
     })
+    sincronizar(q)
+  }
 
-  const marcarPrueba = (q: Quien, r: ResultadoPrueba) =>
+  const marcarPrueba = (q: Quien, r: ResultadoPrueba) => {
     actualizar((b) => {
       const el = b.decisiones[clave(q)]
       if (!el) return
@@ -138,6 +147,8 @@ export function DecisionGuion({
       const premio = r === 'exito' && el.exito ? ` (${el.exito})` : ''
       anotar(b, { tipo: 'avance', etiqueta: 'Prueba', texto: `${q.nombre}: ${el.prueba} ${r === 'exito' ? 'superada' : 'fallada'} en «${titulo}»${premio}` }, ultimoDiario)
     })
+    sincronizar(q)
+  }
 
   const conPrueba = soloLectura ? [] : quienes.filter((q) => eleccionDe(q)?.prueba)
 
@@ -302,7 +313,16 @@ function Lista({ titulo, items, t }: { titulo: string; items: string[]; t: Tone 
   )
 }
 
-function TarjetaRegistro({ r, marcas, onQuitar }: { r: RegistroPersonaje; marcas: boolean; onQuitar: (clave: string, texto: string) => void }) {
+/** «Aplicar a la ficha» of one character: what is pending and applied, the action, and which choices are applied already */
+interface Aplicacion {
+  pendientes: number
+  aplicadas: number
+  ocupado: boolean
+  onAplicar: () => void
+  aplicada: Set<string>
+}
+
+function TarjetaRegistro({ r, marcas, onQuitar, aplicacion }: { r: RegistroPersonaje; marcas: boolean; onQuitar: (clave: string, texto: string) => void; aplicacion?: Aplicacion }) {
   const hoja = r.atributos.length + r.habilidades.length + r.pericias.length + r.metas.length + r.objetos.length
   return (
     <article style={{ ...stack(12), padding: 14, borderRadius: radius.lg, background: c.s1, border: `1px solid ${c.border}`, boxShadow: shadow[1] }}>
@@ -328,6 +348,17 @@ function TarjetaRegistro({ r, marcas, onQuitar }: { r: RegistroPersonaje; marcas
         </div>
       )}
 
+      {aplicacion && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Button size="sm" variant="secondary" icon={<Sparkles size={14} aria-hidden />} disabled={aplicacion.ocupado || aplicacion.pendientes === 0} onClick={aplicacion.onAplicar}>
+            Aplicar a la ficha
+          </Button>
+          <span style={{ fontSize: fs.xs, color: c.subtle }}>
+            {aplicacion.pendientes} pendiente{aplicacion.pendientes === 1 ? '' : 's'} · {aplicacion.aplicadas} aplicada{aplicacion.aplicadas === 1 ? '' : 's'}
+          </span>
+        </div>
+      )}
+
       {(r.caminos.length > 0 || r.metales.length > 0) && (
         marcas ? (
           <div style={{ ...stack(8), padding: 10, borderRadius: radius.md, background: tone.amatista.bg, border: `1px solid ${tone.amatista.border}` }}>
@@ -350,6 +381,9 @@ function TarjetaRegistro({ r, marcas, onQuitar }: { r: RegistroPersonaje; marcas
                 <span style={{ display: 'block', color: c.subtle }}>{el.grupo ? `${el.grupo} · ` : ''}{el.escena}</span>
                 <span style={{ display: 'block', color: c.muted }}>{el.pregunta}</span>
                 <span style={{ display: 'block', color: c.text, fontWeight: 600 }}><EnLinea texto={el.opcion} /></span>
+                {aplicacion?.aplicada.has(claveRegistro(clave)) && (
+                  <span style={{ ...pill(tone.esmeralda), marginTop: 4 }}><Check size={12} aria-hidden /> Aplicada a la ficha</span>
+                )}
                 {el.prueba && (
                   <span style={{ display: 'block', color: el.resultado === 'exito' ? tone.esmeralda.fg : el.resultado === 'fallo' ? tone.rubi.fg : c.subtle }}>
                     {el.prueba}: {el.resultado === 'exito' ? 'superada' : el.resultado === 'fallo' ? 'fallada' : 'sin marcar'}
@@ -372,11 +406,43 @@ function TarjetaRegistro({ r, marcas, onQuitar }: { r: RegistroPersonaje; marcas
  * sheets), the secret marks of path and metal behind a switch, and the echoes. A wrong choice can be removed from here.
  */
 export function RegistroDecisiones({ personajes }: { personajes: Character[] }) {
-  const { estado, actualizar } = usePantalla()
+  const { cId, estado, actualizar } = usePantalla()
   const cfg = useWorldConfig()
   const [marcas, setMarcas] = useVerMarcas()
+  const ultimo = useUltimo(estado)
+  const envios = useSincronizacion()
+  const [enviando, setEnviando] = useState(false)
+  // «Aplicar a la ficha»: what the record of answers says is still pending for each character (the API marks what it applied)
+  const qc = useQueryClient()
+  const { creacion } = useCreacionPantalla(cId)
+  const [aplicando, setAplicando] = useState(false)
+  const [resultado, setResultado] = useState<string | null>(null)
+  const personajeDe = (characterId: number | null) => (characterId === null ? undefined : creacion?.personajes.find((p) => p.id === characterId))
+  const pendientesDe = (characterId: number | null) => { const p = personajeDe(characterId); return p ? decisionesPendientes(p) : [] }
+  const aplicadasDe = (characterId: number | null) => { const p = personajeDe(characterId); return p ? decisionesAplicadas(p) : [] }
+  const aplicar = async (ids: number[]) => {
+    setAplicando(true)
+    const lineas: string[] = []
+    try {
+      for (const id of ids) {
+        const p = personajeDe(id)
+        if (!p || decisionesPendientes(p).length === 0) continue
+        const res = await aplicarAFicha(cId, p, cfg.habilidades)
+        lineas.push(`${p.name}: ${res.aplicado.length ? res.aplicado.join(' · ') : 'nada nuevo'}${res.ignorado.length ? ` · Sin sitio: ${res.ignorado.join(' · ')}` : ''}`)
+      }
+      setResultado(lineas.length ? lineas.join('\n') : 'Nada pendiente de aplicar.')
+    } catch (e) {
+      setResultado(mensajeDe(e))
+    } finally {
+      setAplicando(false)
+      void qc.invalidateQueries({ queryKey: ['creacion', cId] })
+      void qc.invalidateQueries({ queryKey: ['characters', cId] })
+      void qc.invalidateQueries({ queryKey: ['character', cId] })
+    }
+  }
   const [quitando, setQuitando] = useState<{ clave: string; texto: string } | null>(null)
   const registro = useMemo(() => registroDecisiones(estado.decisiones, cfg.habilidades, personajes), [estado.decisiones, cfg.habilidades, personajes])
+  const conPendientes = registro.filter((r) => pendientesDe(r.characterId).length > 0).map((r) => r.characterId as number)
   if (registro.length === 0) return null
   return (
     <Disclosure
@@ -394,9 +460,37 @@ export function RegistroDecisiones({ personajes }: { personajes: Character[] }) 
         </label>
         <ul style={{ ...listReset, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 12 }}>
           {registro.map((r) => (
-            <li key={r.clave}><TarjetaRegistro r={r} marcas={marcas} onQuitar={(clave, texto) => setQuitando({ clave, texto })} /></li>
+            <li key={r.clave}>
+              <TarjetaRegistro
+                r={r}
+                marcas={marcas}
+                onQuitar={(clave, texto) => setQuitando({ clave, texto })}
+                aplicacion={r.characterId === null ? undefined : {
+                  pendientes: pendientesDe(r.characterId).length,
+                  aplicadas: aplicadasDe(r.characterId).length,
+                  ocupado: aplicando,
+                  onAplicar: () => { void aplicar([r.characterId as number]) },
+                  aplicada: new Set(aplicadasDe(r.characterId).map((x) => x.clave)),
+                }}
+              />
+            </li>
           ))}
         </ul>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Button size="sm" variant="secondary" icon={<Sparkles size={14} aria-hidden />} disabled={aplicando || conPendientes.length === 0} onClick={() => { void aplicar(conPendientes) }}>
+            Aplicar a la ficha{conPendientes.length > 1 ? ` (${conPendientes.length} personajes)` : ''}
+          </Button>
+          <span style={{ flex: 1, minWidth: 200, fontSize: fs.xs, color: c.subtle, lineHeight: 1.45 }}>
+            Escribe en cada ficha lo que dan las decisiones pendientes: atributos y grados con los topes de la creación, pericias, metas y objetos; guarda el camino y el metal recomendados.
+          </span>
+        </div>
+        {resultado && <p role="status" style={{ fontSize: fs.xs, color: c.muted, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{resultado}</p>}
+        <EstadoEnvios
+          envios={envios}
+          personajes={personajes}
+          enviando={enviando}
+          onEnviar={() => { setEnviando(true); void enviarTodos(cId, () => ultimo.current).finally(() => setEnviando(false)) }}
+        />
         <p style={{ fontSize: fs.xs, color: c.subtle, lineHeight: 1.45 }}>
           Lo de «Para la ficha» se pasa a la ficha de cada personaje a mano: la pantalla solo lo suma. Una prueba superada que da
           «+1 al atributo de la habilidad» ya cuenta en los atributos.
@@ -410,11 +504,38 @@ export function RegistroDecisiones({ personajes }: { personajes: Character[] }) 
           : ''}
         confirmLabel="Quitar"
         onConfirm={() => {
-          if (quitando) actualizar((b) => { delete b.decisiones[quitando.clave] })
+          if (quitando) {
+            actualizar((b) => { delete b.decisiones[quitando.clave] })
+            programar(cId, personajeDeClave(quitando.clave), () => ultimo.current)
+          }
           setQuitando(null)
         }}
         onCancel={() => setQuitando(null)}
       />
     </Disclosure>
+  )
+}
+
+/** Whether each character's decisions are saved in its record of answers (the creation), with a way to send them all again */
+function EstadoEnvios({ envios, personajes, enviando, onEnviar }: {
+  envios: Record<number, EstadoEnvio>
+  personajes: Character[]
+  enviando: boolean
+  onEnviar: () => void
+}) {
+  const entradas = Object.entries(envios).map(([id, e]) => ({ e, nombre: personajes.find((p) => p.id === Number(id))?.name ?? `Personaje ${id}` }))
+  const fallidas = entradas.filter((x) => x.e.estado === 'error')
+  const enCurso = entradas.some((x) => x.e.estado === 'pendiente' || x.e.estado === 'guardando')
+  const ultima = entradas.filter((x) => x.e.estado === 'guardado').map((x) => x.e.en).sort().at(-1)
+  const texto = fallidas.length
+    ? `Sin guardar en la creación: ${fallidas.map((x) => x.nombre).join(', ')} (${fallidas[0].e.error ?? 'error'}).`
+    : enCurso ? 'Guardando en la creación…'
+      : ultima ? `Guardado en la creación de cada personaje a las ${hora(ultima)}.`
+        : 'Cada decisión se guarda en la creación de su personaje al elegirla.'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <p role="status" style={{ flex: 1, minWidth: 200, fontSize: fs.xs, color: fallidas.length ? tone.rubi.fg : c.subtle, lineHeight: 1.45 }}>{texto}</p>
+      <Button size="sm" variant="ghost" icon={<Save size={14} aria-hidden />} disabled={enviando} onClick={onEnviar}>Guardar en la creación</Button>
+    </div>
   )
 }

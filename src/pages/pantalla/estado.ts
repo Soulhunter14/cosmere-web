@@ -278,6 +278,8 @@ export interface PantallaEstado {
   cambios: CambioCombate[]
   /** «La mesa»: what the director projects to the players (src/pages/pantalla/mesa.ts); emptied when the session ends */
   mesa: MesaDirector
+  /** The director's notes to run each character's scene in the creation session (character id → text); see SesionCreacion.tsx */
+  preparacionCreacion: Record<string, string>
 }
 
 // ── Ids and dates ────────────────────────────────────────────────────────────
@@ -308,6 +310,7 @@ export const estadoVacio = (): PantallaEstado => ({
   historial: [],
   tiradasPrivadas: [],
   cambios: [],
+  preparacionCreacion: {},
   mesa: { proyeccion: null, proyecciones: [] },
 })
 
@@ -564,6 +567,7 @@ export function normalizarEstado(raw: unknown): PantallaEstado {
     historial: lista(o.historial, sesion).slice(0, MAX_HISTORIAL),
     tiradasPrivadas: lista(o.tiradasPrivadas, tiradaPrivada).slice(0, MAX_TIRADAS_PRIVADAS),
     cambios: lista(o.cambios, cambio).slice(0, MAX_CAMBIOS),
+    preparacionCreacion: mapa(o.preparacionCreacion, (x) => (typeof x === 'string' && x.trim() !== '' ? x : null)),
     mesa: mesaDirector(o.mesa),
   }
 }

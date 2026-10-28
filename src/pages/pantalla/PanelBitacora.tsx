@@ -1,23 +1,38 @@
 import { useState, type CSSProperties } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Check, ClipboardCopy, Copy, Download, NotebookPen, Pencil, Play, Square, Trash2 } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, ClipboardCopy, Copy, Download, NotebookPen, Pencil, Play, Square, Trash2, Undo2 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
+import { creacionApi } from '../../api/creacion'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
-import { Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, Sheet, Stepper, Textarea } from '../../components/ui'
+import { Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, Sheet, Stepper, Switch, Textarea } from '../../components/ui'
 import { c, eyebrow, font, fs, numeral, pill, radius, shadow, tone } from '../../theme'
 import { duracion, useAhora, usePantalla } from './contexto'
-import { anotar, escenasJugadas, nuevaSesion, numeroSiguiente, terminarSesion, type EscenaArchivada, type EventoBitacora, type SesionMesa } from './estado'
+import { anotar, claveEscenaPropia, escenasJugadas, marcar, nuevaSesion, numeroSiguiente, terminarSesion, type EscenaArchivada, type EventoBitacora, type SesionMesa } from './estado'
 import { copiarTexto, descargarTexto, hora, fecha, nombreArchivoSesion, notasMarkdown, promptCronica, tituloSesion } from './exportar'
 import { archivarEscena, escribirGuion } from './guion'
 import { nombreBase } from './encuentro'
 import { ETIQUETAS_APUNTE, EVENTO_META } from './meta'
 import { Tesela } from './piezas'
+import { esSesionDeCreacion, personajesEnCreacion, useCreacionPantalla } from './creacionPantalla'
+import { SeccionSesionCreacion } from './SesionCreacion'
+import { enviarTodos, mensajeDe, useUltimo } from './sincronizacion'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
 const tarjeta: CSSProperties = { padding: 14, borderRadius: radius.lg, background: c.s1, border: `1px solid ${c.border}`, boxShadow: shadow[1] }
 
 type Etiqueta = (typeof ETIQUETAS_APUNTE)[number]
+
+/** What the closing session takes with it: the played scenes, and the pending ones too when the director marks them as played */
+function textoEscenas(jugadas: number, pendientes: number, todas: boolean): string {
+  const lasJugadas = jugadas === 1 ? 'la escena jugada' : `las ${jugadas} escenas jugadas`
+  if (pendientes === 0) return jugadas ? `Se lleva ${lasJugadas}.` : 'No tiene escenas.'
+  if (todas) {
+    const total = jugadas + pendientes
+    return `Se lleva ${total === 1 ? 'la escena' : `las ${total} escenas`}: ${pendientes === 1 ? 'la que quedaba sin jugar queda marcada' : `las ${pendientes} sin jugar quedan marcadas`} como jugadas.`
+  }
+  return `${jugadas ? `Se lleva ${lasJugadas}` : 'No tiene escenas jugadas'}; ${pendientes === 1 ? 'la que queda sin jugar pasa' : `las ${pendientes} sin jugar pasan`} a la siguiente sesión.`
+}
 
 export function PanelBitacora() {
   const { cId, estado, actualizar, ultimoDiario } = usePantalla()
@@ -31,12 +46,24 @@ export function PanelBitacora() {
   const [texto, setTexto] = useState('')
   const [etiqueta, setEtiqueta] = useState<Etiqueta>('Apunte')
   const [terminando, setTerminando] = useState(false)
+  const [volviendo, setVolviendo] = useState(false)
+  // «Terminar sesión»: take the pending scenes too, marked as played
+  const [marcarTodas, setMarcarTodas] = useState(false)
   const [editando, setEditando] = useState(false)
   const [borrandoEvento, setBorrandoEvento] = useState<EventoBitacora | null>(null)
   const [borrandoSesion, setBorrandoSesion] = useState<SesionMesa | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
 
   const sesion = estado.sesion
+  const qc = useQueryClient()
+  const { creacion } = useCreacionPantalla(cId)
+  // The screen's current document, for the sends that run after a pause
+  const ultimo = useUltimo(estado)
+  const [ocupado, setOcupado] = useState(false)
+  const esCreacion = esSesionDeCreacion(sesion?.id, creacion)
+  // While the creation session is being prepared, the only session to start is that one: a normal one would not record in the creation
+  const preparandoCreacion = !!creacion && !creacion.iniciada && creacion.sesion.estado === 'preparando'
+  const sinCrear = esCreacion ? personajesEnCreacion(creacion).map((p) => p.name) : []
   const sugerido = numeroSiguiente(estado, ultimoDiario)
   const numero = numeroElegido ?? sugerido
   const jugadas = escenasJugadas(estado).length
@@ -46,6 +73,55 @@ export function PanelBitacora() {
     actualizar((b) => { b.sesion = nuevaSesion(numero, tituloNuevo.trim()) })
     setNumeroElegido(null)
     setTituloNuevo('')
+  }
+  /** The creation session: the campaign registers it first (409 if it was played already), then the table session 0 opens */
+  const empezarCreacion = async () => {
+    const s = nuevaSesion(0, 'Sesión de creación')
+    setOcupado(true)
+    try {
+      qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'iniciar', { mesaId: s.id, guion: estado.guionTitulo }))
+      actualizar((b) => { b.sesion = s })
+      setAviso('Sesión de creación en marcha: lo que decida la mesa se guarda en cada personaje.')
+    } catch (e) {
+      setAviso(mensajeDe(e))
+    } finally {
+      setOcupado(false)
+    }
+  }
+  /** A creation session started by mistake goes back to the preparation: the campaign first, then the table session 0 is discarded */
+  const volverAPreparacion = async () => {
+    setOcupado(true)
+    try {
+      qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'volver'))
+      actualizar((b) => { b.sesion = null })
+      setVolviendo(false)
+      setAviso('La sesión de creación vuelve a la preparación.')
+    } catch (e) {
+      setAviso(mensajeDe(e))
+    } finally {
+      setOcupado(false)
+    }
+  }
+  /** Ends the table session; the creation session is closed in the campaign first, with its decisions sent */
+  const terminar = async () => {
+    setOcupado(true)
+    try {
+      if (esCreacion) {
+        await enviarTodos(cId, () => ultimo.current, true)
+        qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'terminar'))
+      }
+      actualizar((b) => {
+        if (marcarTodas) for (const e of b.escenasPropias) if (!b.marcas[claveEscenaPropia(e.id)]) marcar(b, claveEscenaPropia(e.id), true)
+        terminarSesion(b, (esc) => archivarEscena(b, esc))
+      })
+      setTerminando(false)
+      setMarcarTodas(false)
+      setAviso(esCreacion ? 'Sesión de creación terminada. Marca «Personaje creado» en Creación a quien le falte.' : null)
+    } catch (e) {
+      setAviso(mensajeDe(e))
+    } finally {
+      setOcupado(false)
+    }
   }
 
   const anotarApunte = () => {
@@ -81,7 +157,7 @@ export function PanelBitacora() {
         <section aria-label="Sesión de juego" style={{ ...tarjeta, ...stack(10) }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ ...eyebrow, color: 'var(--gold)' }}>Sesión en curso</p>
+              <p style={{ ...eyebrow, color: 'var(--gold)' }}>{esCreacion ? 'Sesión de creación en curso' : 'Sesión en curso'}</p>
               <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, color: c.text, lineHeight: 1.2 }}>{tituloSesion(sesion)}</h2>
               <p style={{ fontSize: fs.sm, color: c.muted, marginTop: 2 }}>
                 Desde las {hora(sesion.iniciadaEn)} · {duracion(sesion.iniciadaEn, ahora)} · {sesion.eventos.length} anotacion{sesion.eventos.length === 1 ? '' : 'es'}
@@ -94,10 +170,22 @@ export function PanelBitacora() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button size="sm" variant="secondary" icon={<Copy size={15} aria-hidden />} onClick={() => exportar(sesion, 'prompt')}>Copiar prompt de crónica</Button>
             <Button size="sm" variant="secondary" icon={<Download size={15} aria-hidden />} onClick={() => exportar(sesion, 'md')}>Descargar notas</Button>
-            <Button size="sm" variant="ghost" icon={<Square size={14} aria-hidden />} onClick={() => setTerminando(true)} style={{ marginLeft: 'auto' }}>Terminar sesión</Button>
+            {esCreacion && (
+              <Button size="sm" variant="ghost" icon={<Undo2 size={14} aria-hidden />} onClick={() => setVolviendo(true)} disabled={ocupado}>Volver a la preparación</Button>
+            )}
+            <Button size="sm" variant="ghost" icon={<Square size={14} aria-hidden />} onClick={() => setTerminando(true)} style={{ marginLeft: 'auto' }}>
+              {esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
+            </Button>
           </div>
         </section>
       ) : (
+        <>
+        <SeccionSesionCreacion onEmpezar={() => { void empezarCreacion() }} ocupado={ocupado} />
+        {preparandoCreacion ? (
+          <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>
+            Mientras preparas la sesión de creación, la sesión se empieza desde ahí: una sesión normal no guardaría sus decisiones en la creación.
+          </p>
+        ) : (
         <section aria-label="Empezar sesión" style={{ ...tarjeta, ...stack(12) }}>
           <div>
             <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, color: c.text }}>Sesión de juego</h2>
@@ -118,6 +206,8 @@ export function PanelBitacora() {
             <Button icon={<Play size={16} aria-hidden />} onClick={empezar}>Empezar sesión</Button>
           </div>
         </section>
+        )}
+        </>
       )}
 
       {/* Always in the DOM (a live region must exist before it changes); out of the flow while empty */}
@@ -211,14 +301,32 @@ export function PanelBitacora() {
         tone="brand"
         icon="warning"
         title="¿Terminar la sesión?"
-        message={
-          'Se guarda en «Sesiones anteriores» con sus anotaciones; desde allí puedes copiar el prompt de la crónica. ' +
-          (jugadas ? `Se lleva ${jugadas === 1 ? 'la escena jugada' : `las ${jugadas} escenas jugadas`}` : 'No tiene escenas jugadas') +
-          (pendientes ? `; ${pendientes === 1 ? 'la que queda sin jugar pasa' : `las ${pendientes} sin jugar pasan`} a la siguiente sesión.` : '.')
-        }
-        confirmLabel="Terminar sesión"
-        onConfirm={() => { actualizar((b) => terminarSesion(b, (esc) => archivarEscena(b, esc))); setTerminando(false); setAviso(null) }}
-        onCancel={() => setTerminando(false)}
+        message={(
+          <>
+            {esCreacion && `Termina también la sesión de creación, que no se puede volver a jugar.${sinCrear.length ? ` ${sinCrear.join(', ')} ${sinCrear.length === 1 ? 'sigue' : 'siguen'} en creación: márcalos creados en Creación.` : ''} `}
+            Se guarda en «Sesiones anteriores» con sus anotaciones; desde allí puedes copiar el prompt de la crónica.{' '}
+            {textoEscenas(jugadas, pendientes, marcarTodas)}
+            {pendientes > 0 && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+                <Switch checked={marcarTodas} onChange={setMarcarTodas} label="Marcar todas las escenas como jugadas" />
+                Marcar {pendientes === 1 ? 'la escena pendiente' : `las ${pendientes} escenas pendientes`} como jugadas
+              </label>
+            )}
+          </>
+        )}
+        confirmLabel={esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
+        onConfirm={() => { if (!ocupado) void terminar() }}
+        onCancel={() => { setTerminando(false); setMarcarTodas(false) }}
+      />
+      <ConfirmDialog
+        open={volviendo}
+        tone="brand"
+        icon="warning"
+        title="¿Volver a la preparación?"
+        message={`La sesión de creación vuelve a «en preparación» y esta sesión de mesa se descarta${sesion?.eventos.length ? ` con sus ${sesion.eventos.length} anotaciones` : ''}. Lo ya guardado en los personajes se queda y se actualiza al volver a jugar.`}
+        confirmLabel="Volver a la preparación"
+        onConfirm={() => { if (!ocupado) void volverAPreparacion() }}
+        onCancel={() => setVolviendo(false)}
       />
       <ConfirmDialog
         open={!!borrandoEvento}

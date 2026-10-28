@@ -46,6 +46,7 @@ export const MISTBORN: WorldConfig = {
     banda: true,
     creacionGuiada: true,
     caminoInicial: true,
+    pericias: true,
   },
   // «Creación de personajes» (26-10-2026): the steps the director releases, in the order Xavi set; their ids are `MistbornRules.PasosCreacion`.
   // More steps are coming: add them at the end here and there. The choices load their options lazily (data/mistborn/creacion.ts)

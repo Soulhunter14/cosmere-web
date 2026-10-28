@@ -26,8 +26,8 @@ export const creacionApi = {
   deshacer: (campaignId: number, characterId: number) =>
     client.delete<CreacionEstado>(`/campaigns/${campaignId}/creacion/personajes/${characterId}/completar`).then((r) => r.data),
 
-  /** The creation session (director): `preparar`, `iniciar` (with the screen's table session and script) or `terminar`; 409 out of order */
-  sesion: (campaignId: number, accion: 'preparar' | 'iniciar' | 'terminar', body: { mesaId?: string; guion?: string } = {}) =>
+  /** The creation session (director): `preparar`, `iniciar` (with the screen's table session and script), `terminar` or `volver` to the preparation; 409 out of order */
+  sesion: (campaignId: number, accion: 'preparar' | 'iniciar' | 'terminar' | 'volver', body: { mesaId?: string; guion?: string } = {}) =>
     client.post<CreacionEstado>(`/campaigns/${campaignId}/creacion/sesion/${accion}`, body).then((r) => r.data),
 
   /** The record of answers of a character: every row for the director, the creation rows for its owner */

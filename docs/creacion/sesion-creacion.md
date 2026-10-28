@@ -55,3 +55,12 @@ mismo día). Réplica de PRO en local para trabajar la campaña 5: `pro-local.sh
    «Tu camino heroico».
 3. Enseñar las decisiones al jugador (hoy solo el director).
 4. Guion de la sesión 0 y biblia al día con el reparto nuevo.
+
+## 5. Ajustes del 28-10 (tarde)
+
+- «Empezar la sesión de creación» pide confirmación y solo se activa con un guion cargado; la preparación enseña tres requisitos (guion,
+  respuestas al día con los pasos liberados, notas por personaje). Motivo: un segundo toque sobre «Preparar» arrancaba la sesión.
+- «Volver a la preparación» (Bitácora, con la sesión de creación en curso): `POST …/creacion/sesion/volver` (en curso → preparando, borra
+  inicio, guion y sesión de mesa) y la pantalla descarta la sesión de mesa 0. Una sesión jugada sigue sin reabrirse.
+- Guion de la sesión 0 para la mesa de cuatro trasfondos: `docs/pantalla-director/guiones/legado/sesion-0-cuatro.md` (ignorado por git),
+  generado desde `sesion-0.md` sin las escenas del Noble y del Pilluelo, cuyos papeles quedan en PNJ sin nombre.

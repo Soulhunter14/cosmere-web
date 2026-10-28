@@ -5,11 +5,11 @@
  * id the API records) and ends it, from the Bitácora panel (`PanelBitacora`). While it is prepared or played the Grupo panel shows
  * each character's «Creación» card (`TarjetaCreacion`). The decisions of the script go to each character through `sincronizacion`.
  */
-import { useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Film, Play, Sparkles } from 'lucide-react'
+import { Check, Circle, Film, Play, Sparkles } from 'lucide-react'
 import { creacionApi } from '../../api/creacion'
-import { Button, Disclosure, Textarea } from '../../components/ui'
+import { Button, ConfirmDialog, Disclosure, Textarea } from '../../components/ui'
 import { c, eyebrow, font, fs, pill, radius, shadow, tone } from '../../theme'
 import type { CreacionPersonaje } from '../../types'
 import type { PasoCreacion } from '../../worlds/types'
@@ -34,11 +34,15 @@ export function SeccionSesionCreacion({ onEmpezar, ocupado }: { onEmpezar: () =>
   const { creacion, pasos } = useCreacionPantalla(cId)
   const [error, setError] = useState<string | null>(null)
   const [preparando, setPreparando] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
   if (!creacion || creacion.iniciada) return null
   const s = creacion.sesion
   if (s.estado !== 'pendiente' && s.estado !== 'preparando') return null
   const enCreacion = personajesEnCreacion(creacion)
   const escenas = estado.escenasPropias.length
+  // What the director prepares before starting: the script, the players' answers to the released steps, the notes
+  const alDia = enCreacion.filter((p) => pasosResueltos(pasos, p) >= creacion.paso).length
+  const conNotas = enCreacion.filter((p) => (estado.preparacionCreacion[String(p.id)] ?? '').trim() !== '').length
 
   const preparar = async () => {
     setPreparando(true)
@@ -72,10 +76,21 @@ export function SeccionSesionCreacion({ onEmpezar, ocupado }: { onEmpezar: () =>
         </Button>
       ) : (
         <>
-          <p style={{ fontSize: fs.sm, color: c.muted }}>
-            Guion: {estado.guionTitulo ? <strong style={{ color: c.text }}>{estado.guionTitulo}</strong> : <em>sin cargar (impórtalo en Escena)</em>}
-            {escenas > 0 && ` · ${escenas} escena${escenas === 1 ? '' : 's'}`}
-          </p>
+          <ul aria-label="Preparación" style={{ listStyle: 'none', margin: 0, padding: 0, ...stack(4) }}>
+            <Requisito ok={escenas > 0}>
+              {escenas > 0
+                ? <>Guion cargado: <strong style={{ color: c.text }}>{estado.guionTitulo || 'sin título'}</strong> · {escenas} escena{escenas === 1 ? '' : 's'}</>
+                : <>Guion sin cargar: impórtalo en Escena (el de la sesión 0 de tu mundo)</>}
+            </Requisito>
+            <Requisito ok={enCreacion.length > 0 && alDia === enCreacion.length}>
+              {enCreacion.length === 0
+                ? 'Nadie en creación'
+                : `Respuestas: ${alDia} de ${enCreacion.length} personajes al día con los ${creacion.paso} pasos liberados`}
+            </Requisito>
+            <Requisito ok={enCreacion.length > 0 && conNotas === enCreacion.length}>
+              {`Notas para dirigir: ${conNotas} de ${enCreacion.length}`}
+            </Requisito>
+          </ul>
           {enCreacion.length === 0 ? (
             <p style={{ fontSize: fs.sm, color: c.subtle, fontStyle: 'italic' }}>Nadie en creación: añade los personajes en Creación.</p>
           ) : (
@@ -93,13 +108,37 @@ export function SeccionSesionCreacion({ onEmpezar, ocupado }: { onEmpezar: () =>
               ))}
             </ul>
           )}
-          <Button icon={<Play size={16} aria-hidden />} onClick={onEmpezar} disabled={ocupado} style={{ alignSelf: 'flex-start' }}>
-            Empezar la sesión de creación
-          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Button icon={<Play size={16} aria-hidden />} onClick={() => setConfirmando(true)} disabled={ocupado || escenas === 0} aria-haspopup="dialog">
+              Empezar la sesión de creación
+            </Button>
+            {escenas === 0 && <span style={{ fontSize: fs.xs, color: c.subtle }}>Carga antes el guion: la sesión se juega con él.</span>}
+          </div>
+          <ConfirmDialog
+            open={confirmando}
+            tone="brand"
+            icon="warning"
+            title="¿Empezar la sesión de creación?"
+            message={`Se juega una sola vez. Se abre la sesión de mesa 0 con «${estado.guionTitulo || 'el guion cargado'}» y, desde ese momento, lo que decida la mesa se guarda en la creación de cada personaje (${enCreacion.length} en creación).`}
+            confirmLabel="Empezar"
+            onConfirm={() => { setConfirmando(false); onEmpezar() }}
+            onCancel={() => setConfirmando(false)}
+          />
         </>
       )}
       {error && <p role="alert" style={{ fontSize: fs.sm, color: tone.rubi.fg }}>{error}</p>}
     </section>
+  )
+}
+
+/** One line of the preparation list: done (check) or pending (circle) */
+function Requisito({ ok, children }: { ok: boolean; children: ReactNode }) {
+  const Icono = ok ? Check : Circle
+  return (
+    <li style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: fs.sm, color: ok ? c.text : c.muted, lineHeight: 1.45 }}>
+      <Icono size={15} aria-hidden style={{ color: ok ? tone.esmeralda.fg : c.subtle, flexShrink: 0, marginTop: 3 }} />
+      <span><span className="sr-only">{ok ? 'Hecho: ' : 'Pendiente: '}</span>{children}</span>
+    </li>
   )
 }
 

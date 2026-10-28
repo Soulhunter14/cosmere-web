@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ClipboardCopy, Copy, Download, NotebookPen, Pencil, Play, Square, Trash2 } from 'lucide-react'
+import { Check, ClipboardCopy, Copy, Download, NotebookPen, Pencil, Play, Square, Trash2, Undo2 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { creacionApi } from '../../api/creacion'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
@@ -35,6 +35,7 @@ export function PanelBitacora() {
   const [texto, setTexto] = useState('')
   const [etiqueta, setEtiqueta] = useState<Etiqueta>('Apunte')
   const [terminando, setTerminando] = useState(false)
+  const [volviendo, setVolviendo] = useState(false)
   const [editando, setEditando] = useState(false)
   const [borrandoEvento, setBorrandoEvento] = useState<EventoBitacora | null>(null)
   const [borrandoSesion, setBorrandoSesion] = useState<SesionMesa | null>(null)
@@ -66,6 +67,20 @@ export function PanelBitacora() {
       qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'iniciar', { mesaId: s.id, guion: estado.guionTitulo }))
       actualizar((b) => { b.sesion = s })
       setAviso('Sesión de creación en marcha: lo que decida la mesa se guarda en cada personaje.')
+    } catch (e) {
+      setAviso(mensajeDe(e))
+    } finally {
+      setOcupado(false)
+    }
+  }
+  /** A creation session started by mistake goes back to the preparation: the campaign first, then the table session 0 is discarded */
+  const volverAPreparacion = async () => {
+    setOcupado(true)
+    try {
+      qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'volver'))
+      actualizar((b) => { b.sesion = null })
+      setVolviendo(false)
+      setAviso('La sesión de creación vuelve a la preparación.')
     } catch (e) {
       setAviso(mensajeDe(e))
     } finally {
@@ -136,7 +151,12 @@ export function PanelBitacora() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button size="sm" variant="secondary" icon={<Copy size={15} aria-hidden />} onClick={() => exportar(sesion, 'prompt')}>Copiar prompt de crónica</Button>
             <Button size="sm" variant="secondary" icon={<Download size={15} aria-hidden />} onClick={() => exportar(sesion, 'md')}>Descargar notas</Button>
-            <Button size="sm" variant="ghost" icon={<Square size={14} aria-hidden />} onClick={() => setTerminando(true)} style={{ marginLeft: 'auto' }}>Terminar sesión</Button>
+            {esCreacion && (
+              <Button size="sm" variant="ghost" icon={<Undo2 size={14} aria-hidden />} onClick={() => setVolviendo(true)} disabled={ocupado}>Volver a la preparación</Button>
+            )}
+            <Button size="sm" variant="ghost" icon={<Square size={14} aria-hidden />} onClick={() => setTerminando(true)} style={{ marginLeft: 'auto' }}>
+              {esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
+            </Button>
           </div>
         </section>
       ) : (
@@ -267,6 +287,16 @@ export function PanelBitacora() {
         confirmLabel={esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
         onConfirm={() => { if (!ocupado) void terminar() }}
         onCancel={() => setTerminando(false)}
+      />
+      <ConfirmDialog
+        open={volviendo}
+        tone="brand"
+        icon="warning"
+        title="¿Volver a la preparación?"
+        message={`La sesión de creación vuelve a «en preparación» y esta sesión de mesa se descarta${sesion?.eventos.length ? ` con sus ${sesion.eventos.length} anotaciones` : ''}. Lo ya guardado en los personajes se queda y se actualiza al volver a jugar.`}
+        confirmLabel="Volver a la preparación"
+        onConfirm={() => { if (!ocupado) void volverAPreparacion() }}
+        onCancel={() => setVolviendo(false)}
       />
       <ConfirmDialog
         open={!!borrandoEvento}

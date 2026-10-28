@@ -205,6 +205,8 @@ export interface Character {
   recursos: Record<string, number>
   /** Kandra Blessings: `consciencia`, `potencia`, `presencia`, `estabilidad`, `fortaleza` (at most 2, no duplicates) */
   bendiciones: string[]
+  /** Expertises of the sheet (free text); the creation session's come with «Aplicar a la ficha» */
+  pericias: string[]
   /** World-specific derived stats (`alomancia.limite`, `poder.cobre.cargasMax`…), computed by the server */
   derivadosSet: Record<string, StatDesglose>
   /** Attribute bonuses of any origin, without zeros; the sheet and the dice roller add them only when `features.bonosServidor` is true */
@@ -796,6 +798,28 @@ export interface DecisionesPersonajeRequest {
   sesionId: string
   sesionTitulo: string
   decisiones: DecisionRespuestaRequest[]
+}
+
+/** «Aplicar a la ficha»: what the pending decisions give, summed by the screen (`pantalla/aplicar.ts`); the API writes it and marks the rows */
+export interface AplicarRespuestasRequest {
+  claves: string[]
+  /** attribute field (`fuerza`…) → points */
+  atributos: Record<string, number>
+  /** skill field (`atletismo`, `armasLigeras`…) or the name of a custom skill → ranks */
+  habilidades: Record<string, number>
+  pericias: string[]
+  metas: string[]
+  objetos: string[]
+  caminoRecomendado: string
+  metalRecomendado: string
+}
+
+export interface AplicarRespuestasResponse {
+  respuestas: RespuestaPersonaje[]
+  /** Readable lines of what was written («Fuerza 1 → 2», «Pericia Bajos fondos»…) */
+  aplicado: string[]
+  /** What found no place on the sheet, to note by hand */
+  ignorado: string[]
 }
 
 /** A character as the creation state lists it: what it has answered, for the director's table and the player's steps */

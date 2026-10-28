@@ -1,5 +1,5 @@
 import client from './client'
-import type { CreacionEstado, DecisionesPersonajeRequest, RespuestaPersonaje } from '../types'
+import type { AplicarRespuestasRequest, AplicarRespuestasResponse, CreacionEstado, DecisionesPersonajeRequest, RespuestaPersonaje } from '../types'
 
 /**
  * Guided character creation (section «Creación de personajes», src/pages/creacion): the director releases the world's steps one by one,
@@ -37,4 +37,8 @@ export const creacionApi = {
   /** Replaces the character's script decisions with the list sent (director); answers with every row of the character */
   putDecisiones: (campaignId: number, characterId: number, body: DecisionesPersonajeRequest) =>
     client.put<RespuestaPersonaje[]>(`/campaigns/${campaignId}/characters/${characterId}/respuestas/decisiones`, body).then((r) => r.data),
+
+  /** «Aplicar a la ficha» (director): writes what the pending decisions give and marks them as applied; 409 when none was pending */
+  aplicar: (campaignId: number, characterId: number, body: AplicarRespuestasRequest) =>
+    client.post<AplicarRespuestasResponse>(`/campaigns/${campaignId}/characters/${characterId}/respuestas/aplicar`, body).then((r) => r.data),
 }

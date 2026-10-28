@@ -64,3 +64,17 @@ mismo día). Réplica de PRO en local para trabajar la campaña 5: `pro-local.sh
   inicio, guion y sesión de mesa) y la pantalla descarta la sesión de mesa 0. Una sesión jugada sigue sin reabrirse.
 - Guion de la sesión 0 para la mesa de cuatro trasfondos: `docs/pantalla-director/guiones/legado/sesion-0-cuatro.md` (ignorado por git),
   generado desde `sesion-0.md` sin las escenas del Noble y del Pilluelo, cuyos papeles quedan en PNJ sin nombre.
+
+## 6. «Aplicar a la ficha» (28-10, tarde)
+
+- `POST campaigns/{id}/characters/{chId}/respuestas/aplicar` (director): la pantalla suma lo que dan las decisiones pendientes (`pantalla/aplicar.ts`,
+  con la misma lógica del registro) y la API lo escribe (`AplicadorFicha`): atributos sin pasar de 3, grados sin pasar de 2 por habilidad
+  (una habilidad fuera de la lista del mundo busca su hueco personalizado por nombre, como Alomancia), pericias y objetos sin repetir,
+  metas activas una vez por título y el camino y el metal recomendados (el más marcado, si no hay empate) en `creacionDatos`
+  (`caminoRecomendado`, `metalRecomendado`). Las filas quedan `aplicadaEn`; repetir las mismas claves es 409. Lo que no encuentra sitio vuelve en `ignorado`.
+- Nueva columna `Characters.Pericias` (text[], migración `AddCharacterPericias`, aditiva), en el DTO y en el PUT (sin vacíos ni repetidas). La ficha
+  la enseña y edita en «Trasfondo» solo con `features.pericias` (Mistborn).
+- Registro de decisiones (Grupo): «Aplicar a la ficha» por personaje y para todos los que tengan pendientes, con pendientes/aplicadas y
+  «Aplicada a la ficha» en cada decisión; el resultado se lee en una línea por personaje. Una decisión cambiada tras aplicarse vuelve a pendiente:
+  aplicar de nuevo añade lo nuevo, nada se resta (ajuste a mano).
+- Pendiente: el paso «Tu camino heroico» con la recomendación, y el punto de control (12 puntos de atributo, 5 grados) sigue a mano.

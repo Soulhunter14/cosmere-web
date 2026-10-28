@@ -131,6 +131,8 @@ export interface WorldConfig {
     creacionGuiada: boolean
     /** The sheet marks which of the two paths (heroic, Investida) the character started from and lets the director switch it («Camino inicial», Mistborn) */
     caminoInicial: boolean
+    /** The sheet shows and edits expertises («Pericias», in Trasfondo); the creation session's come with «Aplicar a la ficha» */
+    pericias: boolean
   }
   /** The 18 standard skills: the character sheet, the dice roller and the NPC page all read this table */
   habilidades: HabilidadDef[]

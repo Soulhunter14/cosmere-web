@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowDown, ArrowUp, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Plus,
-  ScrollText, Signpost, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
+  ScrollText, Signpost, Square, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { diaryApi } from '../../api/diary'
@@ -12,7 +12,7 @@ import { c, eyebrow, font, fs, numeral, pill, radius, shadow, tone, type Tone } 
 import type { HeroicPath } from '../../data/heroicPaths'
 import type { Character } from '../../types'
 import type { WorldConfig } from '../../worlds/types'
-import { useCatalogo, usePaneles, usePantalla } from './contexto'
+import { guardarPreferencia, leerPreferencia, useCatalogo, usePaneles, usePantalla } from './contexto'
 import {
   MAX_ENCUENTROS, anotar, claveContador, claveEscenaPropia, claveResultado, encuentroEnPantalla, marcar, nuevoId, numeroSiguiente,
   quitarEscena, type EscenaPropia, type PantallaEstado, type ProgresoEmpeno, type ResultadoPrueba,
@@ -30,6 +30,8 @@ import { ESCENA_META } from './meta'
 import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, NavegadorEscenas, TecladoNumerico, Tesela } from './piezas'
 import { ALTO_MIN_ESCENA, BAJO_LA_BARRA, irAEscena } from './escenas'
 import { DecisionGuion } from './DecisionGuion'
+import { DialogoTerminarSesion } from './SesionCreacion'
+import { useAccionesSesionCreacion } from './sesionCreacionAcciones'
 import { esSesionDeCreacion, useCreacionPantalla } from './creacionPantalla'
 import { vivos } from '../../lib/personajes'
 
@@ -64,6 +66,10 @@ const fichaDeItem = (item: string) => /ficha:\s*([^)·;,]+)/i.exec(item)?.[1].tr
  * The director plays it from here: reads aloud, shows images, marks tests, endeavours, counters and progress, prepares the
  * fights, and goes on to the next scene. Scripts are imported (drafted with AI) and the prompt for the next one is exported.
  */
+/** The director hides the played scenes of the session (the index and the neighbours skip them); remembered on the device */
+const PREF_OCULTAR_JUGADAS = 'cosmere-pantalla-ocultar-jugadas'
+const esBool = (v: unknown): v is boolean => typeof v === 'boolean'
+
 export function PanelGuion({
   seleccion, onElegir, escala, onEscala, onLibro,
 }: {
@@ -80,9 +86,21 @@ export function PanelGuion({
   const [rapida, setRapida] = useState(false)
   const [borrando, setBorrando] = useState<EscenaPropia | null>(null)
   const [importando, setImportando] = useState(false)
+  const [ocultarJugadas, setOcultarJugadas] = useState(() => leerPreferencia(PREF_OCULTAR_JUGADAS, true, esBool))
+  const cambiarOcultar = (v: boolean) => {
+    setOcultarJugadas(v)
+    guardarPreferencia(PREF_OCULTAR_JUGADAS, v)
+  }
   const lista = estado.escenasPropias
   const ref = estado.escenaActual
-  const sel = lista.find((e) => e.id === seleccion) ?? lista.find((e) => ref?.origen === 'propia' && e.id === ref.escenaId) ?? lista[0] ?? null
+  const jugada = (e: EscenaPropia) => !!estado.marcas[claveEscenaPropia(e.id)]
+  const sel = lista.find((e) => e.id === seleccion)
+    ?? lista.find((e) => ref?.origen === 'propia' && e.id === ref.escenaId)
+    ?? (ocultarJugadas ? lista.find((e) => !jugada(e)) : undefined)
+    ?? lista[0] ?? null
+  // The scenes on offer: without the played ones while the director hides them (the one on screen always stays)
+  const visibles = ocultarJugadas ? lista.filter((e) => !jugada(e) || e.id === sel?.id) : lista
+  const ocultas = lista.length - visibles.length
 
   return (
     <div style={stack(16)}>
@@ -107,7 +125,7 @@ export function PanelGuion({
         />
       ) : (
         <>
-          <IndiceGuion seleccion={sel?.id ?? null} onElegir={onElegir} />
+          <IndiceGuion seleccion={sel?.id ?? null} onElegir={onElegir} escenas={visibles} filtro={{ activo: ocultarJugadas, ocultas, onCambiar: cambiarOcultar }} />
           {sel && (
             <DetalleGuion
               esc={sel}
@@ -116,6 +134,7 @@ export function PanelGuion({
               onElegir={onElegir}
               onEditar={() => setEditando(sel)}
               onBorrar={() => setBorrando(sel)}
+              vecinas={visibles}
             />
           )}
         </>
@@ -273,16 +292,26 @@ function BarraGuion({ onNueva, onImportar, onLibro }: { onNueva: () => void; onI
 
 // ── Index: the scenes by group, with what has been played ────────────────────
 
-function IndiceGuion({ seleccion, onElegir }: { seleccion: string | null; onElegir: (id: string) => void }) {
+function IndiceGuion({ seleccion, onElegir, escenas, filtro }: {
+  seleccion: string | null
+  onElegir: (id: string) => void
+  /** The scenes on offer (the played ones left out while the director hides them) */
+  escenas: EscenaPropia[]
+  filtro: { activo: boolean; ocultas: number; onCambiar: (v: boolean) => void }
+}) {
   const { estado } = usePantalla()
   const ref = estado.escenaActual
+  const total = estado.escenasPropias.length
+  const jugadasTotal = estado.escenasPropias.filter((e) => !!estado.marcas[claveEscenaPropia(e.id)]).length
   return (
     <NavegadorEscenas
       titulo={estado.guionTitulo || 'Sesión preparada'}
       ancla="escena-guion"
       seleccion={seleccion}
       onElegir={onElegir}
-      escenas={estado.escenasPropias.map((esc) => {
+      filtro={filtro}
+      progresoTotal={{ jugadas: jugadasTotal, total }}
+      escenas={escenas.map((esc) => {
         const e = leerEscena(esc.md)
         return {
           id: esc.id, titulo: e.titulo, tipo: e.tipo, grupo: e.grupo,
@@ -297,7 +326,7 @@ function IndiceGuion({ seleccion, onElegir }: { seleccion: string | null; onEleg
 // ── One scene ────────────────────────────────────────────────────────────────
 
 function DetalleGuion({
-  esc, escala, onEscala, onElegir, onEditar, onBorrar,
+  esc, escala, onEscala, onElegir, onEditar, onBorrar, vecinas,
 }: {
   esc: EscenaPropia
   escala: number
@@ -305,10 +334,26 @@ function DetalleGuion({
   onElegir: (id: string) => void
   onEditar: () => void
   onBorrar: () => void
+  /** The scenes «Anterior», «Siguiente» and «Jugada · pasar a…» move through (without the played ones while they are hidden) */
+  vecinas: EscenaPropia[]
 }) {
   const { estado, actualizar, ultimoDiario } = usePantalla()
+  const { irA } = usePaneles()
+  // With every scene played, the session ends from here (the creation session included)
+  const acc = useAccionesSesionCreacion()
+  const [terminando, setTerminando] = useState(false)
+  const todasJugadas = estado.escenasPropias.length > 0 && estado.escenasPropias.every((x) => !!estado.marcas[claveEscenaPropia(x.id)])
+  // Playing the last scene from the header leaves the reader at the top: the view goes down to «Fin de la sesión» and the focus with it
+  const finRef = useRef<HTMLElement>(null)
+  const enfocarFin = useRef(false)
+  useEffect(() => {
+    if (!enfocarFin.current || !finRef.current) return
+    enfocarFin.current = false
+    finRef.current.focus({ preventScroll: true })
+    finRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  })
   const e = leerEscena(esc.md)
-  const lista = estado.escenasPropias
+  const lista = vecinas
   const i = lista.findIndex((x) => x.id === esc.id)
   const anterior = lista[i - 1] ?? null
   const siguiente = lista[i + 1] ?? null
@@ -333,6 +378,7 @@ function DetalleGuion({
       else b.escenaActual = null
     })
     if (siguiente) ir(siguiente.id)
+    else enfocarFin.current = true
   }
   const mover = (d: -1 | 1) =>
     actualizar((b) => {
@@ -358,10 +404,11 @@ function DetalleGuion({
           if (actual) { b.escenaActual = null; return }
           fijarActual(b, esc)
         })}
-        onJugada={() => actualizar((b) => {
-          marcar(b, clave, !jugada)
-          if (!jugada) anotar(b, { tipo: 'avance', etiqueta: 'Escena jugada', texto: e.titulo }, ultimoDiario)
-        })}
+        onJugada={() => {
+          // Marking it played moves the table on to the next scene; unmarking only takes the mark off
+          if (jugada) actualizar((b) => marcar(b, clave, false))
+          else pasarALaSiguiente()
+        }}
         acciones={
           <>
             <IconButton label={`Editar ${e.titulo}`} variant="surface" size={36} onClick={onEditar}><Pencil size={15} aria-hidden /></IconButton>
@@ -392,12 +439,47 @@ function DetalleGuion({
         <Button size="sm" variant="ghost" disabled={!siguiente} onClick={() => siguiente && ir(siguiente.id)}>
           Siguiente <ChevronRight size={16} aria-hidden />
         </Button>
-        {actual && (
+        {jugada ? (
+          siguiente && (
+            <Button size="sm" variant="secondary" onClick={() => ir(siguiente.id)} style={{ marginLeft: 'auto' }}>
+              Pasar a «{tituloDe(siguiente)}» <ChevronRight size={16} aria-hidden />
+            </Button>
+          )
+        ) : (
           <Button variant="gold" icon={<Check size={16} aria-hidden />} onClick={pasarALaSiguiente} style={{ marginLeft: 'auto' }}>
             {siguiente ? `Jugada · pasar a «${tituloDe(siguiente)}»` : 'Jugada · fin de la sesión'}
           </Button>
         )}
       </nav>
+
+      {jugada && todasJugadas && estado.sesion && (
+        <section ref={finRef} tabIndex={-1} aria-label="Fin de la sesión" style={{ ...stack(10), padding: 14, borderRadius: radius.md, background: tone.gold.bg, border: `1px solid ${tone.gold.border}`, outline: 'none', scrollMarginBottom: 24 }}>
+          <p style={{ ...eyebrow, color: tone.gold.fg }}>Fin de la sesión</p>
+          <p style={{ fontSize: fs.sm, color: c.text, lineHeight: 1.45 }}>
+            Todas las escenas están jugadas.{' '}
+            {acc.esCreacion
+              ? 'Al terminar la sesión de creación, lo decidido queda en cada ficha y la campaña la da por jugada; después, «Personaje creado» en Creación.'
+              : 'Al terminar, la sesión pasa a «Sesiones anteriores» con sus anotaciones, desde donde sale el prompt de la crónica.'}
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Button variant="gold" icon={<Square size={15} aria-hidden />} onClick={() => setTerminando(true)} disabled={acc.ocupado} aria-haspopup="dialog">
+              {acc.esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => irA('bitacora')}>Antes, anotar algo en Bitácora</Button>
+          </div>
+          {acc.aviso && <p role="status" style={{ fontSize: fs.sm, color: c.muted }}>{acc.aviso}</p>}
+          <DialogoTerminarSesion
+            open={terminando}
+            esCreacion={acc.esCreacion}
+            sinCrear={acc.sinCrear}
+            jugadas={estado.escenasPropias.length}
+            pendientes={0}
+            ocupado={acc.ocupado}
+            onConfirm={(todas) => { void acc.terminar(todas).then((ok) => { if (ok) setTerminando(false) }) }}
+            onCancel={() => setTerminando(false)}
+          />
+        </section>
+      )}
     </article>
   )
 }

@@ -78,3 +78,15 @@ mismo día). Réplica de PRO en local para trabajar la campaña 5: `pro-local.sh
   «Aplicada a la ficha» en cada decisión; el resultado se lee en una línea por personaje. Una decisión cambiada tras aplicarse vuelve a pendiente:
   aplicar de nuevo añade lo nuevo, nada se resta (ajuste a mano).
 - Pendiente: el paso «Tu camino heroico» con la recomendación, y el punto de control (12 puntos de atributo, 5 grados) sigue a mano.
+
+## 7. Ajustes del 28-10 (noche): panel «Creación», decisiones automáticas
+
+- Durante la sesión de creación cada decisión se escribe en la ficha al elegirla y se deshace si cambia o se quita: el PUT de decisiones
+  lleva `aplicar` y lo que da cada una (`EfectosFicha`, sumado en `pantalla/aplicar.ts`); la API recuerda por fila lo pedido y lo hecho
+  (`CharacterRespuestas.Aplicado`). Fuera de la sesión, «Aplicar a la ficha» a mano por filas.
+- Pantalla: nuevo panel «Creación» en el Registro (`PanelCreacion`: estado y acciones de la sesión, personajes con respuestas y notas,
+  registro de decisiones), visible solo mientras la sesión de creación no está jugada. La Bitácora solo cierra la sesión de mesa y
+  señala a Creación mientras se prepara; el registro de decisiones deja el Grupo. Acciones compartidas en `sesionCreacionAcciones.ts`.
+- «Encuentro» solo aparece en la cinta mientras hay un combate abierto (se abre desde «Al encuentro» de una escena).
+- «Decisiones de la mesa» en Creación: una tarjeta por escena, pregunta, respuesta en grande y lo que da como etiquetas de color, con
+  el resultado de la prueba y «En la ficha».

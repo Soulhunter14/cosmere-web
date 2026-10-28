@@ -1,10 +1,12 @@
 /**
  * What a character has answered, as the director reads it: one row per step of the guided creation (the step's title or the legacy's
- * question, and the answer) and the decisions the table took in the director's script, by table session and scene (the record the API
- * keeps, `RespuestaPersonaje`). Shared by the director's view of «Creación» and the director's screen (the creation session).
+ * question, and the answer) and the decisions the table took in the director's script, by table session and scene, each with what it
+ * gave to the sheet (the record the API keeps, `RespuestaPersonaje`). Shared by the director's view of «Creación» and the director's
+ * screen (the creation session).
  */
 import type { CSSProperties } from 'react'
-import { c, eyebrow, fs, pill, tone } from '../../theme'
+import { Check } from 'lucide-react'
+import { c, eyebrow, fs, pill, radius, tone, type Tone } from '../../theme'
 import type { CreacionPersonaje, RespuestaPersonaje } from '../../types'
 import type { PasoCreacion } from '../../worlds/types'
 import { etiquetaDato, useLegados, useOpcionesPaso } from './hooks'
@@ -44,6 +46,8 @@ export function FilaRespuesta({ paso, p }: { paso: PasoCreacion; p: CreacionPers
   )
 }
 
+// ── The decisions of the table ───────────────────────────────────────────────
+
 function agrupar<T>(lista: T[], clave: (x: T) => string): [string, T[]][] {
   const out = new Map<string, T[]>()
   for (const x of lista) {
@@ -56,21 +60,28 @@ function agrupar<T>(lista: T[], clave: (x: T) => string): [string, T[]][] {
 }
 
 const texto = (v: unknown): string => (typeof v === 'string' ? v : '')
-const capitalizar = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 
-/** «Atributo +1 Fuerza · Camino Guerrero · Prueba Atletismo CD 10: superada», from the detail of a decision */
-function resumenDetalle(d: Record<string, unknown>): string {
-  const partes: string[] = []
-  if (Array.isArray(d.efectos)) {
-    for (const e of d.efectos as unknown[]) {
-      if (e && typeof e === 'object' && 'clave' in e && 'valor' in e) {
-        partes.push(`${capitalizar(texto((e as { clave: unknown }).clave))} ${texto((e as { valor: unknown }).valor)}`.trim())
-      }
-    }
-  }
-  const prueba = texto(d.prueba)
-  if (prueba) partes.push(`Prueba ${prueba}${d.resultado === 'exito' ? ': superada' : d.resultado === 'fallo' ? ': fallada' : ''}`)
-  return partes.join(' · ')
+/** The label and tone of each kind of effect, as the screen's record paints them */
+const EFECTO: Record<string, { etiqueta: string; t: Tone }> = {
+  atributo: { etiqueta: 'Atributo', t: tone.gold },
+  habilidad: { etiqueta: 'Habilidad', t: tone.zafiro },
+  pericia: { etiqueta: 'Pericia', t: tone.esmeralda },
+  meta: { etiqueta: 'Meta', t: tone.heliodoro },
+  objeto: { etiqueta: 'Objeto', t: tone.cuarzo },
+  camino: { etiqueta: 'Camino', t: tone.amatista },
+  metal: { etiqueta: 'Metal', t: tone.amatista },
+  eco: { etiqueta: 'Eco', t: tone.cuarzo },
+}
+
+/** The effects of a decision as the script wrote them (`detalle.efectos`: clave + valor) */
+function efectosDe(d: Record<string, unknown>): { clave: string; valor: string }[] {
+  if (!Array.isArray(d.efectos)) return []
+  return (d.efectos as unknown[]).flatMap((e) => {
+    if (!e || typeof e !== 'object') return []
+    const clave = texto((e as { clave?: unknown }).clave)
+    const valor = texto((e as { valor?: unknown }).valor)
+    return clave && valor ? [{ clave, valor }] : []
+  })
 }
 
 /** What the table decided for this character in the director's script, by table session and scene (only the director sees it) */
@@ -79,32 +90,43 @@ export function DecisionesMesa({ respuestas }: { respuestas: RespuestaPersonaje[
   if (decisiones.length === 0) return null
   const sesiones = agrupar(decisiones, (r) => r.sesionTitulo || (r.origen === 'sesion-creacion' ? 'Sesión de creación' : 'Sesión'))
   return (
-    <div style={{ ...stack(10), paddingTop: 10, borderTop: `1px solid ${c.border}` }}>
+    <div style={{ ...stack(12), paddingTop: 12, borderTop: `1px solid ${c.border}` }}>
       <p style={eyebrow}>Decisiones de la mesa</p>
       {sesiones.map(([titulo, lista]) => (
-        <div key={titulo} style={stack(8)}>
-          <p style={{ fontSize: fs.sm, color: c.text, fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div key={titulo} style={stack(10)}>
+          <p style={{ fontSize: fs.base, color: c.text, fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {titulo}
             {lista[0].origen !== 'sesion-creacion' && <span style={pill(tone.cuarzo)}>Fuera de la sesión de creación</span>}
           </p>
           {agrupar(lista, (r) => [texto(r.detalle.grupo), texto(r.detalle.escena)].filter(Boolean).join(' · ')).map(([escena, filas]) => (
-            <div key={escena} style={{ ...stack(6), paddingLeft: 10, borderLeft: `2px solid ${c.border}` }}>
-              {escena && <p style={{ fontSize: fs.xs, color: c.muted, fontWeight: 600 }}>{escena}</p>}
-              <dl style={{ ...stack(6), margin: 0 }}>
-                {filas.map((r) => {
-                  const resumen = resumenDetalle(r.detalle)
-                  return (
-                    <div key={r.id}>
-                      <dt style={{ fontSize: fs.xs, color: c.muted, lineHeight: 1.4 }}>{r.pregunta}</dt>
-                      <dd style={{ margin: 0, fontSize: fs.sm, color: c.text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                        {r.respuesta}
-                        {resumen && <span style={{ display: 'block', fontSize: fs.xs, color: c.muted }}>{resumen}</span>}
-                      </dd>
-                    </div>
-                  )
-                })}
-              </dl>
-            </div>
+            <section key={escena} aria-label={escena || 'Escena'} style={{ ...stack(10), padding: '12px 14px', borderRadius: radius.md, background: c.s2, border: `1px solid ${c.border}` }}>
+              {escena && <p style={{ ...eyebrow, color: tone.topacio.fg }}>{escena}</p>}
+              {filas.map((r, i) => {
+                const efectos = efectosDe(r.detalle)
+                const prueba = texto(r.detalle.prueba)
+                const resultado = r.detalle.resultado
+                return (
+                  <div key={r.id} style={{ ...stack(6), paddingTop: i === 0 ? 0 : 10, borderTop: i === 0 ? 'none' : `1px solid ${c.border}` }}>
+                    <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.4 }}>{r.pregunta}</p>
+                    <p style={{ fontSize: fs.base, color: c.text, fontWeight: 600, lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{r.respuesta}</p>
+                    {(efectos.length > 0 || prueba || r.aplicadaEn) && (
+                      <p style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {efectos.map((e, j) => {
+                          const def = EFECTO[e.clave] ?? { etiqueta: e.clave, t: tone.cuarzo }
+                          return <span key={j} style={pill(def.t)}>{def.etiqueta} {e.valor}</span>
+                        })}
+                        {prueba && (
+                          <span style={pill(resultado === 'exito' ? tone.esmeralda : resultado === 'fallo' ? tone.rubi : tone.cuarzo)}>
+                            Prueba {prueba}: {resultado === 'exito' ? 'superada' : resultado === 'fallo' ? 'fallada' : 'sin marcar'}
+                          </span>
+                        )}
+                        {r.aplicadaEn && <span style={pill(tone.esmeralda)}><Check size={12} aria-hidden /> En la ficha</span>}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </section>
           ))}
         </div>
       ))}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, Check, ChevronLeft, CloudOff, Dices, LoaderCircle, NotebookPen, PanelRightClose, PanelRightOpen, Projector, RefreshCw,
+  BookOpen, Check, ChevronLeft, CloudOff, Dices, Film, LoaderCircle, NotebookPen, PanelRightClose, PanelRightOpen, Projector, RefreshCw,
   Swords, Timer, TriangleAlert, Users, type LucideIcon,
 } from 'lucide-react'
 import { gmScreenApi } from '../../api/gmScreen'
@@ -24,6 +24,8 @@ import { PanelGrupo } from './PanelGrupo'
 import { PanelTiradas } from './PanelTiradas'
 import { PanelBitacora } from './PanelBitacora'
 import { PanelMesa } from './PanelMesa'
+import { PanelCreacion } from './PanelCreacion'
+import { useCreacionPantalla } from './creacionPantalla'
 import { BotonEncendida, BotonPantallaCompleta } from './dispositivo'
 import { tituloDe } from './guion'
 import { useLibro } from './libro'
@@ -36,10 +38,11 @@ const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => 
   tiradas: { label: 'Tiradas', icon: Dices, render: () => <PanelTiradas /> },
   bitacora: { label: 'Bitácora', icon: NotebookPen, render: () => <PanelBitacora /> },
   mesa: { label: 'Mesa', icon: Projector, render: () => <PanelMesa /> },
+  creacion: { label: 'Creación', icon: Film, render: () => <PanelCreacion /> },
 }
 /** Left pane: what is happening (story, fight, party); right pane: what comes in, what is noted and what the players see */
 const PANEL_A: PanelId[] = ['escena', 'encuentro', 'grupo']
-const PANEL_B: PanelId[] = ['tiradas', 'bitacora', 'mesa']
+const PANEL_B: PanelId[] = ['tiradas', 'bitacora', 'mesa', 'creacion']
 const TODOS: PanelId[] = [...PANEL_A, ...PANEL_B]
 
 const esDe = (ids: PanelId[]) => (v: unknown): v is PanelId => typeof v === 'string' && ids.includes(v as PanelId)
@@ -108,7 +111,14 @@ export function PantallaPage() {
 // ── Layout ───────────────────────────────────────────────────────────────────
 
 function Pantalla() {
-  const { cId, conflicto, resolverConflicto, rechazo, guardado, reintentarGuardado, soloLectura } = usePantalla()
+  const { cId, estado, conflicto, resolverConflicto, rechazo, guardado, reintentarGuardado, soloLectura } = usePantalla()
+  // «Encuentro» only while a fight is open (scenes start one with «Al encuentro»); «Creación» only while the creation session is not played
+  const { creacion } = useCreacionPantalla(cId)
+  const hayEncuentro = estado.encuentros.length > 0
+  const hayCreacion = !!creacion && !creacion.iniciada && creacion.sesion.estado !== 'jugada'
+  const idsA = PANEL_A.filter((id) => id !== 'encuentro' || hayEncuentro)
+  const idsB = PANEL_B.filter((id) => id !== 'creacion' || hayCreacion)
+  const idsTodos = [...idsA, ...idsB]
   const qc = useQueryClient()
   const [eligiendo, setEligiendo] = useState<'servidor' | 'mia' | null>(null)
   const dos = useDosPaneles()
@@ -124,7 +134,12 @@ function Pantalla() {
     guardarPreferencia(PREF_PLEGADO, v)
   }
 
-  const tiradasVisibles = dos ? tabB === 'tiradas' && !plegado : tabUnico === 'tiradas'
+  // A tab that is no longer offered (the fight ended, the creation session was played) gives way to the first of its pane
+  const tabAVisible: PanelId = idsA.includes(tabA) ? tabA : 'escena'
+  const tabBVisible: PanelId = idsB.includes(tabB) ? tabB : 'tiradas'
+  const tabUnicoVisible: PanelId = idsTodos.includes(tabUnico) ? tabUnico : 'escena'
+
+  const tiradasVisibles = dos ? tabBVisible === 'tiradas' && !plegado : tabUnicoVisible === 'tiradas'
   const visiblesRef = useRef(tiradasVisibles)
   useEffect(() => { visiblesRef.current = tiradasVisibles }, [tiradasVisibles])
 
@@ -245,12 +260,12 @@ function Pantalla() {
           {dos ? (
             <>
               <Panel
-                prefijo="pantalla-a" etiqueta="Mesa" ids={PANEL_A} valor={tabA} onCambiar={elegir} badge={badge}
+                prefijo="pantalla-a" etiqueta="Mesa" ids={idsA} valor={tabAVisible} onCambiar={elegir} badge={badge}
                 // Never narrower than an encounter card needs (its turn controls, bars and conditions), whatever the divider says
                 estilo={{ flex: plegado ? '1 1 0' : `${reparto} 1 0`, minWidth: 440 }}
               />
               {plegado ? (
-                <RielRegistro ids={PANEL_B} badge={badge} onAbrir={(panel) => { plegar(false); if (panel) elegir(panel) }} />
+                <RielRegistro ids={idsB} badge={badge} onAbrir={(panel) => { plegar(false); if (panel) elegir(panel) }} />
               ) : (
                 <>
                   <Divisor
@@ -261,7 +276,7 @@ function Pantalla() {
                     onPlegar={() => plegar(true)}
                   />
                   <Panel
-                    prefijo="pantalla-b" etiqueta="Registro" ids={PANEL_B} valor={tabB} onCambiar={elegir} badge={badge}
+                    prefijo="pantalla-b" etiqueta="Registro" ids={idsB} valor={tabBVisible} onCambiar={elegir} badge={badge}
                     estilo={{ flex: `${1 - reparto} 1 0`, minWidth: 260 }}
                     accion={
                       <IconButton label="Plegar Registro" variant="surface" size={40} onClick={() => plegar(true)}>
@@ -273,7 +288,7 @@ function Pantalla() {
               )}
             </>
           ) : (
-            <Panel prefijo="pantalla-u" etiqueta="Pantalla del director" ids={TODOS} valor={tabUnico} onCambiar={elegir} badge={badge} />
+            <Panel prefijo="pantalla-u" etiqueta="Pantalla del director" ids={idsTodos} valor={tabUnicoVisible} onCambiar={elegir} badge={badge} />
           )}
         </div>
       </div>

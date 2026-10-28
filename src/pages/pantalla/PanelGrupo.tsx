@@ -16,7 +16,6 @@ import { habilidadesDe } from './adversarios'
 import { anadirPersonajes, asegurarEncuentro, destinoAnadir } from './encuentro'
 import { personajeEnCombate } from './estado'
 import { BarraRecurso } from './piezas'
-import { RegistroDecisiones } from './DecisionGuion'
 import { useCreacionPantalla } from './creacionPantalla'
 import { TarjetaCreacion } from './SesionCreacion'
 import { vivos } from '../../lib/personajes'
@@ -52,7 +51,6 @@ export function PanelGrupo() {
     return (
       <div style={stack(14)}>
         <EmptyState icon={<Users size={22} aria-hidden />} title="Sin personajes" description="Cuando los jugadores creen sus personajes, aparecerán aquí." />
-        <RegistroDecisiones personajes={personajes} />
       </div>
     )
   }
@@ -74,7 +72,6 @@ export function PanelGrupo() {
           {estado.encuentros.length ? `Añadir ${destinoAnadir(estado)} a los que faltan` : 'Empezar un encuentro con el grupo'}
         </Button>
       )}
-      <RegistroDecisiones personajes={personajes} />
       <ul style={{ ...listReset, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 12 }}>
         {grupo.map((ch) => (
           <li key={ch.id}>

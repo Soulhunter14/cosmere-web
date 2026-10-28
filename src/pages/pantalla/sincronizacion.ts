@@ -1,14 +1,17 @@
 /**
  * Keeps the API's record of answers (`PUT …/respuestas/decisiones`, one whole list per character) in step with what the screen
  * records in `estado.decisiones`: after a choice, a test or a removal the character's list is sent again (after a short pause, so
- * several taps go together), so its rows always equal the screen; sending twice changes nothing. The state of each send lives here,
- * an external store, so the record of decisions can show it and offer «Guardar en la creación» when a send failed. While the campaign's
- * creation session is running the API marks the rows as decisions of the creation (see `SesionCreacion`).
+ * several taps go together), each decision with what it gives to the sheet (`aplicar.ts`); sending twice changes nothing. While the
+ * creation session is running the send asks the API to write it on the sheet as it comes (`aplicar`), and to undo it when a decision
+ * changes or goes. The state of each send lives here, an external store, so the record of decisions can show it and offer
+ * «Guardar en la creación» when a send failed.
  */
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import axios from 'axios'
 import { creacionApi } from '../../api/creacion'
 import type { DecisionRespuestaRequest } from '../../types'
+import type { HabilidadDef } from '../../worlds/types'
+import { efectosDeEleccion, recomendacionDe } from './aplicar'
 import { ahoraIso, type PantallaEstado } from './estado'
 import { tituloSesion } from './exportar'
 
@@ -17,6 +20,12 @@ export interface EstadoEnvio {
   /** ISO date of the change of state */
   en: string
   error?: string
+}
+
+/** What a send needs besides the document: the world's skills (to sum what each decision gives) and whether the API must write it on the sheet */
+export interface ContextoEnvio {
+  habilidades: HabilidadDef[]
+  aplicar: boolean
 }
 
 const RETRASO = 800
@@ -55,8 +64,8 @@ export function personajeDeClave(clave: string): number | null {
   return s !== '' && s !== '-' && Number.isFinite(n) ? n : null
 }
 
-/** The decisions of a character as the API records them: the whole list, with what each option gives and how its test went */
-export function decisionesDe(estado: PantallaEstado, characterId: number): DecisionRespuestaRequest[] {
+/** The decisions of a character as the API records them: the whole list, each with what it gives to the sheet */
+export function decisionesDe(estado: PantallaEstado, characterId: number, habilidades: HabilidadDef[]): DecisionRespuestaRequest[] {
   return Object.entries(estado.decisiones)
     .filter(([, e]) => e.characterId === characterId)
     .map(([k, e]) => ({
@@ -65,6 +74,7 @@ export function decisionesDe(estado: PantallaEstado, characterId: number): Decis
       respuesta: e.opcion,
       tipoRespuesta: 'opcion' as const,
       detalle: { grupo: e.grupo, escena: e.escena, efectos: e.efectos, prueba: e.prueba, resultado: e.resultado, exito: e.exito, en: e.en },
+      efectos: efectosDeEleccion(e, habilidades),
     }))
 }
 
@@ -81,8 +91,8 @@ export function mensajeDe(e: unknown): string {
   return e instanceof Error && e.message ? e.message : 'No se ha podido guardar.'
 }
 
-/** Sends a character's decisions now (`leerEstado` gives the screen's current document) */
-export async function enviar(cId: number, characterId: number, leerEstado: () => PantallaEstado): Promise<void> {
+/** Sends a character's decisions now (`leerEstado` gives the screen's current document, `leerContexto` the skills and the mode) */
+export async function enviar(cId: number, characterId: number, leerEstado: () => PantallaEstado, leerContexto: () => ContextoEnvio): Promise<void> {
   const t = temporizadores.get(characterId)
   if (t !== undefined) {
     window.clearTimeout(t)
@@ -91,11 +101,17 @@ export async function enviar(cId: number, characterId: number, leerEstado: () =>
   poner(characterId, { estado: 'guardando', en: ahoraIso() })
   try {
     const estado = leerEstado()
+    const { habilidades, aplicar } = leerContexto()
     const s = estado.sesion
+    const propias = Object.values(estado.decisiones).filter((e) => e.characterId === characterId)
+    const { camino, metal } = recomendacionDe(propias, habilidades)
     await creacionApi.putDecisiones(cId, characterId, {
       sesionId: s?.id ?? '',
       sesionTitulo: s ? tituloSesion(s) : '',
-      decisiones: decisionesDe(estado, characterId),
+      aplicar,
+      caminoRecomendado: aplicar ? camino : '',
+      metalRecomendado: aplicar ? metal : '',
+      decisiones: decisionesDe(estado, characterId, habilidades),
     })
     poner(characterId, { estado: 'guardado', en: ahoraIso() })
   } catch (e) {
@@ -104,17 +120,17 @@ export async function enviar(cId: number, characterId: number, leerEstado: () =>
 }
 
 /** Sends a character's decisions after a short pause; a choice recorded without a character has nowhere to go */
-export function programar(cId: number, characterId: number | null, leerEstado: () => PantallaEstado): void {
+export function programar(cId: number, characterId: number | null, leerEstado: () => PantallaEstado, leerContexto: () => ContextoEnvio): void {
   if (characterId === null) return
   const t = temporizadores.get(characterId)
   if (t !== undefined) window.clearTimeout(t)
   poner(characterId, { estado: 'pendiente', en: ahoraIso() })
-  temporizadores.set(characterId, window.setTimeout(() => { void enviar(cId, characterId, leerEstado) }, RETRASO))
+  temporizadores.set(characterId, window.setTimeout(() => { void enviar(cId, characterId, leerEstado, leerContexto) }, RETRASO))
 }
 
 /** Sends every character with decisions now, or only the ones not saved yet (before ending the creation session) */
-export async function enviarTodos(cId: number, leerEstado: () => PantallaEstado, soloPendientes = false): Promise<void> {
+export async function enviarTodos(cId: number, leerEstado: () => PantallaEstado, leerContexto: () => ContextoEnvio, soloPendientes = false): Promise<void> {
   const ids = personajesConDecisiones(leerEstado())
   const lista = soloPendientes ? ids.filter((id) => estados[id] !== undefined && estados[id].estado !== 'guardado') : ids
-  await Promise.all(lista.map((id) => enviar(cId, id, leerEstado)))
+  await Promise.all(lista.map((id) => enviar(cId, id, leerEstado, leerContexto)))
 }

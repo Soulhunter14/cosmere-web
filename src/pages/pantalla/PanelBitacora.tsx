@@ -4,10 +4,10 @@ import { Check, ClipboardCopy, Copy, Download, NotebookPen, Pencil, Play, Square
 import { charactersApi } from '../../api/characters'
 import { creacionApi } from '../../api/creacion'
 import { useCampaignStore, useWorldConfig } from '../../store/campaignStore'
-import { Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, Sheet, Stepper, Textarea } from '../../components/ui'
+import { Button, ConfirmDialog, Disclosure, EmptyState, Field, IconButton, Input, Sheet, Stepper, Switch, Textarea } from '../../components/ui'
 import { c, eyebrow, font, fs, numeral, pill, radius, shadow, tone } from '../../theme'
 import { duracion, useAhora, usePantalla } from './contexto'
-import { anotar, escenasJugadas, nuevaSesion, numeroSiguiente, terminarSesion, type EscenaArchivada, type EventoBitacora, type SesionMesa } from './estado'
+import { anotar, claveEscenaPropia, escenasJugadas, marcar, nuevaSesion, numeroSiguiente, terminarSesion, type EscenaArchivada, type EventoBitacora, type SesionMesa } from './estado'
 import { copiarTexto, descargarTexto, hora, fecha, nombreArchivoSesion, notasMarkdown, promptCronica, tituloSesion } from './exportar'
 import { archivarEscena, escribirGuion } from './guion'
 import { nombreBase } from './encuentro'
@@ -23,6 +23,17 @@ const tarjeta: CSSProperties = { padding: 14, borderRadius: radius.lg, backgroun
 
 type Etiqueta = (typeof ETIQUETAS_APUNTE)[number]
 
+/** What the closing session takes with it: the played scenes, and the pending ones too when the director marks them as played */
+function textoEscenas(jugadas: number, pendientes: number, todas: boolean): string {
+  const lasJugadas = jugadas === 1 ? 'la escena jugada' : `las ${jugadas} escenas jugadas`
+  if (pendientes === 0) return jugadas ? `Se lleva ${lasJugadas}.` : 'No tiene escenas.'
+  if (todas) {
+    const total = jugadas + pendientes
+    return `Se lleva ${total === 1 ? 'la escena' : `las ${total} escenas`}: ${pendientes === 1 ? 'la que quedaba sin jugar queda marcada' : `las ${pendientes} sin jugar quedan marcadas`} como jugadas.`
+  }
+  return `${jugadas ? `Se lleva ${lasJugadas}` : 'No tiene escenas jugadas'}; ${pendientes === 1 ? 'la que queda sin jugar pasa' : `las ${pendientes} sin jugar pasan`} a la siguiente sesión.`
+}
+
 export function PanelBitacora() {
   const { cId, estado, actualizar, ultimoDiario } = usePantalla()
   const cfg = useWorldConfig()
@@ -36,6 +47,8 @@ export function PanelBitacora() {
   const [etiqueta, setEtiqueta] = useState<Etiqueta>('Apunte')
   const [terminando, setTerminando] = useState(false)
   const [volviendo, setVolviendo] = useState(false)
+  // «Terminar sesión»: take the pending scenes too, marked as played
+  const [marcarTodas, setMarcarTodas] = useState(false)
   const [editando, setEditando] = useState(false)
   const [borrandoEvento, setBorrandoEvento] = useState<EventoBitacora | null>(null)
   const [borrandoSesion, setBorrandoSesion] = useState<SesionMesa | null>(null)
@@ -97,8 +110,12 @@ export function PanelBitacora() {
         await enviarTodos(cId, () => ultimo.current, true)
         qc.setQueryData(['creacion', cId], await creacionApi.sesion(cId, 'terminar'))
       }
-      actualizar((b) => terminarSesion(b, (esc) => archivarEscena(b, esc)))
+      actualizar((b) => {
+        if (marcarTodas) for (const e of b.escenasPropias) if (!b.marcas[claveEscenaPropia(e.id)]) marcar(b, claveEscenaPropia(e.id), true)
+        terminarSesion(b, (esc) => archivarEscena(b, esc))
+      })
       setTerminando(false)
+      setMarcarTodas(false)
       setAviso(esCreacion ? 'Sesión de creación terminada. Marca «Personaje creado» en Creación a quien le falte.' : null)
     } catch (e) {
       setAviso(mensajeDe(e))
@@ -284,17 +301,22 @@ export function PanelBitacora() {
         tone="brand"
         icon="warning"
         title="¿Terminar la sesión?"
-        message={
-          (esCreacion
-            ? `Termina también la sesión de creación, que no se puede volver a jugar.${sinCrear.length ? ` ${sinCrear.join(', ')} ${sinCrear.length === 1 ? 'sigue' : 'siguen'} en creación: márcalos creados en Creación.` : ''} `
-            : '') +
-          'Se guarda en «Sesiones anteriores» con sus anotaciones; desde allí puedes copiar el prompt de la crónica. ' +
-          (jugadas ? `Se lleva ${jugadas === 1 ? 'la escena jugada' : `las ${jugadas} escenas jugadas`}` : 'No tiene escenas jugadas') +
-          (pendientes ? `; ${pendientes === 1 ? 'la que queda sin jugar pasa' : `las ${pendientes} sin jugar pasan`} a la siguiente sesión.` : '.')
-        }
+        message={(
+          <>
+            {esCreacion && `Termina también la sesión de creación, que no se puede volver a jugar.${sinCrear.length ? ` ${sinCrear.join(', ')} ${sinCrear.length === 1 ? 'sigue' : 'siguen'} en creación: márcalos creados en Creación.` : ''} `}
+            Se guarda en «Sesiones anteriores» con sus anotaciones; desde allí puedes copiar el prompt de la crónica.{' '}
+            {textoEscenas(jugadas, pendientes, marcarTodas)}
+            {pendientes > 0 && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+                <Switch checked={marcarTodas} onChange={setMarcarTodas} label="Marcar todas las escenas como jugadas" />
+                Marcar {pendientes === 1 ? 'la escena pendiente' : `las ${pendientes} escenas pendientes`} como jugadas
+              </label>
+            )}
+          </>
+        )}
         confirmLabel={esCreacion ? 'Terminar la sesión de creación' : 'Terminar sesión'}
         onConfirm={() => { if (!ocupado) void terminar() }}
-        onCancel={() => setTerminando(false)}
+        onCancel={() => { setTerminando(false); setMarcarTodas(false) }}
       />
       <ConfirmDialog
         open={volviendo}

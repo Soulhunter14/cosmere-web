@@ -30,6 +30,7 @@ import { ESCENA_META } from './meta'
 import { Apartado, CabeceraEscena, Conmutador, EnLinea, Galeria, LeerEnVozAlta, NavegadorEscenas, TecladoNumerico, Tesela } from './piezas'
 import { ALTO_MIN_ESCENA, BAJO_LA_BARRA, irAEscena } from './escenas'
 import { DecisionGuion } from './DecisionGuion'
+import { esSesionDeCreacion, useCreacionPantalla } from './creacionPantalla'
 import { vivos } from '../../lib/personajes'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
@@ -194,6 +195,7 @@ function escenasParaPrompt(estado: PantallaEstado): EscenaJugada[] {
 
 function BarraGuion({ onNueva, onImportar, onLibro }: { onNueva: () => void; onImportar: () => void; onLibro?: () => void }) {
   const { cId, estado, ultimoDiario } = usePantalla()
+  const { creacion } = useCreacionPantalla(cId)
   const cfg = useWorldConfig()
   const campana = useCampaignStore((s) => s.currentCampaign)
   // The next script is written for the living
@@ -205,10 +207,12 @@ function BarraGuion({ onNueva, onImportar, onLibro }: { onNueva: () => void; onI
   const jugadas = lista.filter((e) => estado.marcas[claveEscenaPropia(e.id)]).length
   const titulo = estado.guionTitulo || 'Sesión preparada'
   const archivo = `${(estado.guionTitulo || 'Sesión').replace(/[\\/:*?"<>|]/g, '')}.md`
-  /** The scenes belong to the open session, or to the next one while none is open */
+  /** The scenes belong to the open session, or to the next one while none is open; the creation session says so by its name */
   const deQueSesion = estado.sesion
-    ? `Sesión ${estado.sesion.numero ?? '¿?'} · en curso`
-    : `Sesión ${numeroSiguiente(estado, ultimoDiario)} · sin empezar`
+    ? esSesionDeCreacion(estado.sesion.id, creacion) ? 'Sesión de creación · en curso' : `Sesión ${estado.sesion.numero ?? '¿?'} · en curso`
+    : creacion?.sesion.estado === 'preparando' && !creacion.iniciada
+      ? 'Sesión de creación · sin empezar'
+      : `Sesión ${numeroSiguiente(estado, ultimoDiario)} · sin empezar`
 
   const copiarGuion = async () => {
     const ok = await copiarTexto(escribirGuion(estado.guionTitulo, lista))

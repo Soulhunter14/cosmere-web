@@ -48,6 +48,8 @@ export function PanelBitacora() {
   const ultimo = useUltimo(estado)
   const [ocupado, setOcupado] = useState(false)
   const esCreacion = esSesionDeCreacion(sesion?.id, creacion)
+  // While the creation session is being prepared, the only session to start is that one: a normal one would not record in the creation
+  const preparandoCreacion = !!creacion && !creacion.iniciada && creacion.sesion.estado === 'preparando'
   const sinCrear = esCreacion ? personajesEnCreacion(creacion).map((p) => p.name) : []
   const sugerido = numeroSiguiente(estado, ultimoDiario)
   const numero = numeroElegido ?? sugerido
@@ -162,6 +164,11 @@ export function PanelBitacora() {
       ) : (
         <>
         <SeccionSesionCreacion onEmpezar={() => { void empezarCreacion() }} ocupado={ocupado} />
+        {preparandoCreacion ? (
+          <p style={{ fontSize: fs.sm, color: c.muted, lineHeight: 1.45 }}>
+            Mientras preparas la sesión de creación, la sesión se empieza desde ahí: una sesión normal no guardaría sus decisiones en la creación.
+          </p>
+        ) : (
         <section aria-label="Empezar sesión" style={{ ...tarjeta, ...stack(12) }}>
           <div>
             <h2 style={{ fontFamily: font.display, fontSize: fs.xl, fontWeight: 600, color: c.text }}>Sesión de juego</h2>
@@ -182,6 +189,7 @@ export function PanelBitacora() {
             <Button icon={<Play size={16} aria-hidden />} onClick={empezar}>Empezar sesión</Button>
           </div>
         </section>
+        )}
         </>
       )}
 

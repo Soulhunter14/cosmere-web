@@ -85,7 +85,7 @@ export function DecisionesMesa({ respuestas }: { respuestas: RespuestaPersonaje[
         <div key={titulo} style={stack(8)}>
           <p style={{ fontSize: fs.sm, color: c.text, fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {titulo}
-            {lista[0].origen !== 'sesion-creacion' && <span style={pill(tone.cuarzo)}>Después de la creación</span>}
+            {lista[0].origen !== 'sesion-creacion' && <span style={pill(tone.cuarzo)}>Fuera de la sesión de creación</span>}
           </p>
           {agrupar(lista, (r) => [texto(r.detalle.grupo), texto(r.detalle.escena)].filter(Boolean).join(' · ')).map(([escena, filas]) => (
             <div key={escena} style={{ ...stack(6), paddingLeft: 10, borderLeft: `2px solid ${c.border}` }}>

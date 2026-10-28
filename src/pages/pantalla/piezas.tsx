@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Check, ChevronLeft, ChevronRight, Delete, ExternalLink, ListTree, Pin, PinOff, Projector } from 'lucide-react'
-import { Button, IconButton, Sheet } from '../../components/ui'
+import { Button, IconButton, Sheet, Switch } from '../../components/ui'
 import { CosmereIcon } from '../../components/CosmereIcon'
 import { PlotIcon } from '../../components/GameIcons'
 import { buttonReset, c, eyebrow, font, fs, numeral, pill, radius, tint, tone, type Tone } from '../../theme'
@@ -397,7 +397,7 @@ export interface EntradaIndice {
  * current marks and big rows. Moving keeps the row where it is (`irAEscena` with the element `ancla`, the scene card).
  */
 export function NavegadorEscenas({
-  escenas, seleccion, onElegir, ancla, titulo, progreso = true, accion,
+  escenas, seleccion, onElegir, ancla, titulo, progreso = true, accion, filtro, progresoTotal,
 }: {
   escenas: EntradaIndice[]
   seleccion: string | null
@@ -409,12 +409,17 @@ export function NavegadorEscenas({
   progreso?: boolean
   /** An action on the scene on screen, always at hand in the fixed row («Añadir a la sesión» in the book) */
   accion?: ReactNode
+  /** «Ocultar las jugadas» in the index sheet: the list given already leaves them out when it is on */
+  filtro?: { activo: boolean; ocultas: number; onCambiar: (v: boolean) => void }
+  /** The count of the whole session when `escenas` is only part of it (the played ones hidden) */
+  progresoTotal?: { jugadas: number; total: number }
 }) {
   const [abierto, setAbierto] = useState(false)
   if (escenas.length === 0) return null
   const i = Math.max(0, escenas.findIndex((e) => e.id === seleccion))
   const vista = escenas[i]
-  const jugadas = escenas.filter((e) => e.jugada).length
+  const jugadas = progresoTotal?.jugadas ?? escenas.filter((e) => e.jugada).length
+  const total = progresoTotal?.total ?? escenas.length
   const enCurso = escenas.find((e) => e.actual)
   const ir = (id: string) => {
     setAbierto(false)
@@ -447,11 +452,11 @@ export function NavegadorEscenas({
           icon={<ListTree size={15} aria-hidden />}
           onClick={() => setAbierto(true)}
           aria-haspopup="dialog"
-          aria-label={`Índice de escenas (${progreso ? `${jugadas} de ${escenas.length} jugadas` : escenas.length})`}
+          aria-label={`Índice de escenas (${progreso ? `${jugadas} de ${total} jugadas` : total})`}
           style={{ flexShrink: 0 }}
         >
           <span className="hide-mobile">Índice</span>
-          <span style={{ fontVariantNumeric: 'tabular-nums', color: c.subtle, fontWeight: 600 }}>{progreso ? `${jugadas}/${escenas.length}` : escenas.length}</span>
+          <span style={{ fontVariantNumeric: 'tabular-nums', color: c.subtle, fontWeight: 600 }}>{progreso ? `${jugadas}/${total}` : total}</span>
         </Button>
         <IconButton label="Escena anterior" size={40} variant="surface" disabled={i <= 0} onClick={() => ir(escenas[i - 1].id)}>
           <ChevronLeft size={18} aria-hidden />
@@ -469,8 +474,14 @@ export function NavegadorEscenas({
         {accion}
       </nav>
 
-      <Sheet open={abierto} onClose={() => setAbierto(false)} title={titulo} description={progreso ? `${jugadas} de ${escenas.length} escenas jugadas` : `${escenas.length} escenas`} maxWidth={600}>
+      <Sheet open={abierto} onClose={() => setAbierto(false)} title={titulo} description={progreso ? `${jugadas} de ${total} escenas jugadas` : `${total} escenas`} maxWidth={600}>
         <div style={stack(16)}>
+          {filtro && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: fs.sm, color: c.muted }}>
+              <Switch checked={filtro.activo} onChange={filtro.onCambiar} label="Ocultar las escenas jugadas" />
+              Ocultar las jugadas{filtro.activo && filtro.ocultas > 0 ? ` (${filtro.ocultas} oculta${filtro.ocultas === 1 ? '' : 's'})` : ''}
+            </label>
+          )}
           {enCurso && enCurso.id !== vista.id && (
             <Button variant="gold" icon={<Pin size={15} aria-hidden />} onClick={() => ir(enCurso.id)} style={{ alignSelf: 'flex-start' }}>
               Ir a la escena actual: {enCurso.titulo}

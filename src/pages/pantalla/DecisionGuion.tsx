@@ -105,9 +105,13 @@ export function DecisionGuion({
   soloLectura?: boolean
 }) {
   const { cId, estado, actualizar, ultimoDiario } = usePantalla()
-  // Each change goes to the character's record of answers in the API (sincronizacion), read from the current document after a pause
+  // Each change goes to the character's record of answers in the API (sincronizacion), read from the current document after a pause;
+  // during the creation session the API writes it on the sheet as it comes
+  const cfgMundo = useWorldConfig()
+  const { enCurso } = useCreacionPantalla(cId)
   const ultimo = useUltimo(estado)
-  const sincronizar = (q: Quien) => programar(cId, q.characterId, () => ultimo.current)
+  const contexto = useUltimo({ habilidades: cfgMundo.habilidades, aplicar: enCurso })
+  const sincronizar = (q: Quien) => programar(cId, q.characterId, () => ultimo.current, () => contexto.current)
   // Only the living decide from now on; what the dead decided stays in the record
   const { data: personajes = [] } = useQuery({ queryKey: ['characters', cId], queryFn: () => charactersApi.getAll(cId), enabled: !soloLectura, select: vivos })
   const [marcas, setMarcas] = useVerMarcas()
@@ -318,6 +322,8 @@ interface Aplicacion {
   pendientes: number
   aplicadas: number
   ocupado: boolean
+  /** The creation session writes every decision on the sheet by itself: no button */
+  automatica: boolean
   onAplicar: () => void
   aplicada: Set<string>
 }
@@ -350,11 +356,13 @@ function TarjetaRegistro({ r, marcas, onQuitar, aplicacion }: { r: RegistroPerso
 
       {aplicacion && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <Button size="sm" variant="secondary" icon={<Sparkles size={14} aria-hidden />} disabled={aplicacion.ocupado || aplicacion.pendientes === 0} onClick={aplicacion.onAplicar}>
-            Aplicar a la ficha
-          </Button>
+          {!aplicacion.automatica && (
+            <Button size="sm" variant="secondary" icon={<Sparkles size={14} aria-hidden />} disabled={aplicacion.ocupado || aplicacion.pendientes === 0} onClick={aplicacion.onAplicar}>
+              Aplicar a la ficha
+            </Button>
+          )}
           <span style={{ fontSize: fs.xs, color: c.subtle }}>
-            {aplicacion.pendientes} pendiente{aplicacion.pendientes === 1 ? '' : 's'} · {aplicacion.aplicadas} aplicada{aplicacion.aplicadas === 1 ? '' : 's'}
+            {aplicacion.aplicadas} en la ficha · {aplicacion.pendientes} pendiente{aplicacion.pendientes === 1 ? '' : 's'}
           </span>
         </div>
       )}
@@ -412,6 +420,8 @@ export function RegistroDecisiones({ personajes }: { personajes: Character[] }) 
   const ultimo = useUltimo(estado)
   const envios = useSincronizacion()
   const [enviando, setEnviando] = useState(false)
+  const { enCurso } = useCreacionPantalla(cId)
+  const contexto = useUltimo({ habilidades: cfg.habilidades, aplicar: enCurso })
   // «Aplicar a la ficha»: what the record of answers says is still pending for each character (the API marks what it applied)
   const qc = useQueryClient()
   const { creacion } = useCreacionPantalla(cId)
@@ -469,6 +479,7 @@ export function RegistroDecisiones({ personajes }: { personajes: Character[] }) 
                   pendientes: pendientesDe(r.characterId).length,
                   aplicadas: aplicadasDe(r.characterId).length,
                   ocupado: aplicando,
+                  automatica: enCurso,
                   onAplicar: () => { void aplicar([r.characterId as number]) },
                   aplicada: new Set(aplicadasDe(r.characterId).map((x) => x.clave)),
                 }}
@@ -476,24 +487,31 @@ export function RegistroDecisiones({ personajes }: { personajes: Character[] }) 
             </li>
           ))}
         </ul>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <Button size="sm" variant="secondary" icon={<Sparkles size={14} aria-hidden />} disabled={aplicando || conPendientes.length === 0} onClick={() => { void aplicar(conPendientes) }}>
-            Aplicar a la ficha{conPendientes.length > 1 ? ` (${conPendientes.length} personajes)` : ''}
-          </Button>
-          <span style={{ flex: 1, minWidth: 200, fontSize: fs.xs, color: c.subtle, lineHeight: 1.45 }}>
-            Escribe en cada ficha lo que dan las decisiones pendientes: atributos y grados con los topes de la creación, pericias, metas y objetos; guarda el camino y el metal recomendados.
-          </span>
-        </div>
+        {enCurso ? (
+          <p style={{ fontSize: fs.xs, color: c.subtle, lineHeight: 1.45 }}>
+            Sesión de creación en curso: cada decisión se escribe en la ficha de su personaje al elegirla (atributos y grados con los topes de la
+            creación, pericias, metas y objetos) y se deshace si la cambias o la quitas.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Button size="sm" variant="secondary" icon={<Sparkles size={14} aria-hidden />} disabled={aplicando || conPendientes.length === 0} onClick={() => { void aplicar(conPendientes) }}>
+              Aplicar a la ficha{conPendientes.length > 1 ? ` (${conPendientes.length} personajes)` : ''}
+            </Button>
+            <span style={{ flex: 1, minWidth: 200, fontSize: fs.xs, color: c.subtle, lineHeight: 1.45 }}>
+              Escribe en cada ficha lo que dan las decisiones pendientes: atributos y grados con los topes de la creación, pericias, metas y objetos; guarda el camino y el metal recomendados.
+            </span>
+          </div>
+        )}
         {resultado && <p role="status" style={{ fontSize: fs.xs, color: c.muted, whiteSpace: 'pre-wrap', lineHeight: 1.45 }}>{resultado}</p>}
         <EstadoEnvios
           envios={envios}
           personajes={personajes}
           enviando={enviando}
-          onEnviar={() => { setEnviando(true); void enviarTodos(cId, () => ultimo.current).finally(() => setEnviando(false)) }}
+          onEnviar={() => { setEnviando(true); void enviarTodos(cId, () => ultimo.current, () => contexto.current).finally(() => setEnviando(false)) }}
         />
         <p style={{ fontSize: fs.xs, color: c.subtle, lineHeight: 1.45 }}>
-          Lo de «Para la ficha» se pasa a la ficha de cada personaje a mano: la pantalla solo lo suma. Una prueba superada que da
-          «+1 al atributo de la habilidad» ya cuenta en los atributos.
+          Una prueba superada que da «+1 al atributo de la habilidad» ya cuenta en los atributos. Los caminos y metales no van a la ficha:
+          el más marcado queda como recomendación para la revelación.
         </p>
       </div>
       <ConfirmDialog
@@ -506,7 +524,7 @@ export function RegistroDecisiones({ personajes }: { personajes: Character[] }) 
         onConfirm={() => {
           if (quitando) {
             actualizar((b) => { delete b.decisiones[quitando.clave] })
-            programar(cId, personajeDeClave(quitando.clave), () => ultimo.current)
+            programar(cId, personajeDeClave(quitando.clave), () => ultimo.current, () => contexto.current)
           }
           setQuitando(null)
         }}

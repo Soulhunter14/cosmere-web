@@ -1,12 +1,12 @@
 /**
- * «Aplicar a la ficha»: what the decisions of the script not applied yet give to a character, summed as the record of decisions does
- * (`registroDecisiones`) and turned into the request the API applies (`POST …/respuestas/aplicar`): attributes and skills by sheet
- * field, expertises, goals, items, and the recommended path and metal (the most marked, when alone at the top). The API writes it with
- * the creation caps and marks the rows as applied, so applying twice adds nothing.
+ * What a decision of the script gives to the sheet, by sheet field, summed as the record of decisions does (`registroDecisiones`):
+ * attributes, skill ranks, expertises, goals and items, plus the test prize. It travels with every decision the screen sends
+ * (`sincronizacion`), so the API writes it on the sheet as it comes during the creation session, and with the manual «Aplicar a la
+ * ficha» (`POST …/respuestas/aplicar`) for the pending rows. The recommended path and metal are the most marked among every choice.
  */
 import { creacionApi } from '../../api/creacion'
 import { foldText as normalizar } from '../../lib/catalogo'
-import type { AplicarRespuestasRequest, AplicarRespuestasResponse, CreacionPersonaje, RespuestaPersonaje } from '../../types'
+import type { AplicarRespuestasRequest, AplicarRespuestasResponse, CreacionPersonaje, EfectosFicha, RespuestaPersonaje } from '../../types'
 import type { AttrField, HabilidadDef } from '../../worlds/types'
 import { registroDecisiones, type Suma } from './decisiones'
 import { CLAVES_EFECTO, type Efecto, type Eleccion } from './estado'
@@ -26,7 +26,7 @@ export const claveRegistro = (claveDecision: string): string => `decision:${clav
 const texto = (v: unknown): string => (typeof v === 'string' ? v : '')
 
 /** A recorded decision as the screen's `Eleccion`, to sum it with the record's own logic */
-function eleccionDe(r: RespuestaPersonaje, p: CreacionPersonaje): Eleccion {
+export function eleccionDe(r: RespuestaPersonaje, p: CreacionPersonaje): Eleccion {
   const d = r.detalle
   const efectos: Efecto[] = Array.isArray(d.efectos)
     ? (d.efectos as unknown[]).flatMap((e) => {
@@ -43,51 +43,47 @@ function eleccionDe(r: RespuestaPersonaje, p: CreacionPersonaje): Eleccion {
   }
 }
 
+const sumar = (todas: Eleccion[], habilidades: HabilidadDef[]) =>
+  registroDecisiones(Object.fromEntries(todas.map((e, i) => [String(i), e])), habilidades, [])[0]
+
+/** What one choice gives to the sheet, by sheet field (a skill outside the world's list goes by name: the API looks for its custom slot) */
+export function efectosDeEleccion(el: Eleccion, habilidades: HabilidadDef[]): EfectosFicha {
+  const r = sumar([el], habilidades)
+  const atributos: Record<string, number> = {}
+  const hab: Record<string, number> = {}
+  for (const s of r?.atributos ?? []) {
+    const campo = ATRIBUTOS.find((a) => normalizar(a) === normalizar(s.nombre)) ?? s.nombre
+    atributos[campo] = (atributos[campo] ?? 0) + s.total
+  }
+  for (const s of r?.habilidades ?? []) {
+    const campo = habilidades.find((h) => normalizar(h.label) === normalizar(s.nombre))?.field ?? s.nombre
+    hab[campo] = (hab[campo] ?? 0) + s.total
+  }
+  return { atributos, habilidades: hab, pericias: r?.pericias ?? [], metas: r?.metas ?? [], objetos: r?.objetos ?? [] }
+}
+
 /** The most marked name when it is alone at the top; '' with a tie or nothing */
 const recomendado = (sumas: Suma[]): string =>
   sumas.length > 0 && (sumas.length === 1 || sumas[0].total > sumas[1].total) ? sumas[0].nombre : ''
 
-export interface PeticionAplicar {
-  peticion: AplicarRespuestasRequest
-  /** What the sheet has no field for (a skill not in the world's list goes by name: the API looks for a custom slot) */
-  sinSitio: string[]
+/** The path and metal the night recommends: the most marked among every choice of the character */
+export function recomendacionDe(todas: Eleccion[], habilidades: HabilidadDef[]): { camino: string; metal: string } {
+  const r = todas.length ? sumar(todas, habilidades) : undefined
+  return { camino: recomendado(r?.caminos ?? []), metal: recomendado(r?.metales ?? []) }
 }
 
-/** What the pending decisions give, as the API applies it */
-export function peticionDe(p: CreacionPersonaje, pendientes: RespuestaPersonaje[], habilidades: HabilidadDef[]): PeticionAplicar {
-  const decisiones = Object.fromEntries(pendientes.map((r) => [r.clave, eleccionDe(r, p)]))
-  const [r] = registroDecisiones(decisiones, habilidades, [{ id: p.id, name: p.name }])
-  const atributos: Record<string, number> = {}
-  const hab: Record<string, number> = {}
-  const sinSitio: string[] = []
-  for (const s of r?.atributos ?? []) {
-    const campo = ATRIBUTOS.find((a) => normalizar(a) === normalizar(s.nombre))
-    if (campo) atributos[campo] = (atributos[campo] ?? 0) + s.total
-    else sinSitio.push(`${s.nombre} +${s.total}`)
-  }
-  for (const s of r?.habilidades ?? []) {
-    const def = habilidades.find((h) => normalizar(h.label) === normalizar(s.nombre))
-    const campo = def?.field ?? s.nombre
-    hab[campo] = (hab[campo] ?? 0) + s.total
-    if (!def) sinSitio.push(`${s.nombre} +${s.total}`)
-  }
+/** The manual «Aplicar a la ficha»: the pending rows, each with what it gives, and the recommendation from every decision */
+export function peticionDe(p: CreacionPersonaje, pendientes: RespuestaPersonaje[], habilidades: HabilidadDef[]): AplicarRespuestasRequest {
+  const todas = p.respuestas.filter((r) => r.tipoPregunta === 'decision').map((r) => eleccionDe(r, p))
+  const { camino, metal } = recomendacionDe(todas, habilidades)
   return {
-    peticion: {
-      claves: pendientes.map((x) => x.clave),
-      atributos,
-      habilidades: hab,
-      pericias: r?.pericias ?? [],
-      metas: r?.metas ?? [],
-      objetos: r?.objetos ?? [],
-      caminoRecomendado: recomendado(r?.caminos ?? []),
-      metalRecomendado: recomendado(r?.metales ?? []),
-    },
-    sinSitio,
+    filas: pendientes.map((r) => ({ clave: r.clave, efectos: efectosDeEleccion(eleccionDe(r, p), habilidades) })),
+    caminoRecomendado: camino,
+    metalRecomendado: metal,
   }
 }
 
 /** Applies the character's pending decisions to its sheet */
 export function aplicarAFicha(cId: number, p: CreacionPersonaje, habilidades: HabilidadDef[]): Promise<AplicarRespuestasResponse> {
-  const { peticion } = peticionDe(p, decisionesPendientes(p), habilidades)
-  return creacionApi.aplicar(cId, p.id, peticion)
+  return creacionApi.aplicar(cId, p.id, peticionDe(p, decisionesPendientes(p), habilidades))
 }

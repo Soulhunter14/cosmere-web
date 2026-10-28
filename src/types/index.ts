@@ -753,6 +753,15 @@ export interface SaveEncyclopediaTextRequest {
 
 // ── Guided character creation (section «Creación de personajes», src/pages/creacion; API: campaigns/{id}/creacion) ──
 
+/** What a decision gives to the sheet, by sheet field: attribute points, skill ranks (or a custom skill by name), expertises, goals, items */
+export interface EfectosFicha {
+  atributos: Record<string, number>
+  habilidades: Record<string, number>
+  pericias: string[]
+  metas: string[]
+  objetos: string[]
+}
+
 /**
  * A question answered by (or about) a character, as the API records it (`CharacterRespuestas`): one row per question and character.
  * `paso` rows come from the guided creation (clave = the step id); `decision` rows from the director's script (clave = `decision:grupo|escena|pregunta`),
@@ -773,6 +782,8 @@ export interface RespuestaPersonaje {
   sesionTitulo: string
   respondidaEn: string
   aplicadaEn: string | null
+  /** What it really wrote on the sheet when applied (keys = sheet columns); null while not applied */
+  aplicado: EfectosFicha | null
 }
 
 /** The creation session of a campaign (the session 0 of the director's screen, played once): pendiente → preparando → en-curso → jugada */
@@ -792,24 +803,24 @@ export interface DecisionRespuestaRequest {
   respuesta: string
   tipoRespuesta?: 'opcion'
   detalle?: Record<string, unknown>
+  /** What it gives to the sheet, summed by the screen (`pantalla/aplicar.ts`) */
+  efectos?: EfectosFicha
 }
 
 export interface DecisionesPersonajeRequest {
   sesionId: string
   sesionTitulo: string
+  /** Write on the sheet what each decision gives as it comes (only while the character is in creation: the creation session) */
+  aplicar: boolean
+  /** The most marked path and metal among the character's decisions; '' = no change */
+  caminoRecomendado: string
+  metalRecomendado: string
   decisiones: DecisionRespuestaRequest[]
 }
 
-/** «Aplicar a la ficha»: what the pending decisions give, summed by the screen (`pantalla/aplicar.ts`); the API writes it and marks the rows */
+/** The manual «Aplicar a la ficha»: the pending decisions, each with what it gives (`pantalla/aplicar.ts`); the API writes it and marks the rows */
 export interface AplicarRespuestasRequest {
-  claves: string[]
-  /** attribute field (`fuerza`…) → points */
-  atributos: Record<string, number>
-  /** skill field (`atletismo`, `armasLigeras`…) or the name of a custom skill → ranks */
-  habilidades: Record<string, number>
-  pericias: string[]
-  metas: string[]
-  objetos: string[]
+  filas: { clave: string; efectos: EfectosFicha }[]
   caminoRecomendado: string
   metalRecomendado: string
 }

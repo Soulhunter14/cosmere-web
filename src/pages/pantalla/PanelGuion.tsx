@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowDown, ArrowUp, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Plus,
@@ -343,6 +343,15 @@ function DetalleGuion({
   const acc = useAccionesSesionCreacion()
   const [terminando, setTerminando] = useState(false)
   const todasJugadas = estado.escenasPropias.length > 0 && estado.escenasPropias.every((x) => !!estado.marcas[claveEscenaPropia(x.id)])
+  // Playing the last scene from the header leaves the reader at the top: the view goes down to «Fin de la sesión» and the focus with it
+  const finRef = useRef<HTMLElement>(null)
+  const enfocarFin = useRef(false)
+  useEffect(() => {
+    if (!enfocarFin.current || !finRef.current) return
+    enfocarFin.current = false
+    finRef.current.focus({ preventScroll: true })
+    finRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  })
   const e = leerEscena(esc.md)
   const lista = vecinas
   const i = lista.findIndex((x) => x.id === esc.id)
@@ -369,6 +378,7 @@ function DetalleGuion({
       else b.escenaActual = null
     })
     if (siguiente) ir(siguiente.id)
+    else enfocarFin.current = true
   }
   const mover = (d: -1 | 1) =>
     actualizar((b) => {
@@ -443,7 +453,7 @@ function DetalleGuion({
       </nav>
 
       {jugada && todasJugadas && estado.sesion && (
-        <section aria-label="Fin de la sesión" style={{ ...stack(10), padding: 14, borderRadius: radius.md, background: tone.gold.bg, border: `1px solid ${tone.gold.border}` }}>
+        <section ref={finRef} tabIndex={-1} aria-label="Fin de la sesión" style={{ ...stack(10), padding: 14, borderRadius: radius.md, background: tone.gold.bg, border: `1px solid ${tone.gold.border}`, outline: 'none', scrollMarginBottom: 24 }}>
           <p style={{ ...eyebrow, color: tone.gold.fg }}>Fin de la sesión</p>
           <p style={{ fontSize: fs.sm, color: c.text, lineHeight: 1.45 }}>
             Todas las escenas están jugadas.{' '}

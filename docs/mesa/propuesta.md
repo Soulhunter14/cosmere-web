@@ -81,7 +81,8 @@ visible (red de seguridad si el móvil durmió y perdió el evento).
 - **Panel Mesa** (nuevo, en el panel «Registro»: Tiradas · Bitácora · **Mesa**; icono `Projector`):
   1. **Ahora en la mesa**: la imagen, título y pie de la proyección, **«Quitar de la mesa»**, y «Ver la mesa como jugador»
      (abre `/mesa` en pestaña nueva). **Editor de niebla**: interruptor «Niebla» (activo por defecto en los mapas de la pestaña
-     «Mapas» y en las imágenes tituladas «Mapa…»; apagado en retratos, subidas y URL), el mapa entero bajo un velo con las zonas
+     «Mapas» y en las imágenes tituladas «Mapa…»; apagado en retratos, subidas y URL. **Desde el 2 nov 2026** toda imagen nueva
+     nace con niebla y un retrato del libro pregunta antes «Con niebla / Sin niebla», `PreguntaNieblaRetrato`), el mapa entero bajo un velo con las zonas
      destapadas recuadradas; **arrastrar** (dedo, ratón o lápiz) destapa un rectángulo, la «×» de cada zona la vuelve a tapar y
      «Tapar todo» las quita. Las zonas van en fracciones del mapa (0-1), así caen en el mismo sitio en cualquier pantalla y zoom.
      Un arrastre menor del 1 % no destapa nada; máximo 50 zonas. «Volver a mostrar» recupera el mapa con sus zonas.

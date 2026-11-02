@@ -24,6 +24,8 @@ import { useMesaEnVivo, type EstadoRed } from './useMesaEnVivo'
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
 const tarjeta: CSSProperties = { padding: 14, borderRadius: radius.lg, background: c.s1, border: `1px solid ${c.border}`, boxShadow: shadow[1] }
+/** One column wider than the app's 680px: the table is often seen on a tablet, and wide images (maps) take the whole width */
+const pagina: CSSProperties = { ...page, maxWidth: 1200 }
 
 /** Official action glyph of each turn: a fast turn has 2 actions, a slow one 3 */
 const ICONO_TURNO = { rapido: 'accion-2', lento: 'accion-3' } as const
@@ -47,7 +49,7 @@ export function MesaPage() {
   const mio = miPersonaje(personajes, userId)?.id ?? null
 
   return (
-    <div style={page}>
+    <div style={pagina}>
       <header className="rise" style={{ ...stack(10), marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 200px', minWidth: 0 }}>
@@ -159,7 +161,7 @@ function EnLaMesa({ p, cId }: { p: Proyeccion; cId: number }) {
       )}
       {p.niebla.activa && (
         <p style={{ fontSize: fs.xs, color: c.subtle }}>
-          {p.niebla.zonas.length === 0 ? 'El director aún no ha destapado ninguna zona del mapa.' : 'El director va destapando el mapa.'}
+          {p.niebla.zonas.length === 0 ? 'El director aún no ha destapado ninguna zona de la imagen.' : 'El director va destapando la imagen.'}
         </p>
       )}
       {(p.titulo || p.pie) && (

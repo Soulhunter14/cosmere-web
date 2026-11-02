@@ -90,6 +90,7 @@ Free equivalents of the rulebook faces:
 - Radius: `radius.xs 6 · sm 10 · md 14 · lg 18 · xl 24 · full`. Cards 18, tiles 14, controls 10–14, pills full.
 - Shadows: `shadow[1]` resting card, `shadow[2]` raised, `shadow[3]` dialogs, `shadow.glow` Stormlight glow.
 - Spacing on a 4px grid: 4 · 8 · 12 · 16 · 20 · 24 · 32. Page gutter 16px on mobile, 680px column (`page` fragment).
+  Exception: «La mesa» (`pages/mesa/MesaPage.tsx`) keeps one column but widens it to 1200px, for tablets and wide images.
 - Motion: `.rise` (staggered entrance, `style={{ '--i': index }}`), `.fade-in`, `.pop-in`, `.sheet-up`.
   All motion is disabled under `prefers-reduced-motion`.
 

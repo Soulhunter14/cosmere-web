@@ -23,7 +23,7 @@ import { PanelEncuentro } from './PanelEncuentro'
 import { PanelGrupo } from './PanelGrupo'
 import { PanelTiradas } from './PanelTiradas'
 import { PanelBitacora } from './PanelBitacora'
-import { PanelMesa } from './PanelMesa'
+import { PanelMesa, PreguntaNieblaRetrato } from './PanelMesa'
 import { PanelCreacion } from './PanelCreacion'
 import { useCreacionPantalla } from './creacionPantalla'
 import { BotonEncendida, BotonPantallaCompleta } from './dispositivo'
@@ -251,6 +251,7 @@ function Pantalla() {
           }}
           onCancel={() => setEligiendo(null)}
         />
+        <PreguntaNieblaRetrato />
         <div
           ref={zona}
           style={dos

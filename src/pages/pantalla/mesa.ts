@@ -4,7 +4,7 @@
  * like estado.ts: the panels change the document through `usePantalla().actualizar`.
  */
 import {
-  MAX_FICHAS, MAX_PROYECCIONES, MAX_ZONAS, TAMANO_FICHA, VERSION_MESA, colorDeFicha, enZonaDestapada, mismaImagen, nieblaCerrada, pistaSalud, sinNiebla,
+  MAX_FICHAS, MAX_PROYECCIONES, MAX_ZONAS, TAMANO_FICHA, VERSION_MESA, colorDeFicha, enZonaDestapada, mismaImagen, nieblaCerrada, pistaSalud,
   tamanoFicha as acotarTamano, zonaNiebla,
   type AliadoMesa, type EncuentroMesa, type EnemigoMesa, type FichaDirector, type FichaMesa, type MesaPublica, type Niebla, type OrigenImagen, type Proyeccion,
   type ProyeccionDirector, type ZonaNiebla,
@@ -88,10 +88,6 @@ const proyeccionMesa = (b: PantallaEstado, p: ProyeccionDirector): Proyeccion =>
   }
 }
 
-/** A map («Mapa 1.3: …», the book's and the script's titles) starts covered by the fog; anything else is shown whole */
-export const esMapa = (titulo: string) => /^\s*mapa\b/i.test(titulo)
-export const nieblaInicial = (titulo: string, mapa = esMapa(titulo)): Niebla => (mapa ? nieblaCerrada() : sinNiebla())
-
 /**
  * The public document: the shown encounters (the one on screen first), the session and what is projected right now. The
  * history of images (`mesa.proyecciones`) never leaves the screen: once the director takes an image off the table, the
@@ -109,7 +105,10 @@ export function proyectarMesa(b: PantallaEstado): MesaPublica {
   }
 }
 
-/** What a projection starts with: the fog of a map, and tokens, size and names from the history when it is shown again */
+/**
+ * What a projection starts with: its fog (a new image starts covered, the director uncovers it; a book portrait is asked about
+ * first, `useMostrarEnMesa`), and tokens, size and names from the history when it is shown again
+ */
 export interface OpcionesProyeccion {
   niebla?: Niebla
   fichas?: FichaDirector[]
@@ -126,7 +125,7 @@ export function mostrarEnMesa(
 ): ProyeccionDirector {
   const p: ProyeccionDirector = {
     id: nuevoId(), imagen, titulo: titulo.trim(), pie: pie.trim(), en: ahoraIso(),
-    niebla: copiaNiebla(opciones.niebla ?? nieblaInicial(titulo)),
+    niebla: copiaNiebla(opciones.niebla ?? nieblaCerrada()),
     fichas: (opciones.fichas ?? []).map(copiaFicha).slice(0, MAX_FICHAS),
     tamanoFicha: acotarTamano(opciones.tamanoFicha ?? TAMANO_FICHA.def),
     nombresFichas: opciones.nombresFichas ?? true,

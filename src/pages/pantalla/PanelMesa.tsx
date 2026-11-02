@@ -4,7 +4,7 @@ import { isAxiosError } from 'axios'
 import { ExternalLink, Eye, EyeOff, Image as ImageIcon, Projector, RotateCcw, Search, Swords, Trash2, Upload, UserPlus, Users, X } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
 import { mesaApi } from '../../api/mesa'
-import { Button, ConfirmDialog, EmptyState, Field, IconButton, Input, Segmented, Spinner, Switch, Textarea } from '../../components/ui'
+import { Button, ConfirmDialog, EmptyState, Field, IconButton, Input, Segmented, Sheet, Spinner, Switch, Textarea } from '../../components/ui'
 import { foldText } from '../../lib/catalogo'
 import { vivos } from '../../lib/personajes'
 import { buttonReset, c, eyebrow, font, fs, pill, radius, shadow, tone } from '../../theme'
@@ -24,7 +24,7 @@ import {
   ponerFicha, quitarDeMesa, quitarFicha, volverAMostrar, type OrigenFicha,
 } from './mesa'
 import { Conmutador } from './piezas'
-import { useMostrarEnMesa } from './useMesa'
+import { useMostrarEnMesa, useRetratoPendiente } from './useMesa'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
 const listReset: CSSProperties = { listStyle: 'none', margin: 0, padding: 0 }
@@ -83,6 +83,33 @@ export function PanelMesa() {
         </a>
       </p>
     </div>
+  )
+}
+
+/**
+ * Asks how a book portrait goes to the table: whole, or covered by the fog for the director to uncover (every other image starts
+ * covered). One for the whole screen, so it asks the same wherever the portrait was sent from; closing it shows nothing
+ */
+export function PreguntaNieblaRetrato() {
+  const { retrato, responder } = useRetratoPendiente()
+  return (
+    <Sheet
+      open={retrato !== null}
+      onClose={() => responder(null)}
+      title="¿Con niebla?"
+      description={`Vas a mostrar a la mesa el retrato de ${retrato?.titulo || 'este personaje'}.`}
+      maxWidth={420}
+      footer={
+        <>
+          <Button size="lg" variant="secondary" icon={<EyeOff size={16} aria-hidden />} style={{ flex: 1 }} onClick={() => responder(true)}>Con niebla</Button>
+          <Button size="lg" icon={<Eye size={16} aria-hidden />} style={{ flex: 1 }} onClick={() => responder(false)}>Sin niebla</Button>
+        </>
+      }
+    >
+      <p style={{ fontSize: fs.base, lineHeight: 1.55, color: c.text }}>
+        Sin niebla, los jugadores lo ven entero al momento. Con niebla, les llega tapado y lo vas destapando desde el panel Mesa.
+      </p>
+    </Sheet>
   )
 }
 
@@ -151,6 +178,12 @@ function ProyeccionActual({ p }: { p: ProyeccionDirector }) {
   )
 }
 
+/**
+ * Tallest the projected image gets: the height left under the top bar, the tabs and the fog row, so a tall image is seen whole
+ * without scrolling (never under 240px on a short screen)
+ */
+const ALTO_IMAGEN = 'max(240px, calc(100dvh - 260px - var(--sat) - var(--sab)))'
+
 const acotar = (v: number) => Math.min(1, Math.max(0, v))
 const rectangulo = (a: { x: number; y: number }, b: { x: number; y: number }): ZonaNiebla =>
   ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) })
@@ -171,6 +204,8 @@ function EditorMapa({ p, url }: { p: ProyeccionDirector; url: string }) {
   const fichaEnMano = useRef<string | null>(null)
   const [borrador, setBorrador] = useState<ZonaNiebla | null>(null)
   const [arrastre, setArrastre] = useState<ArrastreFicha | null>(null)
+  // Width / height of the image, once loaded: the map box takes the whole width unless that makes it taller than ALTO_IMAGEN
+  const [proporcion, setProporcion] = useState<number | null>(null)
   // Switching the fog off shows the whole map to the players at once: it asks first
   const [quitando, setQuitando] = useState(false)
   const n = p.niebla
@@ -251,7 +286,7 @@ function EditorMapa({ p, url }: { p: ProyeccionDirector; url: string }) {
         </span>
         {n.activa && (
           <span style={{ fontSize: fs.xs, color: c.muted }}>
-            {cuantas === 0 ? 'Todo tapado para los jugadores: arrastra sobre el mapa para destapar una zona.' : `${cuantas} zona${cuantas === 1 ? '' : 's'} destapada${cuantas === 1 ? '' : 's'} · arrastra para destapar otra.`}
+            {cuantas === 0 ? 'Todo tapado para los jugadores: arrastra sobre la imagen para destapar una zona.' : `${cuantas} zona${cuantas === 1 ? '' : 's'} destapada${cuantas === 1 ? '' : 's'} · arrastra para destapar otra.`}
           </span>
         )}
         {n.activa && cuantas > 0 && (
@@ -260,38 +295,48 @@ function EditorMapa({ p, url }: { p: ProyeccionDirector; url: string }) {
           </Button>
         )}
       </div>
-      <div
-        ref={zona}
-        onPointerDown={empezar}
-        onPointerMove={mover}
-        onPointerUp={soltar}
-        onPointerCancel={cancelar}
-        style={{
-          position: 'relative', borderRadius: radius.md, overflow: 'hidden', border: `1px solid ${c.border}`, background: c.s2,
-          touchAction: n.activa || fichas.length > 0 ? 'none' : 'auto', cursor: n.activa ? 'crosshair' : 'default', userSelect: 'none',
-        }}
-      >
-        <img src={url} alt={p.titulo || 'Imagen en la mesa'} decoding="async" draggable={false} style={{ display: 'block', width: '100%', height: 'auto' }} />
-        <CapaNiebla niebla={n} opaca={false} borrador={borrador} />
-        {n.activa && n.zonas.map((z, i) => (
-          <IconButton
-            key={`${z.x}-${z.y}-${i}`}
-            label={`Volver a tapar la zona ${i + 1}`}
-            variant="surface"
-            size={26}
-            onPointerDown={(ev) => ev.stopPropagation()}
-            onClick={() => actualizar((b) => cambiarNiebla(b, (x) => { x.zonas.splice(i, 1) }))}
-            style={{ position: 'absolute', left: `calc(${(z.x + z.w) * 100}% - 13px)`, top: `calc(${z.y * 100}% - 13px)` }}
-          >
-            <X size={14} aria-hidden />
-          </IconButton>
-        ))}
-        {/* The director sees every token, the hidden ones faded (the players never get those) */}
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          <CapaFichas fichas={fichas.filter((f) => !ocultas.has(f.id))} tamano={p.tamanoFicha} nombres={p.nombresFichas} cId={cId} interactiva arrastre={arrastre} />
-        </div>
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.45 }}>
-          <CapaFichas fichas={fichas.filter((f) => ocultas.has(f.id))} tamano={p.tamanoFicha} nombres={p.nombresFichas} cId={cId} interactiva arrastre={arrastre} />
+      {/* The map box is the image box itself (fog, tokens and drags are fractions of it), centred when the height caps it */}
+      <div style={{ display: 'flex', justifyContent: 'center', borderRadius: radius.md, overflow: 'hidden', border: `1px solid ${c.border}`, background: c.s2 }}>
+        <div
+          ref={zona}
+          onPointerDown={empezar}
+          onPointerMove={mover}
+          onPointerUp={soltar}
+          onPointerCancel={cancelar}
+          style={{
+            position: 'relative', overflow: 'hidden', width: proporcion ? `min(100%, calc(${ALTO_IMAGEN} * ${proporcion}))` : '100%',
+            touchAction: n.activa || fichas.length > 0 ? 'none' : 'auto', cursor: n.activa ? 'crosshair' : 'default', userSelect: 'none',
+          }}
+        >
+          <img
+            src={url}
+            alt={p.titulo || 'Imagen en la mesa'}
+            decoding="async"
+            draggable={false}
+            onLoad={(ev) => { const i = ev.currentTarget; if (i.naturalHeight > 0) setProporcion(i.naturalWidth / i.naturalHeight) }}
+            style={{ display: 'block', width: '100%', height: 'auto' }}
+          />
+          <CapaNiebla niebla={n} opaca={false} borrador={borrador} />
+          {n.activa && n.zonas.map((z, i) => (
+            <IconButton
+              key={`${z.x}-${z.y}-${i}`}
+              label={`Volver a tapar la zona ${i + 1}`}
+              variant="surface"
+              size={26}
+              onPointerDown={(ev) => ev.stopPropagation()}
+              onClick={() => actualizar((b) => cambiarNiebla(b, (x) => { x.zonas.splice(i, 1) }))}
+              style={{ position: 'absolute', left: `calc(${(z.x + z.w) * 100}% - 13px)`, top: `calc(${z.y * 100}% - 13px)` }}
+            >
+              <X size={14} aria-hidden />
+            </IconButton>
+          ))}
+          {/* The director sees every token, the hidden ones faded (the players never get those) */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            <CapaFichas fichas={fichas.filter((f) => !ocultas.has(f.id))} tamano={p.tamanoFicha} nombres={p.nombresFichas} cId={cId} interactiva arrastre={arrastre} />
+          </div>
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.45 }}>
+            <CapaFichas fichas={fichas.filter((f) => ocultas.has(f.id))} tamano={p.tamanoFicha} nombres={p.nombresFichas} cId={cId} interactiva arrastre={arrastre} />
+          </div>
         </div>
       </div>
       <BandejaFichas p={p} />
@@ -299,7 +344,7 @@ function EditorMapa({ p, url }: { p: ProyeccionDirector; url: string }) {
         open={quitando}
         icon="warning"
         title="¿Quitar la niebla?"
-        message={`Los jugadores verán el mapa entero en sus móviles.${cuantas ? ' Las zonas destapadas se guardan por si vuelves a activarla.' : ''}`}
+        message={`Los jugadores verán la imagen entera en sus móviles.${cuantas ? ' Las zonas destapadas se guardan por si vuelves a activarla.' : ''}`}
         confirmLabel="Quitar la niebla"
         onConfirm={() => { actualizar((b) => cambiarNiebla(b, (x) => { x.activa = false })); setQuitando(false) }}
         onCancel={() => setQuitando(false)}
@@ -460,8 +505,8 @@ function EncuentrosEnMesa() {
 
 // ── Picking an image ─────────────────────────────────────────────────────────
 
-/** A thumbnail that shows its image to the players when tapped (`mapa`: covered by the fog until the director uncovers it) */
-function Miniatura({ origen, titulo, detalle, accion, mapa }: { origen: OrigenImagen; titulo: string; detalle?: string; accion?: ReactNode; mapa?: boolean }) {
+/** A thumbnail that shows its image to the players when tapped (covered by the fog; a portrait asks first) */
+function Miniatura({ origen, titulo, detalle, accion }: { origen: OrigenImagen; titulo: string; detalle?: string; accion?: ReactNode }) {
   const { cId } = usePantalla()
   const mostrar = useMostrarEnMesa()
   const { url, cargando } = useImagenMesa(cId, origen)
@@ -469,7 +514,7 @@ function Miniatura({ origen, titulo, detalle, accion, mapa }: { origen: OrigenIm
     <li style={{ display: 'flex', flexDirection: 'column', borderRadius: radius.md, overflow: 'hidden', border: `1px solid ${c.border}`, background: c.s2 }}>
       <button
         type="button"
-        onClick={() => mostrar(origen, titulo, '', { mapa })}
+        onClick={() => mostrar(origen, titulo)}
         aria-label={`Mostrar a la mesa: ${titulo || 'imagen'}`}
         title="Mostrar a la mesa"
         style={{ ...buttonReset, display: 'block', width: '100%', cursor: 'pointer', textAlign: 'left' }}
@@ -635,7 +680,7 @@ function MapasDelLibro() {
         <section key={cap.id} aria-label={cap.title} style={stack(8)}>
           <h4 style={{ ...eyebrow, color: c.subtle }}>Capítulo {cap.number} · {cap.title}</h4>
           <ul style={rejilla}>
-            {mapas.map((m) => <Miniatura key={m.id} origen={{ tipo: 'publica', url: m.imagePath as string }} titulo={`Mapa ${m.id}: ${m.title}`} detalle={m.scale} mapa />)}
+            {mapas.map((m) => <Miniatura key={m.id} origen={{ tipo: 'publica', url: m.imagePath as string }} titulo={`Mapa ${m.id}: ${m.title}`} detalle={m.scale} />)}
           </ul>
         </section>
       ))}
@@ -696,7 +741,6 @@ function MostradasEnSesion() {
           key={p.id}
           origen={p.imagen}
           titulo={p.titulo || 'Sin título'}
-          mapa={p.niebla.activa}
           detalle={p.id === actual ? 'En la mesa ahora' : `A las ${hora(p.en)}${p.niebla.activa ? ` · niebla, ${p.niebla.zonas.length} zona${p.niebla.zonas.length === 1 ? '' : 's'}` : ''}${p.fichas.length ? ` · ${p.fichas.length} ficha${p.fichas.length === 1 ? '' : 's'}` : ''}`}
           accion={p.id !== actual && (
             <Button size="sm" variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={() => actualizar((b) => { volverAMostrar(b, p.id, ultimoDiario) })} style={{ minHeight: 32 }}>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, 
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  BookOpen, Check, ChevronLeft, CloudOff, Dices, Film, LoaderCircle, NotebookPen, PanelRightClose, PanelRightOpen, Projector, RefreshCw,
+  BookMarked, BookOpen, Check, ChevronLeft, CloudOff, Dices, Film, LoaderCircle, NotebookPen, PanelRightClose, PanelRightOpen, Projector, RefreshCw,
   Swords, Timer, TriangleAlert, Users, type LucideIcon,
 } from 'lucide-react'
 import { gmScreenApi } from '../../api/gmScreen'
@@ -18,7 +18,7 @@ import {
 } from './contexto'
 import { FASE_INFO, type PantallaEstado } from './estado'
 import { hora } from './exportar'
-import { PanelEscena } from './PanelEscena'
+import { PanelEscena, PanelLibro } from './PanelEscena'
 import { PanelEncuentro } from './PanelEncuentro'
 import { PanelGrupo } from './PanelGrupo'
 import { PanelTiradas } from './PanelTiradas'
@@ -28,11 +28,12 @@ import { PanelCreacion } from './PanelCreacion'
 import { useCreacionPantalla } from './creacionPantalla'
 import { BotonEncendida, BotonPantallaCompleta } from './dispositivo'
 import { tituloDe } from './guion'
-import { useLibro } from './libro'
+import { useConLibro, useLibro } from './libro'
 import type { LibroAventura } from '../../data/libros/tipos'
 
 const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => ReactNode }> = {
   escena: { label: 'Escena', icon: BookOpen, render: () => <PanelEscena /> },
+  libro: { label: 'Libro', icon: BookMarked, render: () => <PanelLibro /> },
   encuentro: { label: 'Encuentro', icon: Swords, render: () => <PanelEncuentro /> },
   grupo: { label: 'Grupo', icon: Users, render: () => <PanelGrupo /> },
   tiradas: { label: 'Tiradas', icon: Dices, render: () => <PanelTiradas /> },
@@ -40,8 +41,8 @@ const PANELES: Record<PanelId, { label: string; icon: LucideIcon; render: () => 
   mesa: { label: 'Mesa', icon: Projector, render: () => <PanelMesa /> },
   creacion: { label: 'Creación', icon: Film, render: () => <PanelCreacion /> },
 }
-/** Left pane: what is happening (story, fight, party); right pane: what comes in, what is noted and what the players see */
-const PANEL_A: PanelId[] = ['escena', 'encuentro', 'grupo']
+/** Left pane: what is happening (story, book, fight, party); right pane: what comes in, what is noted and what the players see */
+const PANEL_A: PanelId[] = ['escena', 'libro', 'encuentro', 'grupo']
 const PANEL_B: PanelId[] = ['tiradas', 'bitacora', 'mesa', 'creacion']
 const TODOS: PanelId[] = [...PANEL_A, ...PANEL_B]
 
@@ -112,11 +113,13 @@ export function PantallaPage() {
 
 function Pantalla() {
   const { cId, estado, conflicto, resolverConflicto, rechazo, guardado, reintentarGuardado, soloLectura } = usePantalla()
-  // «Encuentro» only while a fight is open (scenes start one with «Al encuentro»); «Creación» only while the creation session is not played
+  // «Libro» only when there is a book (the world's or the uploaded original); «Encuentro» only while a fight is open (scenes start
+  // one with «Al encuentro»); «Creación» only while the creation session is not played
   const { creacion } = useCreacionPantalla(cId)
+  const hayLibro = useConLibro()
   const hayEncuentro = estado.encuentros.length > 0
   const hayCreacion = !!creacion && !creacion.iniciada && creacion.sesion.estado !== 'jugada'
-  const idsA = PANEL_A.filter((id) => id !== 'encuentro' || hayEncuentro)
+  const idsA = PANEL_A.filter((id) => (id !== 'libro' || hayLibro) && (id !== 'encuentro' || hayEncuentro))
   const idsB = PANEL_B.filter((id) => id !== 'creacion' || hayCreacion)
   const idsTodos = [...idsA, ...idsB]
   const qc = useQueryClient()

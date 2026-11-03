@@ -55,3 +55,10 @@ export function useLibroOriginal() {
   const q = useQuery({ queryKey: ['book', cId], queryFn: () => bookApi.list(cId) })
   return { capitulos: q.data ?? [], listo: q.isSuccess }
 }
+
+/** Whether the screen offers the «Libro» tab: the world has a book for this era, or the director uploaded the original */
+export function useConLibro(): boolean {
+  const libro = useLibro()
+  const original = useLibroOriginal()
+  return !!libro || original.capitulos.length > 0
+}

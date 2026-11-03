@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ArrowDown, ArrowUp, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Plus,
+  ArrowDown, ArrowUp, BookMarked, BookOpen, Check, ChevronLeft, ChevronRight, ClipboardCopy, Dices, Download, FileUp, GitFork, Info, Lightbulb, ListPlus, Pencil, Pin, Plus,
   ScrollText, Signpost, Square, Swords, Trash2, TrendingUp, Upload, UserPlus, UserRound, Users, X, type LucideIcon,
 } from 'lucide-react'
 import { charactersApi } from '../../api/characters'
@@ -101,10 +101,16 @@ export function PanelGuion({
   // The scenes on offer: without the played ones while the director hides them (the one on screen always stays)
   const visibles = ocultarJugadas ? lista.filter((e) => !jugada(e) || e.id === sel?.id) : lista
   const ocultas = lista.length - visibles.length
+  const actualId = ref?.origen === 'propia' && lista.some((e) => e.id === ref.escenaId) ? ref.escenaId : null
 
   return (
     <div style={stack(16)}>
-      <BarraGuion onNueva={() => setRapida(true)} onImportar={() => setImportando(true)} onLibro={onLibro} />
+      <BarraGuion
+        onNueva={() => setRapida(true)}
+        onImportar={() => setImportando(true)}
+        onLibro={onLibro}
+        irAActual={actualId ? { oculto: sel?.id === actualId, onClick: () => onElegir(actualId) } : undefined}
+      />
 
       {lista.length === 0 ? (
         <EmptyState
@@ -212,7 +218,13 @@ function escenasParaPrompt(estado: PantallaEstado): EscenaJugada[] {
   ]
 }
 
-function BarraGuion({ onNueva, onImportar, onLibro }: { onNueva: () => void; onImportar: () => void; onLibro?: () => void }) {
+function BarraGuion({ onNueva, onImportar, onLibro, irAActual }: {
+  onNueva: () => void
+  onImportar: () => void
+  onLibro?: () => void
+  /** Back to the current scene; while it is the one on screen the button keeps its place, so the row does not move */
+  irAActual?: { oculto: boolean; onClick: () => void }
+}) {
   const { cId, estado, ultimoDiario } = usePantalla()
   const { creacion } = useCreacionPantalla(cId)
   const cfg = useWorldConfig()
@@ -269,6 +281,20 @@ function BarraGuion({ onNueva, onImportar, onLibro }: { onNueva: () => void; onI
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {irAActual && (
+            <Button
+              size="sm"
+              variant="gold"
+              icon={<Pin size={14} aria-hidden />}
+              onClick={irAActual.onClick}
+              aria-label="Ir a la escena actual"
+              aria-hidden={irAActual.oculto || undefined}
+              tabIndex={irAActual.oculto ? -1 : undefined}
+              style={{ visibility: irAActual.oculto ? 'hidden' : undefined }}
+            >
+              <span className="hide-mobile">Ir a la escena actual</span>
+            </Button>
+          )}
           <Button size="sm" variant="secondary" icon={<Upload size={15} aria-hidden />} onClick={onImportar}>Importar</Button>
           {onLibro && <Button size="sm" variant="secondary" icon={<BookOpen size={15} aria-hidden />} onClick={onLibro}>Del libro</Button>}
           <Button size="sm" variant="secondary" icon={<Plus size={15} aria-hidden />} onClick={onNueva}>Nueva escena</Button>

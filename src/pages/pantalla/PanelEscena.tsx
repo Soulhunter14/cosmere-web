@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import { BookOpen, Check, Clock, Heart, Info, MapPin, Pin, ScrollText, Shield, Star, Swords, UserPlus, Users, Zap, type LucideIcon } from 'lucide-react'
+import { BookOpen, Check, Clock, Heart, Info, MapPin, Shield, Star, Swords, UserPlus, Users, Zap, type LucideIcon } from 'lucide-react'
 import type { AdventureChapter, Combat, LibroAventura, Npc, NpcRole, Scene } from '../../data/libros/tipos'
 import { RollTable } from '../gm/CaminapiedrasPage'
 import { useEra, useWorldConfig } from '../../store/campaignStore'
@@ -14,7 +14,7 @@ import { Apartado, CabeceraEscena, Galeria, LeerEnVozAlta, NavegadorEscenas, Par
 import { ALTO_MIN_ESCENA, BAJO_LA_BARRA } from './escenas'
 import { BotonAnadirASesion, PanelGuion } from './PanelGuion'
 import { mdDesdeCombateLibro, mdDesdeEscenaLibro } from './guion'
-import { useLibro, useLibroOriginal } from './libro'
+import { useConLibro, useLibro, useLibroOriginal } from './libro'
 import { BotonSubirLibro, GuiaOriginal } from './PanelLibroOriginal'
 
 const stack = (gap: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', gap })
@@ -24,22 +24,43 @@ const tarjeta: CSSProperties = { padding: 14, borderRadius: radius.lg, backgroun
 type Vista = 'escenas' | 'pnj' | 'combates' | 'mapas' | 'resumen'
 const VISTAS: Vista[] = ['escenas', 'pnj', 'combates', 'mapas', 'resumen']
 
-/** What the panel shows, remembered on the device (it is not part of the shared document) */
-interface PrefEscena {
-  fuente: 'aventura' | 'propias'
+/**
+ * What the «Libro» tab shows, remembered on the device (it is not part of the shared document). Until it has its own it starts
+ * where the book was left when it shared the «Escena» tab (those preferences keep their book fields)
+ */
+interface PrefLibro {
   capituloId: string
   vista: Vista
   escenaId: string | null
-  propiaId: string | null
   escala: number
   /** Chapter and scene of the original book uploaded to the Libro (absent in preferences saved before it existed) */
   originalNum?: number | null
   originalEscena?: string | null
 }
 
-const esPref = (v: unknown): v is PrefEscena =>
-  typeof v === 'object' && v !== null && 'fuente' in v && 'capituloId' in v && 'vista' in v && VISTAS.includes((v as PrefEscena).vista) &&
-  Number.isFinite((v as PrefEscena).escala)
+/** What the «Escena» tab shows: the scene of the session on screen and the size of its text */
+interface PrefEscena {
+  propiaId: string | null
+  escala: number
+}
+
+const esPrefLibro = (v: unknown): v is PrefLibro =>
+  typeof v === 'object' && v !== null && 'capituloId' in v && 'vista' in v && VISTAS.includes((v as PrefLibro).vista) &&
+  Number.isFinite((v as PrefLibro).escala)
+
+const esPrefEscena = (v: unknown): v is PrefEscena =>
+  typeof v === 'object' && v !== null && 'propiaId' in v && Number.isFinite((v as PrefEscena).escala)
+
+/** A preference of a panel kept on the device: the change merges into what is stored */
+function usePref<T extends object>(clave: string, inicial: () => T) {
+  const [pref, setPrefEstado] = useState<T>(inicial)
+  const setPref = (p: Partial<T>) => {
+    const siguiente = { ...pref, ...p }
+    setPrefEstado(siguiente)
+    guardarPreferencia(clave, siguiente)
+  }
+  return [pref, setPref] as const
+}
 
 const NPC_ROL: Record<NpcRole, { label: string; tone: Tone; icon: LucideIcon }> = {
   special: { label: 'Especial', tone: tone.topacio, icon: Star },
@@ -54,114 +75,58 @@ const PROGRESION: Record<'key' | 'spren' | 'info', { label: string; tone: Tone }
   info: { label: 'Información', tone: tone.cuarzo },
 }
 
-// ── Panel ────────────────────────────────────────────────────────────────────
+// ── Panels ───────────────────────────────────────────────────────────────────
 
+/** «Escena»: the scenes of the session. «Del libro» opens the «Libro» tab, when there is one */
 export function PanelEscena() {
-  const { cId, estado } = usePantalla()
+  const { cId } = usePantalla()
+  const { irA } = usePaneles()
+  const conLibro = useConLibro()
+  const [pref, setPref] = usePref<PrefEscena>(`cosmere-pantalla-escena-${cId}`, () =>
+    leerPreferencia<PrefEscena>(`cosmere-pantalla-escena-${cId}`, { propiaId: null, escala: 1 }, esPrefEscena))
+  return (
+    <PanelGuion
+      seleccion={pref.propiaId}
+      onElegir={(id) => setPref({ propiaId: id })}
+      escala={pref.escala}
+      onEscala={(v) => setPref({ escala: v })}
+      onLibro={conLibro ? () => irA('libro') : undefined}
+    />
+  )
+}
+
+/** «Libro»: the original book uploaded by the director, or else the summary of the world's book */
+export function PanelLibro() {
+  const { cId } = usePantalla()
   // The book of the world, with the chapters of the campaign's era (null while it loads or when there is none)
   const libro = useLibro()
-  const capitulos = libro?.capitulos ?? []
-  // The original book uploaded by the director replaces the summary in the Libro
+  // The original book uploaded by the director replaces the summary
   const original = useLibroOriginal()
-  const conOriginal = original.capitulos.length > 0
-  const conAventura = !!libro || conOriginal
-  const clave = `cosmere-pantalla-escena-${cId}`
-
-  const [pref, setPrefEstado] = useState<PrefEscena>(() => {
-    const ref = estado.escenaActual
-    const porDefecto: PrefEscena = {
-      // The script when it is where the story is, or when there is one and the story is not in the book
-      fuente: !conAventura || ref?.origen === 'propia' || (!ref && estado.escenasPropias.length > 0) ? 'propias' : 'aventura',
-      capituloId: ref?.capituloId ?? '',
-      vista: 'escenas',
-      escenaId: ref?.origen === 'aventura' ? ref.escenaId : null,
-      propiaId: ref?.origen === 'propia' ? ref.escenaId : null,
-      escala: 1,
-    }
-    return leerPreferencia(clave, porDefecto, esPref)
+  const [pref, setPref] = usePref<PrefLibro>(`cosmere-pantalla-libro-${cId}`, () => {
+    const antes = leerPreferencia<PrefLibro>(`cosmere-pantalla-escena-${cId}`, { capituloId: '', vista: 'escenas', escenaId: null, escala: 1 }, esPrefLibro)
+    const p = leerPreferencia(`cosmere-pantalla-libro-${cId}`, antes, esPrefLibro)
+    return { capituloId: p.capituloId, vista: p.vista, escenaId: p.escenaId, escala: p.escala, originalNum: p.originalNum ?? null, originalEscena: p.originalEscena ?? null }
   })
-  const setPref = (p: Partial<PrefEscena>) => {
-    const siguiente = { ...pref, ...p }
-    setPrefEstado(siguiente)
-    guardarPreferencia(clave, siguiente)
-  }
 
-  const fuente = conAventura ? pref.fuente : 'propias'
-  const ref = estado.escenaActual
-  const viendoActual =
-    !ref ||
-    (ref.origen === 'aventura'
-      ? fuente === 'aventura' && pref.capituloId === ref.capituloId && pref.vista === 'escenas' &&
-        // With nothing picked yet the chapter shows its first scene
-        (pref.escenaId ?? capitulos.find((ch) => ch.id === pref.capituloId)?.scenes[0]?.id) === ref.escenaId
-      : fuente === 'propias' && (pref.propiaId ?? estado.escenasPropias[0]?.id) === ref.escenaId)
-  const irAActual = () => {
-    if (!ref) return
-    if (ref.origen === 'aventura') setPref({ fuente: 'aventura', capituloId: ref.capituloId ?? pref.capituloId, escenaId: ref.escenaId, vista: 'escenas' })
-    else setPref({ fuente: 'propias', propiaId: ref.escenaId })
+  if (original.capitulos.length > 0) {
+    return (
+      <GuiaOriginal
+        capitulos={original.capitulos}
+        numero={pref.originalNum ?? null}
+        escenaId={pref.originalEscena ?? null}
+        escala={pref.escala}
+        onCapitulo={(n) => setPref({ originalNum: n, originalEscena: null })}
+        onEscena={(id) => setPref({ originalEscena: id })}
+        onEscala={(v) => setPref({ escala: v })}
+      />
+    )
   }
-
-  return (
-    <div style={stack(16)}>
-      {/* «Ir a la escena actual» keeps its place in this row whether it shows or not, so nothing below moves when it comes and goes */}
-      {(conAventura || ref) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {conAventura && (
-            <Segmented<'aventura' | 'propias'>
-              ariaLabel="Fuente de las escenas"
-              value={fuente}
-              onChange={(v) => setPref({ fuente: v })}
-              options={[
-                { value: 'aventura', label: <><BookOpen size={15} aria-hidden />Libro</> },
-                { value: 'propias', label: <><ScrollText size={15} aria-hidden />Sesión</> },
-              ]}
-              style={{ flex: 1, minWidth: 0 }}
-            />
-          )}
-          {ref && (
-            <Button
-              variant="gold"
-              size="sm"
-              icon={<Pin size={14} aria-hidden />}
-              onClick={irAActual}
-              aria-label="Ir a la escena actual"
-              aria-hidden={viendoActual || undefined}
-              tabIndex={viendoActual ? -1 : undefined}
-              style={{ flexShrink: 0, visibility: viendoActual ? 'hidden' : undefined }}
-            >
-              <span className="hide-mobile">Ir a la escena actual</span>
-            </Button>
-          )}
-        </div>
-      )}
-      {fuente === 'aventura' && conOriginal ? (
-        <GuiaOriginal
-          capitulos={original.capitulos}
-          numero={pref.originalNum ?? null}
-          escenaId={pref.originalEscena ?? null}
-          escala={pref.escala}
-          onCapitulo={(n) => setPref({ originalNum: n, originalEscena: null })}
-          onEscena={(id) => setPref({ originalEscena: id })}
-          onEscala={(v) => setPref({ escala: v })}
-        />
-      ) : fuente === 'aventura' && libro ? (
-        <GuiaAventura libro={libro} pref={pref} setPref={setPref} />
-      ) : (
-        <PanelGuion
-          seleccion={pref.propiaId}
-          onElegir={(id) => setPref({ propiaId: id })}
-          escala={pref.escala}
-          onEscala={(v) => setPref({ escala: v })}
-          onLibro={conAventura ? () => setPref({ fuente: 'aventura', vista: 'escenas' }) : undefined}
-        />
-      )}
-    </div>
-  )
+  return libro ? <GuiaAventura libro={libro} pref={pref} setPref={setPref} /> : null
 }
 
 // ── Book adventure ───────────────────────────────────────────────────────────
 
-function GuiaAventura({ libro, pref, setPref }: { libro: LibroAventura; pref: PrefEscena; setPref: (p: Partial<PrefEscena>) => void }) {
+function GuiaAventura({ libro, pref, setPref }: { libro: LibroAventura; pref: PrefLibro; setPref: (p: Partial<PrefLibro>) => void }) {
   const cap = libro.capitulos.find((ch) => ch.id === pref.capituloId) ?? libro.capitulos[0]
   const escena = cap.scenes.find((s) => s.id === pref.escenaId) ?? cap.scenes[0]
 

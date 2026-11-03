@@ -139,7 +139,7 @@ function AhoraEnLaMesa() {
       <EmptyState
         icon={<Projector size={22} aria-hidden />}
         title="Nada en la mesa"
-        description="Elige abajo una imagen, un mapa o un retrato y los jugadores lo verán en su móvil al momento."
+        description="Elige abajo una imagen, un mapa o un retrato y los jugadores lo verán en su móvil al momento. Al cambiar de escena la mesa se vacía; la imagen queda en el historial."
       />
     )
   }

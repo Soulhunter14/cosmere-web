@@ -14,7 +14,7 @@ import type { Character } from '../../types'
 import type { WorldConfig } from '../../worlds/types'
 import { guardarPreferencia, leerPreferencia, useCatalogo, usePaneles, usePantalla } from './contexto'
 import {
-  MAX_ENCUENTROS, anotar, claveContador, claveEscenaPropia, claveResultado, encuentroEnPantalla, marcar, nuevoId, numeroSiguiente,
+  MAX_ENCUENTROS, anotar, cambiarDeEscena, claveContador, claveEscenaPropia, claveResultado, encuentroEnPantalla, marcar, nuevoId, numeroSiguiente,
   quitarEscena, type EscenaPropia, type PantallaEstado, type ProgresoEmpeno, type ResultadoPrueba,
 } from './estado'
 import {
@@ -364,7 +364,7 @@ function DetalleGuion({
   const ir = (id: string) => irAEscena('escena-guion', () => onElegir(id), true)
 
   const fijarActual = (b: PantallaEstado, x: EscenaPropia) => {
-    b.escenaActual = { origen: 'propia', capituloId: null, escenaId: x.id }
+    cambiarDeEscena(b, { origen: 'propia', capituloId: null, escenaId: x.id })
     anotar(b, { tipo: 'escena', etiqueta: 'Escena', texto: tituloDe(x) }, ultimoDiario)
   }
   /** The table moves on: this scene is played and the next one becomes the current one */
@@ -375,7 +375,7 @@ function DetalleGuion({
         anotar(b, { tipo: 'avance', etiqueta: 'Escena jugada', texto: e.titulo }, ultimoDiario)
       }
       if (siguiente) fijarActual(b, siguiente)
-      else b.escenaActual = null
+      else cambiarDeEscena(b, null)
     })
     if (siguiente) ir(siguiente.id)
     else enfocarFin.current = true
@@ -1216,7 +1216,7 @@ function HojaEscenaRapida({ onClose, onCreada, onMarkdown }: { onClose: () => vo
     actualizar((b) => {
       b.escenasPropias.splice(posicionTras(b.escenasPropias, actualDeSesion(b)), 0, { id, md })
       if (!b.sesion) return
-      b.escenaActual = { origen: 'propia', capituloId: null, escenaId: id }
+      cambiarDeEscena(b, { origen: 'propia', capituloId: null, escenaId: id })
       anotar(b, { tipo: 'escena', etiqueta: 'Escena', texto: `${titulo.trim()} (añadida en la mesa)` }, ultimoDiario)
     })
     onCreada(id)

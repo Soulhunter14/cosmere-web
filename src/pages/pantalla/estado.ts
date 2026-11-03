@@ -605,6 +605,18 @@ export function quitarEscena(b: PantallaEstado, id: string) {
   for (const e of b.encuentros) if (e.escenaId === id) e.escenaId = null
 }
 
+const claveRef = (r: EscenaRef | null) => (r ? `${r.origen}:${r.escenaId}` : '')
+
+/**
+ * Moves the story to another scene (null once the last one was played). Another scene empties the table: what was projected,
+ * with its fog and tokens, leaves the players' phones and stays in the session's history; the fights shown at the table stay
+ * (Xavi, 3 Nov 2026)
+ */
+export function cambiarDeEscena(b: PantallaEstado, ref: EscenaRef | null) {
+  if (claveRef(b.escenaActual) !== claveRef(ref)) b.mesa.proyeccion = null
+  b.escenaActual = ref
+}
+
 export function marcar(b: PantallaEstado, clave: string, valor: boolean) {
   if (valor) b.marcas[clave] = ahoraIso()
   else delete b.marcas[clave]
